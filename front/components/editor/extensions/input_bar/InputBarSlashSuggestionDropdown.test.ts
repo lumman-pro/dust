@@ -1,4 +1,3 @@
-import { filterSlashCommandItems } from "@app/components/editor/extensions/shared/slash_suggestion/buildSlashCommandItems";
 import { PICK_MODEL_SLASH_COMMAND_ACTION } from "@app/components/editor/extensions/shared/slash_suggestion/pickModelSlashCommand";
 import type { SlashCommand } from "@app/components/editor/extensions/shared/slash_suggestion/SlashCommandDropdown";
 import {
@@ -15,7 +14,10 @@ import type { MessageDescriptor } from "@lingui/core";
 import { setupI18n } from "@lingui/core";
 import { describe, expect, it } from "vitest";
 
-import { getInputBarSlashCommandItems } from "./InputBarSlashSuggestionItems";
+import {
+  filterInputBarSlashCommandItems,
+  getInputBarSlashCommandItems,
+} from "./InputBarSlashSuggestionItems";
 import type { InputBarSlashCommand } from "./InputBarSlashSuggestionTypes";
 import {
   getAvailableInputBarSlashCommands,
@@ -38,7 +40,7 @@ function buildInputBarSlashCommandItems({
   query: string;
   t?: (descriptor: MessageDescriptor) => string;
 }): SlashCommand[] {
-  return filterSlashCommandItems(
+  return filterInputBarSlashCommandItems(
     getInputBarSlashCommandItems({ ...options, t }),
     query
   );
@@ -219,6 +221,18 @@ describe("buildInputBarSlashCommandItems", () => {
         query: "zzz",
       })
     ).toEqual([]);
+  });
+
+  it("ranks label matches before description matches", () => {
+    expect(
+      buildInputBarSlashCommandItems({
+        commands: ALL_COMMANDS,
+        includeAttachKnowledge: true,
+        includePickModel: true,
+        includeSelectSpaces: false,
+        query: "p",
+      }).map(getInputBarSlashCommandItemId)
+    ).toEqual(["pick-model", "upload-file", "compact", "attach-knowledge"]);
   });
 });
 

@@ -1,4 +1,7 @@
-import { withDefaultLocaleSearchText } from "@app/components/editor/extensions/shared/slash_suggestion/buildSlashCommandItems";
+import {
+  filterSlashCommandItems,
+  withDefaultLocaleSearchText,
+} from "@app/components/editor/extensions/shared/slash_suggestion/buildSlashCommandItems";
 import type { SlashCommand } from "@app/components/editor/extensions/shared/slash_suggestion/SlashCommandDropdown";
 import { getSlashCommandAvatarIcon } from "@app/components/editor/extensions/shared/slash_suggestion/slashCommandIcons";
 import {
@@ -7,6 +10,7 @@ import {
   createSelectSpacesSlashCommand,
 } from "@app/components/editor/extensions/shared/slash_suggestion/slashStaticCommands";
 import { RUN_COMMAND_SLASH_COMMAND_ACTION } from "@app/components/editor/extensions/shared/SlashCommandCapabilitiesItems";
+import { compareForAutocompleteSort, removeDiacritics } from "@app/lib/utils";
 import type { MessageDescriptor } from "@lingui/core";
 import type {
   InputBarSlashCommand,
@@ -106,4 +110,22 @@ export function getInputBarSlashCommandItems({
 
     return item ? [item] : [];
   });
+}
+
+export function filterInputBarSlashCommandItems(
+  items: SlashCommand[],
+  query: string
+): SlashCommand[] {
+  const normalizedQuery = removeDiacritics(query.trim());
+  if (normalizedQuery.length === 0) {
+    return items;
+  }
+
+  return filterSlashCommandItems(items, query).toSorted((a, b) =>
+    compareForAutocompleteSort(
+      normalizedQuery,
+      removeDiacritics(a.label),
+      removeDiacritics(b.label)
+    )
+  );
 }

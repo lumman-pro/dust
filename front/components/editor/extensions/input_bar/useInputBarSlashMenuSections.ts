@@ -1,9 +1,11 @@
-import { getInputBarSlashCommandItems } from "@app/components/editor/extensions/input_bar/InputBarSlashSuggestionItems";
+import {
+  filterInputBarSlashCommandItems,
+  getInputBarSlashCommandItems,
+} from "@app/components/editor/extensions/input_bar/InputBarSlashSuggestionItems";
 import type {
   InputBarSlashCommand,
   InputBarSlashMenuRefs,
 } from "@app/components/editor/extensions/input_bar/InputBarSlashSuggestionTypes";
-import { filterSlashCommandItems } from "@app/components/editor/extensions/shared/slash_suggestion/buildSlashCommandItems";
 import type { SlashCommandSection } from "@app/components/editor/extensions/shared/slash_suggestion/buildSlashCommandSections";
 import { buildSlashCommandSections } from "@app/components/editor/extensions/shared/slash_suggestion/buildSlashCommandSections";
 import type { SlashCommand } from "@app/components/editor/extensions/shared/slash_suggestion/SlashCommandDropdown";
@@ -74,21 +76,20 @@ export function useInputBarSlashMenuSections({
     ]
   );
 
-  const { capabilityItems, isLoading, resolvedQuery } =
-    useInputBarSlashCommandCapabilities({
-      disabled: isAttachOnly,
-      owner,
-      query,
-    });
+  const { capabilityItems, isLoading } = useInputBarSlashCommandCapabilities({
+    disabled: isAttachOnly,
+    owner,
+    query,
+  });
 
   const sections = useMemo(
     () =>
       buildSlashCommandSections({
-        commandItems: filterSlashCommandItems(allCommandItems, resolvedQuery),
+        commandItems: filterInputBarSlashCommandItems(allCommandItems, query),
         capabilityItems,
         t,
       }),
-    [allCommandItems, capabilityItems, resolvedQuery, t]
+    [allCommandItems, capabilityItems, query, t]
   );
 
   // The browser is the whole menu, so the file upload command rides along at its root.
