@@ -423,10 +423,13 @@ function WorkspaceView({ model, user, onProfileChange }: WorkspaceViewProps) {
     model.triggeredConversations
   );
   const [wakeUps, setWakeUps] = useState<WakeUp[]>(model.wakeUps);
-  // The inbox rows you have read, conversations and requests alike. Ones read
-  // during a visit to the Inbox keep their place there; the next visit starts
-  // without them.
+  // The inbox rows you have read, conversations and requests alike. Reading
+  // one only takes its dot away: the Inbox lists what you have until you
+  // clear it.
   const [readRowIds, setReadRowIds] = useState<Set<string>>(new Set());
+  // The inbox rows you have cleared, which are the ones a later visit drops.
+  // Held here because the Inbox is unmounted every time you look elsewhere.
+  const [clearedRowIds, setClearedRowIds] = useState<Set<string>>(new Set());
   // Rows put back to unread from a row's menu, which outranks whether the
   // conversation itself has anything new in it. A row is in one set or the
   // other, never both.
@@ -806,6 +809,10 @@ function WorkspaceView({ model, user, onProfileChange }: WorkspaceViewProps) {
       return next;
     });
     setUnreadRowIds((prev) => new Set([...prev, ...rowIds]));
+  }, []);
+
+  const handleRowsCleared = useCallback((rowIds: string[]) => {
+    setClearedRowIds((prev) => new Set([...prev, ...rowIds]));
   }, []);
 
   // Leaving a conversation takes it out of every list, and closes it if you
@@ -1934,6 +1941,8 @@ function WorkspaceView({ model, user, onProfileChange }: WorkspaceViewProps) {
           onRowsRead={handleRowsRead}
           unreadRowIds={unreadRowIds}
           onRowsUnread={handleRowsUnread}
+          clearedRowIds={clearedRowIds}
+          onRowsCleared={handleRowsCleared}
           onLeaveConversation={handleLeaveConversation}
           onConversationClick={(conversation) => {
             setP3View({

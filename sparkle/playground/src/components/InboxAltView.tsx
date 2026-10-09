@@ -156,6 +156,15 @@ interface InboxAltViewProps {
   unreadRowIds?: Set<string>;
   /** Reports rows as unread, from a row's menu. */
   onRowsUnread?: (rowIds: string[]) => void;
+  /**
+   * The rows cleared by hand, which are the only ones a later visit drops.
+   * Held by the screen rather than here, since the Inbox is unmounted every
+   * time you look at something else. Without it the Inbox falls back to
+   * dropping whatever was read, which is how it used to behave throughout.
+   */
+  clearedRowIds?: Set<string>;
+  /** Reports rows as cleared, from a row's menu or the clear menu. */
+  onRowsCleared?: (rowIds: string[]) => void;
   /** Leaves a conversation, which is the end of it in every list. */
   onLeaveConversation?: (conversationId: string) => void;
   onConversationClick?: (conversation: Conversation) => void;
@@ -409,6 +418,8 @@ export function InboxAltView({
   onRowsRead,
   unreadRowIds,
   onRowsUnread,
+  clearedRowIds,
+  onRowsCleared,
   onLeaveConversation,
   onConversationClick,
   onRequestClick,
@@ -418,10 +429,12 @@ export function InboxAltView({
   const [filter, setFilter] = useState<FilterSelection>(null);
   const [hideTriggered, setHideTriggered] = useState(false);
   const [hideRequests, setHideRequests] = useState(false);
-  // Read before this visit means dealt with, so those rows are gone. What gets
-  // read during the visit keeps its place rather than vanishing under the
-  // cursor, which is why the snapshot is taken once, on arrival.
-  const [hiddenRowIds, setHiddenRowIds] = useState(() => new Set(readRowIds));
+  // A conversation keeps its place until it is cleared: reading one only takes
+  // its dot away. The snapshot is taken once, on arrival, so a row cleared
+  // during the visit does not vanish under the cursor.
+  const [hiddenRowIds, setHiddenRowIds] = useState(
+    () => new Set(clearedRowIds ?? readRowIds)
+  );
 
   const spacesById = useMemo(
     () => new Map(spaces.map((space) => [space.id, space])),
@@ -747,9 +760,10 @@ export function InboxAltView({
         return;
       }
       onRowsRead?.(rowIds);
+      onRowsCleared?.(rowIds);
       setHiddenRowIds((prev) => new Set([...prev, ...rowIds]));
     },
-    [onRowsRead]
+    [onRowsCleared, onRowsRead]
   );
 
   // Anything still listed is something left to deal with, whichever kind it is.
