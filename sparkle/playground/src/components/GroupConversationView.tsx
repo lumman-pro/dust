@@ -145,6 +145,12 @@ interface GroupConversationViewProps {
    */
   onNewConversation?: () => void;
   hideConversationFilters?: boolean;
+  /**
+   * A short list is padded out into a plausible history and its rows are given
+   * colleagues, which is how most of the playground gets a workspace worth
+   * reading. A workspace opened today has neither, and has to say so.
+   */
+  simulateHistory?: boolean;
   currentUserId?: string;
   /** The rows read elsewhere, which stop calling for attention here too. */
   readRowIds?: Set<string>;
@@ -578,6 +584,7 @@ export function GroupConversationView({
   showComposer = true,
   onNewConversation,
   hideConversationFilters = false,
+  simulateHistory = true,
   currentUserId,
   readRowIds,
   onRowsRead,
@@ -642,6 +649,8 @@ export function GroupConversationView({
   const expandedConversations = useMemo(() => {
     if (conversations.length === 0) return [];
 
+    if (!simulateHistory) return conversations;
+
     // Determine if this space should have no history (25% probability)
     const hash = space.id
       .split("")
@@ -653,13 +662,14 @@ export function GroupConversationView({
     // Generate at least 20 conversations, more if we have fewer originals
     const targetCount = Math.max(20, conversations.length * 4);
     return generateConversationsWithDates(conversations, targetCount, space.id);
-  }, [conversations, space.id]);
+  }, [conversations, simulateHistory, space.id]);
 
   const myPodEnrichedConversations = useMemo(() => {
     if (
       podVariant !== "personal" ||
       !currentUserId ||
-      hideConversationFilters
+      hideConversationFilters ||
+      !simulateHistory
     ) {
       return expandedConversations;
     }
@@ -677,6 +687,7 @@ export function GroupConversationView({
     expandedConversations,
     hideConversationFilters,
     podVariant,
+    simulateHistory,
     users,
   ]);
 

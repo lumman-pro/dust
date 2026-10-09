@@ -108,6 +108,7 @@ import {
 import { ConversationView } from "../components/ConversationView";
 import type { PodDestination } from "../components/CreateRoomDialog";
 import { CreateRoomDialog } from "../components/CreateRoomDialog";
+import { EmptyState } from "../components/EmptyState";
 import {
   type CreatableFileType,
   CreateFilesMenu,
@@ -2075,10 +2076,30 @@ function WorkspaceView({ model, user, onProfileChange }: WorkspaceViewProps) {
             }}
           />
         );
+      const runs = allConversations.filter(isTriggeredConversation);
+      // Nothing has run yet, which is most of a workspace's first day: the
+      // generic "start a conversation" line would be the wrong advice, since
+      // this is the one list you never write into by hand.
+      if (runs.length === 0)
+        return (
+          <EmptyState
+            icon={Zap}
+            title="No automated work yet"
+            description="Work your agents do on their own shows up here: runs that start on a schedule, and runs a trigger sets off."
+            action={
+              <Button
+                label="Manage triggers"
+                icon={Zap}
+                variant="outline"
+                onClick={() => setAutomatedWorkTab("triggers")}
+              />
+            }
+          />
+        );
       return (
         <GroupConversationView
           space={MY_POD_SPACE}
-          conversations={allConversations.filter(isTriggeredConversation)}
+          conversations={runs}
           users={mockUsers}
           agents={mockAgents}
           onConversationClick={(conversation) => {
@@ -2111,6 +2132,9 @@ function WorkspaceView({ model, user, onProfileChange }: WorkspaceViewProps) {
         <GroupConversationView
           space={podContext.space}
           conversations={podContext.conversations}
+          // A workspace opened today has the one conversation it was given,
+          // and padding it out would invent a past it does not have.
+          simulateHistory={model.profile !== "newWorkspace"}
           users={mockUsers}
           agents={mockAgents}
           spaceMemberIds={
