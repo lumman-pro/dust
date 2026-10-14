@@ -138,8 +138,8 @@ reads the local manifest, so the function does not need to be published yet.
 
 Each function is a TypeScript module that:
 
-- exports a \`schema\` object with a description and Zod \`input\` and \`output\` schemas, plus an
-  optional \`userIdentity\` policy;
+- exports a \`schema\` object with a description and Zod \`input\` and \`output\` schemas, plus a
+  \`userIdentity\` policy that defaults to \`workspace_user_required\`;
 - default-exports an object with a \`fetch(request: Request): Promise<Response>\` method. A bare
   default-exported function is invalid.
 
@@ -300,8 +300,8 @@ refuses the tool call. Function \`fetch()\` requests use the same workspace egre
 
 The \`schema.userIdentity\` policy decides whether the function may run:
 
-- \`optional\` is the default and allows calls without a user.
-- \`workspace_user_required\` requires a current member of the owning workspace.
+- \`workspace_user_required\` is the default and requires a current member of the owning
+  workspace.
 - \`interactive_workspace_user_required\` additionally requires the member's live Dust session;
   delegated agents, schedules, and API clients are refused.
 - \`frame_author_required\` requires the caller to be able to modify the Frame v2 source files (same
@@ -313,12 +313,11 @@ Frame UI calls are available only to authenticated members of the owning workspa
 viewers must get a typed authorization error. A function policy can impose a stricter requirement.
 
 Use \`currentUser()\` from \`@dust/pod\` for the trusted caller. It returns
-\`{ sId, firstName, lastName, fullName, image, isPodMember, isPodEditor }\`, or \`null\` under the
-optional policy when there is no user. Never accept a caller \`userId\` as function input: the caller
-can forge it. The frontend's \`useUserIdentity\` hook also returns \`canWriteFrameSource\`; use that flag to
-show source-write-only UI, but enforce every such operation with \`frame_author_required\` (the
-server-side equivalent of \`canWriteFrameSource\`) because client-side conditions are not access
-control.
+\`{ sId, firstName, lastName, fullName, image, isPodMember, isPodEditor }\`. Never accept a caller
+\`userId\` as function input: the caller can forge it. The frontend's \`useUserIdentity\` hook also
+returns \`canWriteFrameSource\`. Use that flag to show source-write-only UI, but enforce every such
+operation with \`frame_author_required\` (the server-side equivalent of \`canWriteFrameSource\`)
+because client-side conditions are not access control.
 
 ## Storing files in a Frame
 
