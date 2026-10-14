@@ -18,7 +18,6 @@ export type SandboxFunctionInvocationStatus =
   (typeof SANDBOX_FUNCTION_INVOCATION_STATUSES)[number];
 
 export const SANDBOX_FUNCTION_USER_IDENTITY_POLICIES = [
-  "optional",
   "workspace_user_required",
   "interactive_workspace_user_required",
   "frame_author_required",
@@ -28,8 +27,10 @@ export const SANDBOX_FUNCTION_USER_IDENTITY_POLICIES = [
 export type SandboxFunctionUserIdentityPolicy =
   (typeof SANDBOX_FUNCTION_USER_IDENTITY_POLICIES)[number];
 
+// Publication descriptors stored before the optional policy was retired, and dsbx up to 0.1.70,
+// still carry it.
 export const SandboxFunctionUserIdentityPolicySchema = z
-  .enum(SANDBOX_FUNCTION_USER_IDENTITY_POLICIES)
+  .enum([...SANDBOX_FUNCTION_USER_IDENTITY_POLICIES, "optional"])
   .transform((policy): SandboxFunctionUserIdentityPolicy =>
     policy === "optional" ? "workspace_user_required" : policy
   );

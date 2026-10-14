@@ -67,7 +67,7 @@ async function createFrame(adminAuth: Authenticator, space: SpaceResource) {
 }
 
 describe("authorizeSandboxFunctionInvocation for Frames", () => {
-  it("requires a workspace member even when identity is optional", async () => {
+  it("requires a workspace member even when identity is public", async () => {
     const { workspace, adminAuth, space } = await setup();
     const frame = await createFrame(adminAuth, space);
     const userlessAuth = await Authenticator.internalAdminForWorkspace(
@@ -77,7 +77,7 @@ describe("authorizeSandboxFunctionInvocation for Frames", () => {
     const authorization = await authorizeSandboxFunctionInvocation(
       userlessAuth,
       {
-        userIdentity: "optional",
+        userIdentity: "public",
         origin: "delegated",
         owner: { kind: "frame", frame },
       }
@@ -126,7 +126,7 @@ describe("authorizeSandboxFunctionInvocation for Frames", () => {
     });
 
     const authorization = await authorizeSandboxFunctionInvocation(adminAuth, {
-      userIdentity: "optional",
+      userIdentity: "workspace_user_required",
       origin: "interactive_session",
       owner: { kind: "frame", frame },
     });

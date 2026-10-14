@@ -102,8 +102,6 @@ function userIdentityPolicyStrength(
 ): number {
   switch (policy) {
     case "public":
-      return -1;
-    case "optional":
       return 0;
     case "workspace_user_required":
       return 1;
@@ -220,7 +218,7 @@ export class SandboxFunctionResource extends BaseResource<SandboxFunctionModel> 
     {
       bundleCode,
       description,
-      userIdentity = this.userIdentity ?? "optional",
+      userIdentity = this.userIdentity ?? "workspace_user_required",
       executionMode = DEFAULT_SANDBOX_FUNCTION_EXECUTION_MODE,
       defaultStake = DEFAULT_SANDBOX_FUNCTION_STAKE,
       inputSchema,
@@ -256,7 +254,7 @@ export class SandboxFunctionResource extends BaseResource<SandboxFunctionModel> 
           const byteIdentical = currentFunction.bundleSha256 === bundleSha256;
 
           const currentUserIdentity =
-            currentFunction.userIdentity ?? "optional";
+            currentFunction.userIdentity ?? "workspace_user_required";
           if (
             userIdentityPolicyStrength(userIdentity) >
             userIdentityPolicyStrength(currentUserIdentity)
