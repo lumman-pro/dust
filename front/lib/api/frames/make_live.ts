@@ -12,6 +12,7 @@ import { checkFrameFunctionSharing } from "@app/lib/api/frames/publish_from_sour
 import type { Authenticator } from "@app/lib/auth";
 import { isLockAcquisitionTimeoutError } from "@app/lib/lock";
 import type { FileResource } from "@app/lib/resources/file_resource";
+import { FramePublicationResource } from "@app/lib/resources/frame_publication_resource";
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
 
@@ -45,7 +46,10 @@ type MakeLiveResult = Result<
  * scope) and the share allowlist (file access). Development feature flags are not re-checked.
  * When the named publication is already the live one, it MUST succeed without re-activating it;
  * when it is neither live nor the pending draft (including when there is no pending draft), it
- * MUST fail with `draft_conflict`.
+ * MUST fail with `draft_conflict`. It MUST install the draft's stored share allowlist only when
+ * the caller is the user that list was generated for (the draft's publisher), and otherwise
+ * recompute it under the caller's access; activation still recomputes it when the share scope
+ * changed since the draft.
  */
 export async function makeFrameDraftLive(
   auth: Authenticator,
@@ -104,11 +108,27 @@ export async function makeFrameDraftLive(
         return sharing;
       }
 
+      // The draft's stored list was computed under its publisher's access: reuse it only when that
+      // publisher is the one making it live, so a list never goes live under someone else's access.
+      const draftPublication =
+        await FramePublicationResource.fetchForFramePublication(
+          auth,
+          fresh,
+          draftPublicationId
+        );
+      const storedAllowlist = draftPublication?.authorizedFileAccess ?? null;
+      const reusableAllowlist =
+        storedAllowlist &&
+        storedAllowlist.allowlist.generatedByUserId === auth.user()?.id
+          ? storedAllowlist
+          : null;
+
       const activation = await activateFramePublication(auth, {
         frame: fresh,
         publicationId: draftPublicationId,
         publishedByAgentConfigurationId,
         descriptor: descriptor.value,
+        authorizedFileAccess: reusableAllowlist,
       });
       if (activation.isErr()) {
         return activation;
