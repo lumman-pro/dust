@@ -39,9 +39,9 @@ export class DfsWireFactory {
     };
   }
 
-  static lockState(overrides: DfsWireMessage = {}): DfsWireMessage {
+  static lockState(id: string, overrides: DfsWireMessage = {}): DfsWireMessage {
     return {
-      lockId: Buffer.alloc(16, 1),
+      lockId: Buffer.from(id, "hex"),
       expiresAt: "1700000060000",
       ...overrides,
     };

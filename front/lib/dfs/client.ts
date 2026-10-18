@@ -35,6 +35,7 @@ import type {
   DfsOperation,
   DfsEntryPage,
   DfsFilesBatch,
+  DfsLockId,
   DfsLockState,
   DfsObjectLock,
   DfsReadData,
@@ -229,7 +230,7 @@ export class DfsClient {
     lockId,
   }: {
     objectId: DfsObjectId;
-    lockId?: Uint8Array;
+    lockId?: DfsLockId;
   }): Promise<Result<DfsLockState, DfsError>> {
     return this.callMatching(
       "Lock",
@@ -238,9 +239,7 @@ export class DfsClient {
         lockId: lockId === undefined ? undefined : encodeLockId(lockId),
       }),
       WireLockStateSchema,
-      (lock) =>
-        lockId === undefined ||
-        lock.lockId.every((byte, index) => byte === lockId[index])
+      (lock) => lockId === undefined || lock.lockId === lockId
     );
   }
 

@@ -85,35 +85,27 @@ of at most 100 entries. Each batch rechecks session state with conflict tracking
 protecting refreshed sessions and allowing concurrent sweepers to retry safely. Stale and orphaned
 index entries are also removed. Authentication rejects expired sessions independently of cleanup.
 
-## Exclusive locks (proposed)
+## Exclusive locks
 
-FDB is authoritative for [exclusive locks](API.md#exclusive-locks-proposed).
+FDB is authoritative for [exclusive locks](API.md#exclusive-locks).
 
 | Key | Value | Rationale |
 | --- | --- | --- |
-| `dfs-v1-{env}/tenant/<tenantId>/object/<objectId>/lock` | FDB tuple `(lock_id_bytes, expires_at_ms)`. | Stores the object's ownership token and expiry. |
-| `dfs-v1-{env}/lock-expiry/<expiresAtMs>/<tenantId>/<objectId>` | Empty value. | Finds expired locks across tenants without scanning objects. |
+| `dfs-v1-{env}/tenant/<tenantId>/object/<objectId>/lock` | Tuple `(lock_id_bytes, expires_at_ms)`; UUIDv7 as 16 bytes. | Object ownership token and expiry. |
+| `dfs-v1-{env}/lock-expiry/<expiresAtMs>/<tenantId>/<objectId>` | Empty. | Expiry scan, using session expiry's timestamp encoding. |
 
-Acquisition conflict-reads the lock key and replaces only an absent or expired lock. Refresh
-requires the matching ID and unexpired state. Both set expiry to server time plus one minute;
-unlock clears only a matching ID. State and expiry index change atomically: replacement or refresh
-removes the old expiry entry, and unlock or object removal clears both records. Moves preserve them.
-Acquisition, refresh, and unlock use `with_idempotent_transaction`; receipt replay retains the
-committed absolute expiry. Each transaction attempt uses current server time for expiry checks.
+Acquire, refresh, and unlock use `with_idempotent_transaction`. Each attempt checks expiry against
+current server time; receipt replay returns the committed expiry. Lock state and its expiry entry
+change atomically. Moves preserve both; removal clears both.
 
-One common helper checks every Apply operation's batching targets after permission checks and
-before staging writes. Lock reads use conflict tracking in the mutation transaction, never a cache.
-Session authentication uses the existing cache; no session ID is stored or checked in lock state.
+One helper checks Apply's batching targets after authorization and before writes. All lock reads
+use ordinary FDB reads (`snapshot = false`) in the write transaction, so concurrent lock changes
+force a retry. Lock state is never cached; session authentication uses the existing cache.
 
-Cleanup joins `sweep_expired_storage`, sharing its jitter and pass timestamp and running independently
-of other cleanup failures. Each pass drains entries expired for at least one minute in fresh
-transactions of at most 100 entries, using one fixed cutoff. Expiry keys use session expiry's
-timestamp encoding.
-
-The sweeper conflict-reads each lock and clears it only if its expiry matches the indexed timestamp
-and is past the cutoff. Stale or orphaned index entries are cleared alone. A replacement sharing
-that timestamp is also expired, so the index needs no lock ID. Locks stop blocking at expiry,
-independently of cleanup. These keys and checks remain proposed until lock enforcement is implemented.
+Cleanup joins `sweep_expired_storage`, sharing jitter and a fixed cutoff one minute before the pass.
+It drains at most 100 entries per transaction, independently of other cleanup failures. Before
+clearing a lock, it rechecks that its expiry matches the indexed timestamp and is past the cutoff.
+Stale/orphaned index entries are cleared alone. Expiry takes effect independently of cleanup.
 
 ## Transaction receipts
 

@@ -216,7 +216,7 @@ fn apply_preserves_operation_order_and_per_operation_outcomes() -> Result<()> {
         ],
         locks: vec![rpc::ObjectLock {
             object_id,
-            lock_id: vec![1; 16],
+            lock_id: ObjectId::new_v7().as_bytes().to_vec(),
         }],
     };
     assert_eq!(request.operations.len(), 3);

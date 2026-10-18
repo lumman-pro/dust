@@ -58,7 +58,7 @@ pub(crate) async fn apply_returns_per_operation_errors_and_rejects_invalid_reque
                 }],
                 locks: vec![rpc::ObjectLock {
                     object_id: tenant.root_id,
-                    lock_id: vec![1; 16],
+                    lock_id: ObjectId::new_v7().as_bytes().to_vec(),
                 }],
             },
             &authorization,
