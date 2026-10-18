@@ -645,15 +645,15 @@ Acquiring an active lock gives `WOULD_BLOCK`. Refresh preserves the matching une
 `LOCK_LOST`. Unlock clears only the matching ID, succeeds if absent/mismatched, and needs no object
 permission. Moves preserve locks; removal clears them. Locks do not change attributes or versions.
 
-Refresh about every 20 seconds. On `LOCK_LOST`, stop saving with that ID; reacquire and reconcile
-current file state before saving again. Expiry releases the lock without waiting for cleanup.
+Refresh about every 20 seconds. Expiry releases the lock without waiting for cleanup.
 
 `Apply.locks` supplies at most one `ObjectLock` per object; duplicates give `INVALID_INPUT`.
 After authorization, each operation checks locks in its write transaction: an active lock without
 an `ObjectLock` gives `WOULD_BLOCK`; a supplied `ObjectLock` without a matching active lock gives
 `LOCK_LOST`. No lock and no supplied `ObjectLock` allows mutation. Checks cover batching targets:
 Create's parent/new object; Update/Write's object; Move's object/both parents; Remove's object/parent.
-Directory locks are not recursive. A blocked operation changes nothing; other operations continue.
+Directory locks are not recursive. An operation returning `WOULD_BLOCK` or `LOCK_LOST` makes no
+changes; other operations continue.
 Retry only blocked operations, never successful operations or unknown write outcomes.
 
 Lock RPCs and Apply with nonempty `locks` currently return `UNSUPPORTED`.
