@@ -12,7 +12,10 @@ use tracing::{error, info};
 
 use crate::{
     api::api_state::APIState,
-    data_sources::data_source::{Chunk, DataSource, Document},
+    data_sources::{
+        data_source::{Chunk, DataSource, Document},
+        file_storage_document::FileStorageDocument,
+    },
     providers::embedder::EmbedderRequest,
 };
 use crate::{
@@ -1346,6 +1349,12 @@ pub async fn data_sources_documents_retrieve(
                 )
                 .await
             {
+                Err(e) if FileStorageDocument::is_missing_blob_error(&e) => error_response(
+                    StatusCode::NOT_FOUND,
+                    "data_source_document_content_not_found",
+                    "Document content is missing from storage",
+                    Some(e),
+                ),
                 Err(e) => error_response(
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "internal_server_error",

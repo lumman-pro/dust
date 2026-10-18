@@ -161,7 +161,9 @@ export async function cat(
       new MCPError(
         `Could not read node: ${nodeId} (error: ${readResult.error.message})`,
         {
-          tracked: readResult.error.code !== "invalid_regex",
+          tracked:
+            readResult.error.code !== "invalid_regex" &&
+            readResult.error.code !== "data_source_document_content_not_found",
         }
       )
     );

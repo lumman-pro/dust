@@ -72,6 +72,14 @@ impl FileStorageDocument {
         }
     }
 
+    // cloud_storage's Object::download maps a GCS 404 to `Error::Other("No such object: ...")`.
+    pub fn is_missing_blob_error(e: &anyhow::Error) -> bool {
+        matches!(
+            e.downcast_ref::<cloud_storage::Error>(),
+            Some(cloud_storage::Error::Other(s)) if s.contains("No such object")
+        )
+    }
+
     pub async fn get_stored_document(
         data_source: &DataSource,
         document_created: u64,
@@ -237,5 +245,25 @@ impl FileStorageDocument {
         );
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_missing_blob_error() {
+        let missing = anyhow::Error::from(cloud_storage::Error::Other(
+            "No such object: bucket/path.json".to_string(),
+        ));
+        assert!(FileStorageDocument::is_missing_blob_error(&missing));
+
+        let other = anyhow::Error::from(cloud_storage::Error::Other("boom".to_string()));
+        assert!(!FileStorageDocument::is_missing_blob_error(&other));
+
+        assert!(!FileStorageDocument::is_missing_blob_error(&anyhow!(
+            "No such object: not a cloud_storage error"
+        )));
     }
 }
