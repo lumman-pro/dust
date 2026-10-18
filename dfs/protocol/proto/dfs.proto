@@ -420,10 +420,6 @@ message ObjectLock {
 // Lock checks MUST use non-snapshot FDB reads, never a cache. Malformed lock IDs or duplicate
 // object IDs in locks MUST fail the request with INVALID_INPUT; unused entries MAY be ignored.
 
-// @cc [owner:spolu,label:api;security] dfs-apply-lock-rollout
-// Until enforcement is implemented, otherwise valid requests with nonempty locks MUST fail with
-// UNSUPPORTED before any operation runs. Lock acquisition MUST remain unsupported until Apply
-// checks are implemented.
 message ApplyRequest {
   repeated Operation operations = 1;
   repeated ObjectLock locks = 2;
