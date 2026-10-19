@@ -11,12 +11,10 @@ the end; the rest of the document assumes the recommended option for each.
 
 ## Motivation
 
-**One source of truth for content access.** Access rules are spread across front today: space
-checks (`requestedSpaceIds`), the private URL setting and participant rows for conversations,
-`shareable_files` and `sharing_grants` for Frames, and pod membership. Dfs already enforces grants
-on every file operation, including from sandboxes. A second set of rules in front can disagree
-with dfs, and every new surface has to reimplement it. With dfs as the authority, front,
-sandboxes, search and browsing answer "who can see this" the same way.
+**One restrictive source of truth.** Content is moving to dfs, and dfs grants become the single
+source of truth for who can access it: front, sandboxes, search and browsing all answer "who can
+see this" from the same grants. That truth has to be restrictive, because dfs makes whatever a
+user can read discoverable.
 
 **Search and browsing make conversations discoverable.** Dfs will provide search
 ([SEARCH.md](SEARCH.md)) and browsing (`List`, `/shared`) over everything a user can read. Today, a
