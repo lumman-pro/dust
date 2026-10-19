@@ -45,6 +45,7 @@ import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.
 import {
   discoverAuthorizationServerMetadata,
   discoverOAuthProtectedResourceMetadata,
+  extractWWWAuthenticateParams,
   registerClient,
   selectClientAuthMethod,
   selectResourceURL,
@@ -54,6 +55,7 @@ import type {
   OAuthProtectedResourceMetadata,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
 import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
+import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js";
 import assert from "assert";
 import uniq from "lodash/uniq";
 import type {
@@ -94,6 +96,45 @@ export function getMCPAuthorizationScope({
   }
 
   return scopes.size > 0 ? [...scopes].join(" ") : undefined;
+}
+
+/**
+ * @cc [owner:fabiencelier,label:mcp] resource-metadata-url-from-challenge
+ * Returns the `resource_metadata` URL of the `WWW-Authenticate` header the MCP server sends on an
+ * unauthenticated `initialize` request. Returns `undefined`, never throws, when the request fails
+ * or the header carries no valid URL.
+ */
+async function getResourceMetadataUrlFromChallenge(
+  serverUrl: string,
+  fetchFn: FetchLike
+): Promise<URL | undefined> {
+  try {
+    const response = await fetchFn(serverUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 0,
+        method: "initialize",
+        params: {
+          protocolVersion: LATEST_PROTOCOL_VERSION,
+          capabilities: {},
+          clientInfo: { name: "dust-mcp-client", version: "1.0.0" },
+        },
+      }),
+    });
+    await response.body?.cancel();
+    return extractWWWAuthenticateParams(response).resourceMetadataUrl;
+  } catch (e) {
+    logger.info(
+      { error: e, serverUrl },
+      "Failed to probe MCP server for its OAuth challenge"
+    );
+    return undefined;
+  }
 }
 
 async function getMCPServerEgressAgent(
@@ -709,6 +750,11 @@ export class RemoteMCPServerResource extends BaseResource<RemoteMCPServerModel> 
    * / `client_secret_post` in the server's `token_endpoint_auth_methods_supported` order; otherwise
    * the provider's default `clientMetadata.token_endpoint_auth_method`.
    */
+  /**
+   * @cc [owner:fabiencelier,label:mcp] protected-resource-metadata-from-challenge
+   * When the server's unauthenticated 401 challenge names a `resource_metadata` URL, the protected
+   * resource metadata MUST be fetched from that URL rather than only from the well-known locations.
+   */
   static async discoverOAuthMetadata(
     auth: Authenticator,
     {
@@ -751,9 +797,15 @@ export class RemoteMCPServerResource extends BaseResource<RemoteMCPServerModel> 
     let authServerUrl = new URL("/", serverUrl);
     let resourceMetadata: OAuthProtectedResourceMetadata | null = null;
     try {
+      // Servers may host their protected resource metadata outside the well-known locations and
+      // point to it from the 401 challenge, which the MCP spec requires clients to follow.
+      const resourceMetadataUrl = await getResourceMetadataUrlFromChallenge(
+        serverUrl,
+        fetchFn
+      );
       resourceMetadata = await discoverOAuthProtectedResourceMetadata(
         serverUrl,
-        undefined,
+        { resourceMetadataUrl },
         fetchFn
       );
       if (resourceMetadata?.authorization_servers?.length) {

@@ -4,6 +4,8 @@ import type { ToolActivityExecution } from "./tool_activity_start_marker";
 import {
   claimToolActivityNeverStarted,
   claimToolActivityStart,
+  isToolActivityCompleted,
+  markToolActivityCompleted,
 } from "./tool_activity_start_marker";
 
 function makeExecution(): ToolActivityExecution {
@@ -38,5 +40,24 @@ describe("tool activity start marker", () => {
     expect(
       await claimToolActivityStart({ ...execution, activityId: "4" })
     ).toBe(true);
+  });
+
+  it("reports completion only once the started activity marked itself completed", async () => {
+    const execution = makeExecution();
+
+    expect(await claimToolActivityStart(execution)).toBe(true);
+    expect(await isToolActivityCompleted(execution)).toBe(false);
+
+    await markToolActivityCompleted(execution);
+
+    expect(await isToolActivityCompleted(execution)).toBe(true);
+    expect(await claimToolActivityNeverStarted(execution)).toBe(false);
+  });
+
+  it("does not report completion for an abandoned activity", async () => {
+    const execution = makeExecution();
+
+    expect(await claimToolActivityNeverStarted(execution)).toBe(true);
+    expect(await isToolActivityCompleted(execution)).toBe(false);
   });
 });

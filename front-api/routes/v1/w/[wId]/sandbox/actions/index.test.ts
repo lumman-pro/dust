@@ -5,6 +5,7 @@ import {
 } from "@app/lib/api/sandbox/access_tokens";
 import { Authenticator } from "@app/lib/auth";
 import { InternalMCPServerInMemoryResource } from "@app/lib/resources/internal_mcp_server_in_memory_resource";
+import { RemoteMCPServerToolMetadataResource } from "@app/lib/resources/remote_mcp_server_tool_metadata_resource";
 import { SpaceResource } from "@app/lib/resources/space_resource";
 import { GroupPermissionModel } from "@app/lib/resources/storage/models/group_permissions";
 import { AgentConfigurationFactory } from "@app/tests/utils/AgentConfigurationFactory";
@@ -251,6 +252,42 @@ describe("GET /api/v1/w/[wId]/sandbox/actions", () => {
     expect(
       body.serverViews.map((sv: { server: { name: string } }) => sv.server.name)
     ).toEqual(["search"]);
+  });
+
+  it("hides the tools an admin disabled on the server", async () => {
+    const { auth, token, workspace, globalSpace } =
+      await createSandboxFunctionInvocationTokenTestContext();
+
+    const remoteServer = await RemoteMCPServerFactory.create(workspace, {
+      name: "remote_server",
+      tools: [
+        { name: "enabled_tool", description: "Enabled tool" },
+        { name: "disabled_tool", description: "Disabled tool" },
+      ],
+    });
+    await MCPServerViewFactory.create(workspace, remoteServer.sId, globalSpace);
+    await RemoteMCPServerToolMetadataResource.updateOrCreateSettings(auth, {
+      serverId: remoteServer.sId,
+      toolName: "disabled_tool",
+      permission: "high",
+      enabled: false,
+    });
+
+    for (const query of ["", "?light=true"]) {
+      const response = await honoApp.request(
+        `/api/v1/w/${workspace.sId}/sandbox/actions${query}`,
+        { headers: { authorization: `Bearer ${token}` } }
+      );
+
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.serverViews).toHaveLength(1);
+      expect(
+        body.serverViews[0].server.tools.map(
+          (tool: { name: string }) => tool.name
+        )
+      ).toEqual(["enabled_tool"]);
+    }
   });
 
   it("resolves ?server= by view id, then view name, then server name", async () => {

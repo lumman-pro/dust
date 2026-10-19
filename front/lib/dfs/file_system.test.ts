@@ -195,6 +195,21 @@ describe("DfsFileSystem", () => {
     expect(throughFile.isErr() && throughFile.error.code).toBe("not_directory");
   });
 
+  it("sets the MIME type of the created directory only", async () => {
+    const { dfs, fs, at } = setup();
+
+    const dir = await fs.mkdir(at("a/b"), {
+      mimeType: "application/vnd.dust.pod",
+    });
+
+    expect(dir.isOk()).toBe(true);
+    expect(
+      dfs.applyCalls.map((ops) =>
+        ops.map((op) => op.type === "create" && op.mimeType)
+      )
+    ).toEqual([[undefined], ["application/vnd.dust.pod"]]);
+  });
+
   it("reuses a parent directory created concurrently", async () => {
     const { dfs, fs, at } = setup({
       // Another writer creates `a` right before our own `create` (apply #0).

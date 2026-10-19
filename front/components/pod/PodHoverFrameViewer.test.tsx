@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   canWriteFrameSource: true,
   hasAuthorizedRequiredTools: true,
   requiredTools: [] as [string, string][],
+  draftPublicationId: null as string | null,
   iframe: vi.fn((_props: unknown) => null),
 }));
 
@@ -83,6 +84,7 @@ vi.mock(
 vi.mock("@app/lib/swr/frames", () => ({
   useFramePermissions: () => ({
     canWriteFrameSource: mocks.canWriteFrameSource,
+    draftPublicationId: mocks.draftPublicationId,
     hasFrameFunctions: false,
     requiredTools: mocks.requiredTools,
     isLastPublisher: false,
@@ -102,6 +104,7 @@ beforeEach(() => {
   mocks.canWriteFrameSource = true;
   mocks.hasAuthorizedRequiredTools = true;
   mocks.requiredTools = [];
+  mocks.draftPublicationId = null;
 });
 
 afterEach(() => {
@@ -135,6 +138,33 @@ describe("PodHoverFrameViewer", () => {
         isEditable: true,
         stagedEditMode: "preview",
       })
+    );
+  });
+
+  it("offers no editing while a draft is pending and shows the draft chip", () => {
+    mocks.draftPublicationId = "pub_draft";
+
+    render(
+      <PodHoverFrameViewer
+        owner={owner}
+        spaceId="vlt_project"
+        fileId="fil_frame"
+        fileContent="bundle"
+        vizUrl="https://viz.dust.tt"
+        identifier="viz-test"
+        isPodEditor={true}
+        isPodMember={true}
+        frameId="fil_frame"
+        framePath="pod-vlt_project/App/manifest.json"
+        pinnedFramePath={null}
+        fileTabs={[]}
+      />
+    );
+
+    expect(screen.queryByText("edit-controls")).not.toBeInTheDocument();
+    expect(screen.getByText("Draft pending")).toBeInTheDocument();
+    expect(mocks.iframe).toHaveBeenCalledWith(
+      expect.objectContaining({ isEditable: false })
     );
   });
 

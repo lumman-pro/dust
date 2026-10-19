@@ -20,6 +20,7 @@ const {
   finalizeCreditSpendCheckpointPausedAgentLoopActivity,
   finalizeErroredSandboxChildToolActivity,
   finalizeSuccessfulAgentLoopActivity,
+  isToolActivityCompletedActivity,
   runToolActivity,
   runRetryableToolActivity,
   runToolActivityWithExplicitCancellation,
@@ -38,6 +39,7 @@ const {
   finalizeCreditSpendCheckpointPausedAgentLoopActivity: vi.fn(),
   finalizeErroredSandboxChildToolActivity: vi.fn(),
   finalizeSuccessfulAgentLoopActivity: vi.fn(),
+  isToolActivityCompletedActivity: vi.fn(),
   runToolActivity: vi.fn(),
   runRetryableToolActivity: vi.fn(),
   runToolActivityWithExplicitCancellation: vi.fn(),
@@ -93,6 +95,7 @@ vi.mock("@temporalio/workflow", () => {
       finalizeGracefullyStoppedAgentLoopActivity: unusedActivity,
       finalizeInterruptedAgentLoopActivity: unusedActivity,
       finalizeSuccessfulAgentLoopActivity,
+      isToolActivityCompletedActivity,
       upsertOngoingAgentLoopActivity,
       deleteOngoingAgentLoopActivity,
       publishDeferredEventsActivity,
@@ -310,6 +313,7 @@ describe("never started tool activity rescheduling", () => {
     vi.clearAllMocks();
     patched.mockReturnValue(true);
     claimToolActivityNeverStartedActivity.mockResolvedValue(true);
+    isToolActivityCompletedActivity.mockResolvedValue(false);
     finalizeErroredSandboxChildToolActivity.mockResolvedValue(undefined);
   });
 
@@ -363,6 +367,98 @@ describe("never started tool activity rescheduling", () => {
     });
 
     expect(runToolActivity).toHaveBeenCalledOnce();
+    expect(finalizeErroredSandboxChildToolActivity).toHaveBeenCalledOnce();
+  });
+
+  it("recovers a started tool activity that marked itself completed", async () => {
+    claimToolActivityNeverStartedActivity.mockResolvedValue(false);
+    isToolActivityCompletedActivity.mockResolvedValue(true);
+    runToolActivity.mockRejectedValue(makeToolHeartbeatTimeout());
+
+    await runSandboxChildToolWorkflow({
+      actionModelId: 123,
+      agentLoopArgs,
+      authType,
+      retryPolicy: "no_retry",
+      step: 1,
+    });
+
+    expect(runToolActivity).toHaveBeenCalledOnce();
+    expect(isToolActivityCompletedActivity).toHaveBeenCalledWith({
+      workflowId: "workflow-id",
+      runId: "run-id",
+      activityId: "3",
+    });
+    expect(finalizeErroredSandboxChildToolActivity).not.toHaveBeenCalled();
+  });
+
+  it("rethrows the tool heartbeat timeout when the completion check fails", async () => {
+    const heartbeatTimeout = makeToolHeartbeatTimeout();
+    claimToolActivityNeverStartedActivity.mockResolvedValue(false);
+    isToolActivityCompletedActivity.mockRejectedValue(
+      new ActivityFailure(
+        "Activity task failed",
+        "isToolActivityCompletedActivity",
+        "4",
+        RetryState.MAXIMUM_ATTEMPTS_REACHED,
+        "worker-id",
+        new Error("redis down")
+      )
+    );
+    runToolActivity.mockRejectedValue(heartbeatTimeout);
+
+    await runSandboxChildToolWorkflow({
+      actionModelId: 123,
+      agentLoopArgs,
+      authType,
+      retryPolicy: "no_retry",
+      step: 1,
+    });
+
+    expect(runToolActivity).toHaveBeenCalledOnce();
+    expect(workflowLogError).toHaveBeenCalledWith(
+      "Sandbox child tool activity failed.",
+      { actionModelId: 123, error: heartbeatTimeout }
+    );
+  });
+
+  it("propagates a non-activity failure of the completion check", async () => {
+    const checkError = new TypeError("proxy failure");
+    claimToolActivityNeverStartedActivity.mockResolvedValue(false);
+    isToolActivityCompletedActivity.mockRejectedValue(checkError);
+    runToolActivity.mockRejectedValue(makeToolHeartbeatTimeout());
+
+    await runSandboxChildToolWorkflow({
+      actionModelId: 123,
+      agentLoopArgs,
+      authType,
+      retryPolicy: "no_retry",
+      step: 1,
+    });
+
+    expect(workflowLogError).toHaveBeenCalledWith(
+      "Sandbox child tool activity failed.",
+      { actionModelId: 123, error: checkError }
+    );
+  });
+
+  it("does not check completion when replaying without the patch marker", async () => {
+    patched.mockImplementation(
+      (patchId: string) => patchId !== "recover-completed-tool-activity"
+    );
+    claimToolActivityNeverStartedActivity.mockResolvedValue(false);
+    isToolActivityCompletedActivity.mockResolvedValue(true);
+    runToolActivity.mockRejectedValue(makeToolHeartbeatTimeout());
+
+    await runSandboxChildToolWorkflow({
+      actionModelId: 123,
+      agentLoopArgs,
+      authType,
+      retryPolicy: "no_retry",
+      step: 1,
+    });
+
+    expect(isToolActivityCompletedActivity).not.toHaveBeenCalled();
     expect(finalizeErroredSandboxChildToolActivity).toHaveBeenCalledOnce();
   });
 

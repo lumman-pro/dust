@@ -499,6 +499,7 @@ export function ConversationContainerVirtuoso({
           limitReachedCode={limitReachedCode}
           key={conversationViewerKey}
           clientSideMCPServerIds={clientSideMCPServerIds}
+          showMessageTimeline
         />
       ) : (
         <>

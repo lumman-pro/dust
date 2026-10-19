@@ -64,6 +64,26 @@ impl Inodes {
         ino
     }
 
+    /// The inode number `object` shows in a directory listing: its own when the kernel knows it,
+    /// otherwise a new one, not recorded, since a listing entry counts no lookup.
+    /**
+     * @cc [owner:fontanierh,label:coding] listing-counts-nothing
+     * `listed` MUST NOT count a lookup, and MUST leave the table as it was, apart from using up the
+     * number it returns. That number MUST NOT be one that another object has or had.
+     */
+    /**
+     * @cc [owner:fontanierh,label:coding] listing-known-number
+     * While the table holds `object`, `listed` MUST return its inode number.
+     */
+    pub(crate) fn listed(&mut self, object: ObjectId) -> Ino {
+        if let Some(ino) = self.inos.get(&object) {
+            return *ino;
+        }
+        let ino = self.next;
+        self.next += 1;
+        ino
+    }
+
     pub(crate) fn object(&self, ino: Ino) -> Option<ObjectId> {
         self.inodes.get(&ino).map(|inode| inode.object)
     }
@@ -130,6 +150,24 @@ mod tests {
         inodes.forget(ino, 2);
         assert_eq!(inodes.object(ino), Some(object));
         assert_eq!(inodes.lookup(object), ino);
+    }
+
+    #[test]
+    fn listing_an_object_counts_no_lookup() {
+        let mut inodes = Inodes::new();
+        let known = ObjectId::new_v7();
+        let ino = inodes.lookup(known);
+        assert_eq!(inodes.listed(known), ino);
+        inodes.forget(ino, 1);
+        assert_eq!(inodes.object(ino), None);
+
+        let unknown = ObjectId::new_v7();
+        let listed = inodes.listed(unknown);
+        assert_ne!(listed, ino);
+        assert_eq!(inodes.object(listed), None);
+        // The listed number is not the object's: a lookup gives it its own, never used before.
+        let looked_up = inodes.lookup(unknown);
+        assert!(![ino, listed].contains(&looked_up));
     }
 
     #[test]

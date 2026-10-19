@@ -12,6 +12,7 @@ import { DocumentImage } from "@app/components/editor/document/DocumentImage";
 import { DocumentListItem } from "@app/components/editor/document/DocumentListItem";
 import type { DocumentOrderedListOptions } from "@app/components/editor/document/DocumentOrderedList";
 import { DocumentOrderedList } from "@app/components/editor/document/DocumentOrderedList";
+import { DocumentParagraph } from "@app/components/editor/document/DocumentParagraph";
 import {
   DocumentTable,
   DocumentTableCell,
@@ -19,10 +20,12 @@ import {
 } from "@app/components/editor/document/DocumentTable";
 import { createDocumentMarked } from "@app/components/editor/document/marked_instance";
 import { codeFence } from "@app/lib/markdown/code_fence";
+import { isNumber } from "@app/types/shared/utils/general";
 import { cn } from "@dust-tt/sparkle";
 import type { AnyExtension } from "@tiptap/core";
 import { Code } from "@tiptap/extension-code";
 import { CodeBlock } from "@tiptap/extension-code-block";
+import { Heading } from "@tiptap/extension-heading";
 import { Markdown } from "@tiptap/markdown";
 import type { StarterKitOptions } from "@tiptap/starter-kit";
 import { StarterKit } from "@tiptap/starter-kit";
@@ -33,17 +36,8 @@ import { StarterKit } from "@tiptap/starter-kit";
  * selected like any other text.
  */
 const starterKitOptions: Partial<StarterKitOptions> = {
-  heading: {
-    HTMLAttributes: {
-      class: cn(
-        "text-pretty font-semibold tracking-tight",
-        "[&:is(h1)]:heading-3xl [&:is(h1)]:mt-9 [&:is(h1)]:mb-3",
-        "[&:is(h2)]:heading-2xl [&:is(h2)]:mt-8 [&:is(h2)]:mb-3",
-        "[&:is(h3)]:heading-xl [&:is(h3)]:mt-7 [&:is(h3)]:mb-2"
-      ),
-    },
-  },
-  paragraph: { HTMLAttributes: { class: "my-2.5" } },
+  heading: false,
+  paragraph: false,
   bold: { HTMLAttributes: { class: "font-semibold" } },
   bulletList: { HTMLAttributes: { class: "my-3 list-disc pl-6" } },
   orderedList: false,
@@ -75,6 +69,20 @@ const starterKitOptions: Partial<StarterKitOptions> = {
  * MUST exclude the comment mark, since an anchor written inside a code span reads back as code.
  */
 const DocumentCode = Code.extend({ excludes: COMMENT_MARK_NAME });
+
+/**
+ * @cc [owner:rfrenoy,label:product] document-empty-heading
+ * An empty heading MUST be written as its `#` marker alone, which reads back as an empty heading
+ * of the same level.
+ */
+const DocumentHeading = Heading.extend({
+  renderMarkdown(node, h, context) {
+    if (node.content?.length) {
+      return this.parent?.(node, h, context) ?? "";
+    }
+    return "#".repeat(isNumber(node.attrs?.level) ? node.attrs.level : 1);
+  },
+});
 
 /**
  * @cc [owner:avervaet,label:product] document-code-block-fences
@@ -133,6 +141,17 @@ export const buildSchemaExtensions = ({
   StarterKit.configure(
     live ? { ...starterKitOptions, undoRedo: false } : starterKitOptions
   ),
+  DocumentParagraph.configure({ HTMLAttributes: { class: "my-2.5" } }),
+  DocumentHeading.configure({
+    HTMLAttributes: {
+      class: cn(
+        "text-pretty font-semibold tracking-tight",
+        "[&:is(h1)]:heading-3xl [&:is(h1)]:mt-9 [&:is(h1)]:mb-3",
+        "[&:is(h2)]:heading-2xl [&:is(h2)]:mt-8 [&:is(h2)]:mb-3",
+        "[&:is(h3)]:heading-xl [&:is(h3)]:mt-7 [&:is(h3)]:mb-2"
+      ),
+    },
+  }),
   DocumentCode.configure({
     // Mirrors the Markdown preview's inline code style, spelled out because the collab server
     // bundles this file and cannot pull in the design system's rendering dependencies.

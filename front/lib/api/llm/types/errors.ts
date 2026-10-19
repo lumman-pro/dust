@@ -310,7 +310,7 @@ export const getUserFacingLLMErrorMessage = (
       return `${userFacingProvider} is currently overloaded. Please try again in a moment.`;
     }
     case "context_length_exceeded": {
-      return "Your message or retrieved data is too large. Break it into smaller parts or reduce the input size.";
+      return "Your message, retrieved data, or the agent's instructions are too large for the model. Break your request into smaller parts or shorten the agent's instructions.";
     }
     case "invalid_request_error": {
       return "The request was invalid. Please check your input and try again.";

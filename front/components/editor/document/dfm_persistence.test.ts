@@ -1022,3 +1022,122 @@ describe("numbered lists", () => {
     expect(roundTrip(source)).toBe(source);
   });
 });
+
+/** Each list item's first paragraph text, in document order. */
+function itemTexts(node: JSONContent): string[] {
+  const own =
+    node.type === "listItem"
+      ? [(node.content?.[0]?.content ?? []).map((n) => n.text ?? "").join("")]
+      : [];
+  return [...own, ...(node.content ?? []).flatMap(itemTexts)];
+}
+
+describe("empty blocks", () => {
+  const text = (value: string): JSONContent => ({ type: "text", text: value });
+  const paragraph = (value?: string): JSONContent => ({
+    type: "paragraph",
+    ...(value ? { content: [text(value)] } : {}),
+  });
+  const item = (value?: string, ...blocks: JSONContent[]): JSONContent => ({
+    type: "listItem",
+    content: [paragraph(value), ...blocks],
+  });
+  const bullets = (...items: JSONContent[]): JSONContent => ({
+    type: "bulletList",
+    content: items,
+  });
+  const quote = (...blocks: JSONContent[]): JSONContent => ({
+    type: "blockquote",
+    content: blocks,
+  });
+  const heading = (level: number, value?: string): JSONContent => ({
+    type: "heading",
+    attrs: { level },
+    ...(value ? { content: [text(value)] } : {}),
+  });
+
+  it.each([
+    ["alone", "- &nbsp;\n", [""]],
+    ["opening a list", "- &nbsp;\n- b\n", ["", "b"]],
+    ["ending a list", "- a\n- &nbsp;\n", ["a", ""]],
+    ["numbered from 3", "3. &nbsp;\n4. four\n", ["", "four"]],
+    ["after a paragraph", "Intro\n\n- &nbsp;\n", [""]],
+    ["opening a sub-list", "- a\n  - &nbsp;\n  - c\n", ["a", "", "c"]],
+    ["opening a numbered sub-list", "1. a\n   1. &nbsp;\n", ["a", ""]],
+    ["holding a sub-list", "- &nbsp;\n  - b\n", ["", "b"]],
+    ["before a second paragraph", "- &nbsp;\n\n  x\n", [""]],
+    ["in a quote", "> - a\n>   - &nbsp;\n", ["a", ""]],
+  ])(
+    "opens an empty list item %s and saves it as written",
+    (_, source, texts) => {
+      expect(itemTexts(load(source).content)).toEqual(texts);
+      expect(roundTrip(source)).toBe(source);
+    }
+  );
+
+  it.each([
+    ["a quote holding only it", "> &nbsp;\n"],
+    ["a quote, after text", "> a\n>\n> &nbsp;\n"],
+    ["a list item, after text", "- a\n\n  &nbsp;\n"],
+    ["a list item, between paragraphs", "- a\n\n  &nbsp;\n\n  b\n"],
+  ])("opens an empty paragraph in %s and saves it as written", (_, source) => {
+    expect(JSON.stringify(load(source).content)).not.toContain("&nbsp;");
+    expect(roundTrip(source)).toBe(source);
+  });
+
+  it.each([
+    ["alone", "##\n"],
+    ["between paragraphs", "Before\n\n###\n\nAfter\n"],
+  ])("opens an empty heading %s and saves it as written", (_, source) => {
+    expect(roundTrip(source)).toBe(source);
+  });
+
+  it.each([
+    [
+      "a list holding only an empty item",
+      [paragraph("Intro"), bullets(item())],
+      "Intro\n\n- &nbsp;\n",
+    ],
+    [
+      "a sub-list opening with an empty item",
+      [bullets(item("a", bullets(item(), item("c"))))],
+      "- a\n  - &nbsp;\n  - c\n",
+    ],
+    [
+      "an item whose text was deleted, holding a sub-list",
+      [bullets(item(undefined, bullets(item("b"))))],
+      "- &nbsp;\n  - b\n",
+    ],
+    ["a quote holding an empty paragraph", [quote(paragraph())], "> &nbsp;\n"],
+    [
+      "a list item ending with an empty paragraph",
+      [bullets(item("a", paragraph()))],
+      "- a\n\n  &nbsp;\n",
+    ],
+    ["an empty heading", [heading(2)], "##\n"],
+  ])("saves %s", (_, content, expected) => {
+    const document = { type: "doc", content };
+    const saved = saveDfm({ frontMatter: null, anchorOrder: [] }, document);
+    expect(saved).toEqual(new Ok(expected));
+    expect(
+      documentSchema.nodeFromJSON(load(expected).content).toJSON()
+    ).toEqual(documentSchema.nodeFromJSON(document).toJSON());
+  });
+
+  it("reads a non-breaking space opening a list item as an empty item", () => {
+    expect(itemTexts(load("- \u00a0\n- b\n").content)).toEqual(["", "b"]);
+  });
+
+  it.each([
+    ["the marker escaped", "- &amp;nbsp;\n", "&nbsp;"],
+    ["the marker followed by text", "- &nbsp;milk\n", "milk"],
+    [
+      "the marker followed by a continuation line",
+      "- &nbsp;\n  continued\n",
+      "continued",
+    ],
+  ])("reads %s as the item's text", (_, source, kept) => {
+    const [first] = itemTexts(load(source).content);
+    expect(first).toContain(kept);
+  });
+});

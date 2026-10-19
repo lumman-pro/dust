@@ -25,6 +25,26 @@ describe("formatAgentError", () => {
     });
   });
 
+  it("titles a model context length error as a context window error", () => {
+    expect(
+      formatAgentError(
+        {
+          ...overloadedError,
+          metadata: {
+            ...overloadedError.metadata,
+            category: "context_window_exceeded",
+            llmErrorType: "context_length_exceeded",
+          },
+        },
+        NON_ADMIN
+      )
+    ).toMatchObject({
+      title: "Context window exceeded",
+      description:
+        "Your message, retrieved data, or the agent's instructions are too large for the model. Break your request into smaller parts or shorten the agent's instructions.",
+    });
+  });
+
   it("uses the BYOK description when the workspace brings its own key", () => {
     expect(
       formatAgentError(

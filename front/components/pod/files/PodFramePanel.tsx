@@ -7,6 +7,7 @@ import { FrameToolbar } from "@app/components/assistant/conversation/interactive
 import { FrameToolConsentGate } from "@app/components/assistant/conversation/interactive_content/frame/FrameToolConsentGate";
 import { PreviewActionButtons } from "@app/components/assistant/conversation/interactive_content/frame/PreviewActionButtons";
 import { useFrameEditSession } from "@app/components/assistant/conversation/interactive_content/frame/useFrameEditSession";
+import { useLiveFrameEditing } from "@app/components/assistant/conversation/interactive_content/frame/useLiveFrameEditing";
 import { useSidePanelFullScreen } from "@app/components/assistant/conversation/useSidePanelFullScreen";
 import { useAuth } from "@app/lib/auth/AuthContext";
 import {
@@ -15,7 +16,6 @@ import {
   useFileMetadata,
   useShareInteractiveContentFile,
 } from "@app/lib/swr/files";
-import { useFramePermissions } from "@app/lib/swr/frames";
 import { usePodFiles } from "@app/lib/swr/pods";
 import { useIsMobile } from "@app/lib/swr/useIsMobile";
 import { getFrameFunctionReferenceKind } from "@app/types/api/frame_function_reference";
@@ -69,15 +69,18 @@ export function PodFramePanel({ fileId, owner, pod }: PodFramePanelProps) {
   const isV2 = functionReferenceKind === "v2";
 
   const {
+    canEditV2,
     canWriteFrameSource,
     hasFrameFunctions,
     requiredTools,
     hasAuthorizedRequiredTools,
     isFramePermissionsLoading,
     mutateFramePermissions,
-  } = useFramePermissions({
+    status: draftStatus,
+  } = useLiveFrameEditing({
     owner,
     frameId: fileId,
+    isV2,
     disabled: !isV2,
   });
   const needsToolConsent =
@@ -96,14 +99,13 @@ export function PodFramePanel({ fileId, owner, pod }: PodFramePanelProps) {
     disabled: !isV2 || !showCode,
   });
 
-  // Pods only offer the Frames v2 Preview|Edit session; legacy Frames stay view-only here.
-  const canEditV2 = isV2 && canWriteFrameSource;
   const editSession = useFrameEditSession({
     owner,
     fileId,
     conversationId: undefined,
     iframeRef,
     mutateFileContent,
+    onSaved: mutateFramePermissions,
   });
 
   const framePackageRoot =
@@ -242,6 +244,7 @@ export function PodFramePanel({ fileId, owner, pod }: PodFramePanelProps) {
           hasFrameFunctions={hasFrameFunctions}
           editSession={editSession}
           canEditV2={canEditV2}
+          status={draftStatus}
           hideEditLabels={isMobile}
           podActions={{
             spaceId: pod.sId,

@@ -17,7 +17,8 @@ type AgentErrorMessages = {
 const DEFAULT_TITLE = msg`Something went wrong`;
 const DEFAULT_DESCRIPTION = msg`An unexpected error occurred.`;
 
-const CONTEXT_LENGTH_EXCEEDED_DESCRIPTION = msg`Your message or retrieved data is too large. Break it into smaller parts or reduce the input size.`;
+const CONTEXT_WINDOW_EXCEEDED_TITLE = msg`Context window exceeded`;
+const CONTEXT_LENGTH_EXCEEDED_DESCRIPTION = msg`Your message, retrieved data, or the agent's instructions are too large for the model. Break your request into smaller parts or shorten the agent's instructions.`;
 const STREAM_INTERRUPTED_DESCRIPTION = msg`The connection was interrupted while receiving the response. Try again.`;
 const EMPTY_CONTENT_DESCRIPTION = msg`The agent stopped without producing an answer. You can retry.`;
 const RESOURCE_CAP_DESCRIPTION = msg`This message used too many resources to continue. Start a new message with a narrower request.`;
@@ -248,14 +249,17 @@ function getAgentErrorMessages(
     category === "context_window_exceeded"
   ) {
     return {
-      title: msg`Context window exceeded`,
+      title: CONTEXT_WINDOW_EXCEEDED_TITLE,
       description: msg`Your message or retrieved data is too large. Break your request into smaller parts or reduce agent output.`,
     };
   }
 
   if (error.code === "multi_actions_error") {
     return {
-      title: DEFAULT_TITLE,
+      title:
+        category === "context_window_exceeded"
+          ? CONTEXT_WINDOW_EXCEEDED_TITLE
+          : DEFAULT_TITLE,
       description: getModelErrorDescription(metadata),
     };
   }

@@ -14,14 +14,23 @@ import { AgentMCPActionResource } from "@app/lib/resources/agent_mcp_action_reso
 import { AgentStepContentResource } from "@app/lib/resources/agent_step_content_resource";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { getShutdownSignal } from "@app/lib/shutdown_signal";
-import { withPeriodicHeartbeat } from "@app/lib/utils/async_utils";
+import {
+  setTimeoutAsync,
+  withPeriodicHeartbeat,
+} from "@app/lib/utils/async_utils";
 import logger from "@app/logger/logger";
 import { updateResourceAndPublishEvent } from "@app/temporal/agent_loop/activities/common";
-import { TOOL_SETUP_HEARTBEAT_INTERVAL_MS } from "@app/temporal/agent_loop/config";
+import {
+  TOOL_ACTIVITY_COMPLETED_MARK_TIMEOUT_MS,
+  TOOL_SETUP_HEARTBEAT_INTERVAL_MS,
+} from "@app/temporal/agent_loop/config";
 import type { ToolExecutionResult } from "@app/temporal/agent_loop/lib/deferred_events";
 import { annotateInFlightActivity } from "@app/temporal/agent_loop/lib/event_loop_stall_watchdog";
 import { sliceConversationForAgentMessage } from "@app/temporal/agent_loop/lib/loop_utils";
-import { claimToolActivityStart } from "@app/temporal/agent_loop/lib/tool_activity_start_marker";
+import {
+  claimToolActivityStart,
+  markToolActivityCompleted,
+} from "@app/temporal/agent_loop/lib/tool_activity_start_marker";
 import type {
   AgentLoopArgsWithTiming,
   AgentLoopExecutionData,
@@ -32,6 +41,7 @@ import {
 } from "@app/types/assistant/agent_run";
 import type { ModelId } from "@app/types/shared/model_id";
 import { assertNever } from "@app/types/shared/utils/assert_never";
+import { normalizeError } from "@app/types/shared/utils/error_utils";
 import { isString } from "@app/types/shared/utils/general";
 import {
   startActiveObservation,
@@ -97,6 +107,14 @@ function extractDataSourceIds(
  * any work other than heartbeating, and MUST NOT execute the tool when the claim is refused or
  * throws.
  */
+/**
+ * @cc [owner:tdraier,label:error-handling;concurrency] mark-completed-before-returning
+ * When the executed tool returns a result without deferred events nor `shouldPauseAgentLoop`,
+ * `runToolActivity` MUST call `markToolActivityCompleted` for its Temporal activity execution
+ * before returning that result, and MUST NOT call it for any other outcome. A failure to mark,
+ * including a mark that does not settle within `TOOL_ACTIVITY_COMPLETED_MARK_TIMEOUT_MS`, MUST NOT
+ * fail the activity.
+ */
 export async function runToolActivity(
   authType: AuthenticatorType,
   {
@@ -117,11 +135,12 @@ export async function runToolActivity(
   heartbeat();
 
   const { activityId, workflowExecution } = Context.current().info;
-  const startClaimed = await claimToolActivityStart({
+  const toolActivityExecution = {
     workflowId: workflowExecution.workflowId,
     runId: workflowExecution.runId,
     activityId,
-  });
+  };
+  const startClaimed = await claimToolActivityStart(toolActivityExecution);
   if (!startClaimed) {
     throw new Error(
       "Tool activity was already declared never started by its workflow"
@@ -258,7 +277,7 @@ export async function runToolActivity(
       step: step + 1,
     });
 
-  return startActiveObservation(
+  const result = await startActiveObservation(
     `${action.toolConfiguration.mcpServerName}/${action.toolConfiguration.name}`,
     () => {
       updateActiveObservation(
@@ -286,6 +305,31 @@ export async function runToolActivity(
     },
     { asType: "tool" }
   );
+
+  if (result.deferredEvents.length === 0 && !result.shouldPauseAgentLoop) {
+    heartbeat();
+    const markOutcome = await Promise.race([
+      markToolActivityCompleted(toolActivityExecution).then(
+        () => "marked" as const,
+        (err) => normalizeError(err)
+      ),
+      setTimeoutAsync(TOOL_ACTIVITY_COMPLETED_MARK_TIMEOUT_MS),
+    ]);
+    if (markOutcome !== "marked") {
+      logger.warn(
+        {
+          actionId,
+          activityId,
+          workspaceId: authType.workspaceId,
+          error: markOutcome === "timeout" ? undefined : markOutcome,
+          timedOut: markOutcome === "timeout",
+        },
+        "Failed to mark tool activity as completed"
+      );
+    }
+  }
+
+  return result;
 }
 
 async function executeToolStreaming(

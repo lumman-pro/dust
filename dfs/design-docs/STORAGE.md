@@ -201,20 +201,17 @@ writes need not maintain them. Background workers could share an internal tenant
 
 ### Search
 
-Search would use an asynchronous Elasticsearch projection with a durable FDB work queue:
+[SEARCH.md](SEARCH.md) defines the search proposal: one ES document per object, FDB-based permission
+checks, and Temporal orchestration through separate preprocessing and indexing task queues.
 
-| Key | Value | Rationale |
-| --- | --- | --- |
-| `dfs-v1-{env}/tenant/<tenantId>/search-pending/<objectId>` | Work token, enqueue time, and retry state. | Coalesces edits into an obligation to index current state, including deletion. |
-| `dfs-v1-{env}/tenant/<tenantId>/search-meta` | Index generation, backfill/queue cursors, and publication time. | Makes backfills and queue processing resumable. |
-
-When introduced, searchable mutations would replace the pending token atomically with source
-changes. Workers publish conditionally and clear only a matching token, preserving concurrent edits
-and failed work. Hits require bounded existence, freshness, scope, and permission checks. FDB can
-provide these without a RAM tree; indexed ACLs are never authoritative. Results use `SearchAttr`.
-
-One option is to index parents and grants in Elasticsearch, fanning out parent or grant changes to
-affected descendants. A full in-memory tree index is an alternative to that write fan-out.
+- Source mutations and `search/dirty/<objectId>` markers commit together under the tenant prefix.
+- Signal-With-Start runs inside `with_idempotent_transaction`, with Temporal cancellation on rollback.
+- Workflows debounce relevant Applies for 10 seconds. `preprocess` stores extracted text and starts
+  `indexFile`; only successful publication clears the corresponding dirty revision.
+- Temporal owns retries and execution progress. FDB retains pending work and extracted text;
+  reconciliation repairs interrupted work. Native text indexing is limited to `text/*` MIME types.
+- FDB permissions remain authoritative. Results use `SearchAttr`; API freshness-policy reconciliation,
+  multilingual mapping, GCS backfill, and reindexing follow-ups are tracked in [SEARCH.md](SEARCH.md).
 
 ### Full in-memory tree index
 

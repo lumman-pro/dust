@@ -28,6 +28,8 @@ interface FakeNode {
   data: Buffer;
   // Undefined once cleared with an empty MIME type.
   mimeType: string | undefined;
+  // Set at creation only.
+  xattrs: Record<string, Uint8Array>;
   children: Map<string, DfsObjectId>;
   attrVersion: bigint;
   contentVersion: bigint;
@@ -100,13 +102,15 @@ export class InMemoryDfs implements DfsFileSystemClient {
     parentId: DfsObjectId | null,
     name: string,
     kind: DfsObjectKind,
-    mimeType?: string
+    mimeType?: string,
+    xattrs: Record<string, Uint8Array> = {}
   ): FakeNode {
     return {
       id,
       parentId,
       name,
       kind,
+      xattrs,
       data: Buffer.alloc(0),
       mimeType:
         mimeType === ""
@@ -160,7 +164,7 @@ export class InMemoryDfs implements DfsFileSystemClient {
       grantsVersion: BigInt(1),
       storeVersion: BigInt(1),
       metadata: includeMetadata
-        ? { createdMs: 0, mimeType: node.mimeType, xattrs: {} }
+        ? { createdMs: 0, mimeType: node.mimeType, xattrs: node.xattrs }
         : undefined,
     };
   }
@@ -370,7 +374,14 @@ export class InMemoryDfs implements DfsFileSystemClient {
         }
         this.nodes.set(
           op.objectId,
-          this.newNode(op.objectId, parent.id, op.name, op.kind, op.mimeType)
+          this.newNode(
+            op.objectId,
+            parent.id,
+            op.name,
+            op.kind,
+            op.mimeType,
+            op.xattrs
+          )
         );
         parent.children.set(op.name, op.objectId);
         this.touch(parent, { content: true });

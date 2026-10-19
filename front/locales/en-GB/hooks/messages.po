@@ -265,6 +265,18 @@ msgstr ""
 msgid "Failed to hide the suggestion."
 msgstr ""
 
+#: front/hooks/useMakeFrameDraftLive.ts
+msgid "Could not make the changes live"
+msgstr ""
+
+#: front/hooks/useMakeFrameDraftLive.ts
+msgid "Changes are live"
+msgstr ""
+
+#: front/hooks/useMakeFrameDraftLive.ts
+msgid "The share link now shows this version."
+msgstr ""
+
 #: front/hooks/useMarkAllConversationsAsRead.ts
 msgid "All conversations marked as read"
 msgstr ""

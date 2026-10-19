@@ -199,8 +199,9 @@ const handleDocumentShortcut = (
  * @cc [owner:tdraier,label:react] document-escape
  * An Escape from the document or its controls MUST close, first found, the comments list, the
  * pending comment draft or the active thread's card, even when a host already prevented the
- * event's default, as dialogs do with every Escape. It MUST NOT when the selection toolbar or a
- * comment field used it, nor when none is open, so the host can handle it. While the list, a card,
+ * event's default, as dialogs do with every Escape. It MUST NOT when the selection toolbar, a
+ * comment field or a message's actions menu used it, nor when none is open, so the host can
+ * handle it. While the list, a card,
  * the block menu or the link field is open, its element MUST carry `data-document-layer`, so hosts
  * can leave such an Escape to the document; an Escape from elsewhere stays the host's.
  */

@@ -3,6 +3,7 @@ import { DEFAULT_FRAME_PANEL_SIZE } from "@app/components/assistant/conversation
 import { ConversationSidePanelHeader } from "@app/components/assistant/conversation/ConversationSidePanelHeader";
 import { CenteredState } from "@app/components/assistant/conversation/interactive_content/CenteredState";
 import { FrameCodeView } from "@app/components/assistant/conversation/interactive_content/frame/FrameCodeView";
+import { FrameDraftControls } from "@app/components/assistant/conversation/interactive_content/frame/FrameDraftControls";
 import { FrameToolbar } from "@app/components/assistant/conversation/interactive_content/frame/FrameToolbar";
 import { FrameToolConsentGate } from "@app/components/assistant/conversation/interactive_content/frame/FrameToolConsentGate";
 import { PreviewActionButtons } from "@app/components/assistant/conversation/interactive_content/frame/PreviewActionButtons";
@@ -167,24 +168,29 @@ export function FrameRenderer({
     requiredTools,
     hasAuthorizedRequiredTools,
     isFramePermissionsLoading,
+    hasFramePermissions,
+    draftPublicationId,
+    livePublishedAt,
     mutateFramePermissions,
   } = useFramePermissions({
     owner,
     frameId: fileId,
     publication: "latest",
+    cacheKey: contentHash,
     disabled: renderMode !== "v2",
   });
+  // Retained permissions keep the gate up while a new contentHash refetches them.
   const needsToolConsent =
-    renderMode === "v2" &&
-    !isFramePermissionsLoading &&
-    !hasAuthorizedRequiredTools;
+    renderMode === "v2" && hasFramePermissions && !hasAuthorizedRequiredTools;
   const framePackageRoot =
     framePath && framePath.includes("/")
       ? framePath.slice(0, framePath.lastIndexOf("/"))
       : packageRoot;
   // useFile("./…") resolves against framePackageRoot on first fetch and never retries. Wait until
-  // permissions (packageRoot) have loaded so the iframe does not mount with a null root.
-  const isFramePathPending = renderMode === "v2" && isFramePermissionsLoading;
+  // permissions (packageRoot) have loaded so the iframe does not mount with a null root. A refetch
+  // for a new contentHash keeps the previous permissions, so it does not wait again.
+  const isFramePathPending =
+    renderMode === "v2" && isFramePermissionsLoading && !hasFramePermissions;
   const editFrameText = useEditFrameText({
     owner,
     fileId,
@@ -200,6 +206,7 @@ export function FrameRenderer({
     conversationId: conversation.sId,
     iframeRef,
     mutateFileContent,
+    onSaved: mutateFramePermissions,
   });
   // Remount via React key only (identifier stays stable so Next.js keeps one /content URL):
   // on a new contentHash (agent publish / interactive content) and, for v2, after Save/discard/reload.
@@ -359,6 +366,18 @@ export function FrameRenderer({
           editSession={editSession}
           canEditV2={canEditV2}
           hideEditLabels={isMobile}
+          status={
+            canEditV2 && draftPublicationId ? (
+              <FrameDraftControls
+                owner={owner}
+                frameId={fileId}
+                draftPublicationId={draftPublicationId}
+                livePublishedAt={livePublishedAt}
+                hideLabels={isMobile}
+                onMadeLive={() => mutateFramePermissions()}
+              />
+            ) : null
+          }
           podActions={
             isFrameInPod
               ? {

@@ -75,8 +75,8 @@ describe("streamErrorToErrorEvent", () => {
   it("does not turn a statusless SSE payload with a permanent error code into a retryable server_error", () => {
     const err = new APIError(
       undefined,
-      { code: "context_length_exceeded", message: "too many tokens" },
-      "too many tokens",
+      { code: "invalid_prompt", message: "invalid prompt" },
+      "invalid prompt",
       undefined
     );
     const result = streamErrorToErrorEvent(metadata, err);
@@ -87,6 +87,25 @@ describe("streamErrorToErrorEvent", () => {
       content: { type: "unknown_error", isRetryable: false },
     });
   });
+
+  it.each([400, undefined])(
+    "maps context_length_exceeded (status %s) to a non-retryable Dust context_length_exceeded",
+    (status) => {
+      const err = new APIError(
+        status,
+        { code: "context_length_exceeded", message: "too many tokens" },
+        "too many tokens",
+        undefined
+      );
+      const result = streamErrorToErrorEvent(metadata, err);
+      expect(result.content.type).toBe("context_length_exceeded");
+      expect(result.content.errorSource).toBe("dust");
+      expect(convertToOldEvent(result, llmMetadata)).toMatchObject({
+        type: "error",
+        content: { type: "context_length_exceeded", isRetryable: false },
+      });
+    }
+  );
 
   it("maps APIConnectionTimeoutError to a retryable timeout_error without blaming the provider", () => {
     const err = new APIConnectionTimeoutError({ message: "request timed out" });

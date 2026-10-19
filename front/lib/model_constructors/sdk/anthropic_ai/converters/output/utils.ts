@@ -22,7 +22,11 @@ import {
   logToolSearchQuery,
   logToolSearchResult,
 } from "@app/lib/model_constructors/sdk/anthropic_ai/converters/output/tool_search_logging";
-import { isAnthropicFileDownloadError } from "@app/lib/model_constructors/sdk/anthropic_ai/errors";
+import {
+  isAnthropicFileDownloadError,
+  isAnthropicPromptTooLongError,
+  isAnthropicPromptTooLongMessage,
+} from "@app/lib/model_constructors/sdk/anthropic_ai/errors";
 import type { EndpointMetadata } from "@app/lib/model_constructors/types/endpoint_metadata";
 import { ANTHROPIC_LAB } from "@app/lib/model_constructors/types/labs";
 import type {
@@ -443,6 +447,20 @@ function apiErrorToErrorEvent(
       type: "server_error",
       message: httpErrorMessage({
         type: "server_error",
+        provider: "Anthropic",
+        detail: error.message,
+      }),
+      originalError: error,
+    });
+  }
+
+  if (isAnthropicPromptTooLongError(error)) {
+    return buildErrorEvent({
+      errorSource: "dust",
+      metadata,
+      type: "context_length_exceeded",
+      message: httpErrorMessage({
+        type: "context_length_exceeded",
         provider: "Anthropic",
         detail: error.message,
       }),
@@ -1087,13 +1105,21 @@ export function messageToEvents(
   return events;
 }
 
-function classifyAnthropicApiErrorType(errorType: string): {
+function classifyAnthropicApiError({
+  type: errorType,
+  message,
+}: {
+  type: string;
+  message: string;
+}): {
   errorSource: ErrorSource;
   type: ErrorType;
 } {
   switch (errorType) {
     case "invalid_request_error":
-      return { errorSource: "dust", type: "invalid_request_error" };
+      return isAnthropicPromptTooLongMessage(message)
+        ? { errorSource: "dust", type: "context_length_exceeded" }
+        : { errorSource: "dust", type: "invalid_request_error" };
     case "authentication_error":
       return { errorSource: "dust", type: "authentication_error" };
     case "permission_error":
@@ -1121,8 +1147,8 @@ export function batchResultToEvents(
     case "succeeded":
       return messageToEvents(result.message, metadata, converters);
     case "errored": {
-      const { errorSource, type } = classifyAnthropicApiErrorType(
-        result.error.error.type
+      const { errorSource, type } = classifyAnthropicApiError(
+        result.error.error
       );
       return [
         buildErrorEvent({

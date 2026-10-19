@@ -890,6 +890,14 @@ msgstr ""
 msgid "More reactions"
 msgstr ""
 
+#: front/components/assistant/conversation/MessageTimeline.tsx
+msgid "Message timeline"
+msgstr ""
+
+#: front/components/assistant/conversation/MessageTimeline.tsx
+msgid "Go to message {messageNumber}"
+msgstr ""
+
 #: front/components/assistant/conversation/SidebarMenu.tsx
 msgid "Today"
 msgstr ""
@@ -1161,7 +1169,11 @@ msgid "An unexpected error occurred."
 msgstr ""
 
 #: front/components/assistant/conversation/agentErrorMessages.ts
-msgid "Your message or retrieved data is too large. Break it into smaller parts or reduce the input size."
+msgid "Context window exceeded"
+msgstr ""
+
+#: front/components/assistant/conversation/agentErrorMessages.ts
+msgid "Your message, retrieved data, or the agent's instructions are too large for the model. Break your request into smaller parts or shorten the agent's instructions."
 msgstr ""
 
 #: front/components/assistant/conversation/agentErrorMessages.ts
@@ -1394,10 +1406,6 @@ msgstr ""
 
 #: front/components/assistant/conversation/agentErrorMessages.ts
 msgid "This answer was marked as failed because it stopped responding."
-msgstr ""
-
-#: front/components/assistant/conversation/agentErrorMessages.ts
-msgid "Context window exceeded"
 msgstr ""
 
 #: front/components/assistant/conversation/agentErrorMessages.ts

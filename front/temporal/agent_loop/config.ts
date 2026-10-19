@@ -118,3 +118,7 @@ export const TOOL_RESULT_PROCESSING_HEARTBEAT_INTERVAL_MS =
 // phase is stalling (DB contention): the log emitted alongside each firing is monitored in
 // Datadog. Aligned with the worker's maxHeartbeatThrottleInterval.
 export const TOOL_SETUP_HEARTBEAT_INTERVAL_MS = 20 * 1000;
+
+// Bounds the Redis write marking a tool activity completed, which runs after the tool returned
+// without periodic heartbeats: it must give up well within the heartbeat timeout.
+export const TOOL_ACTIVITY_COMPLETED_MARK_TIMEOUT_MS = 10 * 1000;

@@ -1,4 +1,5 @@
 import { ServerVisualizationWrapperClient } from "@viz/app/content/ServerVisualizationWrapperClient";
+import { concurrentExecutor } from "@viz/app/lib/async_utils";
 import type { PreFetchedFile } from "@viz/app/lib/data-apis/cache-data-api";
 import type { VizCatalog } from "@viz/app/lib/i18n/catalogs";
 import logger from "@viz/app/lib/logger";
@@ -9,95 +10,155 @@ const FRAME_MIME_TYPES = new Set([
   "application/vnd.dust.frame.slideshow",
 ]);
 
-async function fetchFileRefsRecursively(
-  text: string,
-  frontApiUrl: string,
-  headers: Record<string, string>,
-  visited: Set<string>
-): Promise<PreFetchedFile[]> {
-  const refs = extractFileRefs(text);
-  const results: PreFetchedFile[] = [];
+const MAX_PREFETCHED_FILE_BYTES = 20 * 1024 * 1024;
+const MAX_PREFETCHED_TOTAL_BYTES = 50 * 1024 * 1024;
+const PREFETCH_CONCURRENCY = 4;
 
-  await Promise.all(
-    refs.map(async (ref) => {
-      // The files endpoint accepts the "conversation/" and "pod/" prefixes (and
-      // their canonical "conversation-{id}/" / "pod-{id}/" forms), but not the
-      // legacy "project/" prefix, which older frame code may still reference and
-      // which maps to the same Pod files. Rewrite only the request path; the
-      // prefetched file stays keyed by the original scopedPath (`key`) so the
-      // frame's useFile("project/...") lookup still resolves.
-      // Package-relative refs (`./data.csv`) are fetched under the synthetic
-      // `frame/` scope and keyed as `./…` for useFile lookup.
-      let requestPath: string;
-      let key: string;
-      if (ref.type === "fileId") {
-        key = ref.fileId;
-        requestPath = ref.fileId;
-      } else if (ref.type === "frameRelative") {
-        key = `./${ref.relativePath}`;
-        requestPath = `frame/${ref.relativePath}`;
-      } else if (ref.scopedPath.startsWith("project/")) {
-        logger.info(
-          { scopedPath: ref.scopedPath },
-          "Legacy project/ file scope referenced in frame"
-        );
-        key = ref.scopedPath;
-        requestPath = `pod/${ref.scopedPath.slice("project/".length)}`;
-      } else {
-        key = ref.scopedPath;
-        requestPath = ref.scopedPath;
-      }
+/**
+ * @cc [owner:tdraier,label:performance] prefetch-size-budget
+ * A single render MUST NOT hold more than `MAX_PREFETCHED_FILE_BYTES` of raw response body for one
+ * file nor, at any time, more than `MAX_PREFETCHED_TOTAL_BYTES` of raw response body across all
+ * fetched files, including nested frames. Bytes of a skipped file are released and stop counting.
+ * The caps count raw body bytes, not the concatenated or base64-encoded copies of accepted files. A
+ * file exceeding either limit MUST be skipped (left out of the returned files) and its body read
+ * aborted, rather than failing the render.
+ */
+class FileRefPrefetcher {
+  private readonly visited = new Set<string>();
+  private remainingBytes = MAX_PREFETCHED_TOTAL_BYTES;
 
-      if (visited.has(key)) {
-        return;
-      }
-      visited.add(key);
+  constructor(
+    private readonly frontApiUrl: string,
+    private readonly headers: Record<string, string>,
+    private readonly identifier: string
+  ) {}
 
-      const fileEndpoint = `${frontApiUrl}/api/v1/viz/files/${requestPath}`;
+  async fetchRefs(text: string): Promise<PreFetchedFile[]> {
+    const refs = extractFileRefs(text);
+    const results: PreFetchedFile[] = [];
 
-      try {
-        const fileResponse = await fetch(fileEndpoint, {
-          headers,
-          cache: "no-store",
-        });
-
-        if (!fileResponse.ok) {
-          logger.warn(
-            { key, statusCode: fileResponse.status },
-            "Failed to fetch file ref"
+    await concurrentExecutor(
+      refs,
+      async (ref) => {
+        // The files endpoint accepts the "conversation/" and "pod/" prefixes (and
+        // their canonical "conversation-{id}/" / "pod-{id}/" forms), but not the
+        // legacy "project/" prefix, which older frame code may still reference and
+        // which maps to the same Pod files. Rewrite only the request path; the
+        // prefetched file stays keyed by the original scopedPath (`key`) so the
+        // frame's useFile("project/...") lookup still resolves.
+        // Package-relative refs (`./data.csv`) are fetched under the synthetic
+        // `frame/` scope and keyed as `./…` for useFile lookup.
+        let requestPath: string;
+        let key: string;
+        if (ref.type === "fileId") {
+          key = ref.fileId;
+          requestPath = ref.fileId;
+        } else if (ref.type === "frameRelative") {
+          key = `./${ref.relativePath}`;
+          requestPath = `frame/${ref.relativePath}`;
+        } else if (ref.scopedPath.startsWith("project/")) {
+          logger.info(
+            { scopedPath: ref.scopedPath },
+            "Legacy project/ file scope referenced in frame"
           );
+          key = ref.scopedPath;
+          requestPath = `pod/${ref.scopedPath.slice("project/".length)}`;
+        } else {
+          key = ref.scopedPath;
+          requestPath = ref.scopedPath;
+        }
+
+        if (this.visited.has(key)) {
           return;
         }
+        this.visited.add(key);
 
-        const arrayBuffer = await fileResponse.arrayBuffer();
-        const mimeType =
-          fileResponse.headers.get("content-type") ||
-          "application/octet-stream";
+        const fileEndpoint = `${this.frontApiUrl}/api/v1/viz/files/${requestPath}`;
 
-        results.push({
-          data: Buffer.from(arrayBuffer).toString("base64"),
-          fileId: key,
-          mimeType,
-        });
+        try {
+          const fileResponse = await fetch(fileEndpoint, {
+            headers: this.headers,
+            cache: "no-store",
+          });
 
-        // Recursively fetch refs from nested frames.
-        if (FRAME_MIME_TYPES.has(mimeType)) {
-          const nestedText = Buffer.from(arrayBuffer).toString("utf-8");
-          const nested = await fetchFileRefsRecursively(
-            nestedText,
-            frontApiUrl,
-            headers,
-            visited
-          );
-          results.push(...nested);
+          if (!fileResponse.ok) {
+            logger.warn(
+              { key, statusCode: fileResponse.status },
+              "Failed to fetch file ref"
+            );
+            return;
+          }
+
+          const body = await this.readBodyWithinBudget(fileResponse);
+          if (!body) {
+            logger.warn(
+              {
+                identifier: this.identifier,
+                key,
+                contentLength: fileResponse.headers.get("content-length"),
+              },
+              "Skipped prefetching file ref over size budget"
+            );
+            return;
+          }
+
+          const mimeType =
+            fileResponse.headers.get("content-type") ||
+            "application/octet-stream";
+
+          results.push({
+            data: body.toString("base64"),
+            fileId: key,
+            mimeType,
+          });
+
+          // Recursively fetch refs from nested frames.
+          if (FRAME_MIME_TYPES.has(mimeType)) {
+            results.push(...(await this.fetchRefs(body.toString("utf-8"))));
+          }
+        } catch (_err) {
+          logger.error({ key }, "Failed to fetch file ref");
         }
-      } catch (_err) {
-        logger.error({ key }, "Failed to fetch file ref");
-      }
-    })
-  );
+      },
+      { concurrency: PREFETCH_CONCURRENCY }
+    );
 
-  return results;
+    return results;
+  }
+
+  private async readBodyWithinBudget(
+    response: Response
+  ): Promise<Buffer | null> {
+    const declaredBytes = Number(response.headers.get("content-length"));
+    if (
+      declaredBytes > MAX_PREFETCHED_FILE_BYTES ||
+      declaredBytes > this.remainingBytes
+    ) {
+      await response.body?.cancel();
+      return null;
+    }
+    if (!response.body) {
+      return Buffer.alloc(0);
+    }
+
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let readBytes = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        return Buffer.concat(chunks, readBytes);
+      }
+      readBytes += value.byteLength;
+      this.remainingBytes -= value.byteLength;
+      if (readBytes > MAX_PREFETCHED_FILE_BYTES || this.remainingBytes < 0) {
+        this.remainingBytes += readBytes;
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+  }
 }
 
 interface ServerSideVisualizationWrapperProps {
@@ -157,12 +218,11 @@ export async function ServerSideVisualizationWrapper({
       }
 
       // SERVER-SIDE: Recursively fetch all file refs (including nested frame imports).
-      preFetchedFiles = await fetchFileRefsRecursively(
-        prefetchedCode,
+      preFetchedFiles = await new FileRefPrefetcher(
         process.env.DUST_FRONT_API ?? "",
         headers,
-        new Set()
-      );
+        identifier
+      ).fetchRefs(prefetchedCode);
     } else {
       logger.warn(
         { identifier, statusCode: codeResponse.status },

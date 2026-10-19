@@ -13,6 +13,7 @@ import {
   createPlaceholderUserMessage,
 } from "@app/components/assistant/conversation/lib";
 import { MessageItem } from "@app/components/assistant/conversation/MessageItem";
+import { MessageTimeline } from "@app/components/assistant/conversation/MessageTimeline";
 import { handlePlanUpdatedEvent } from "@app/components/assistant/conversation/plan_mode/handle_plan_updated";
 import type {
   AgentMessageWithStreaming,
@@ -33,6 +34,7 @@ import {
   reconcileAgentMessage,
   reconcileCachedAgentMessage,
 } from "@app/components/assistant/conversation/types";
+import { useMessageTimeline } from "@app/components/assistant/conversation/useMessageTimeline";
 import { ConversationViewerEmptyState } from "@app/components/assistant/ConversationViewerEmptyState";
 import {
   CONVERSATION_MESSAGES_PAGE_LIMIT,
@@ -129,6 +131,8 @@ interface ConversationViewerProps {
   clientSideMCPServerIds?: string[];
   /** Set while the viewer is mounted but not shown, to skip its fetches. */
   disabled?: boolean;
+  /** Shows the message timeline on the right of the list (desktop only). */
+  showMessageTimeline?: boolean;
 }
 
 function easeOutQuint(x: number): number {
@@ -267,6 +271,7 @@ export const ConversationViewer = ({
   limitReachedCode,
   clientSideMCPServerIds,
   disabled = false,
+  showMessageTimeline = false,
 }: ConversationViewerProps) => {
   const virtuosoMessageListRef =
     useRef<
@@ -508,6 +513,20 @@ export const ConversationViewer = ({
     conversation?.lastReadMs,
   ]);
 
+  const isMessageTimelineVisible = showMessageTimeline && !isMobile;
+  const {
+    timelineStore,
+    syncTimeline,
+    onScrollerScroll,
+    onTimelineWheel,
+    getTimelineMessageAnswer,
+    scrollToTimelineMessage,
+  } = useMessageTimeline({
+    virtuosoMessageListRef,
+    isEnabled: isMessageTimelineVisible,
+    scrollBehavior: customSmoothScroll,
+  });
+
   // Sync the virtuoso ref with the side panel context.
   const {
     data: panelData,
@@ -522,6 +541,8 @@ export const ConversationViewer = ({
   // It's highly unlikely to happen (we render much more than the viewport and it would be surprising that the user scroll to another message) but it's something to keep in mind.
   const onRenderedDataChange = useCallback(
     (renderedData: VirtuosoMessage[]) => {
+      syncTimeline();
+
       if (currentPanel === "actions" && panelData) {
         const { messageId } = parseDataAsMessageIdAndActionId(panelData);
         if (!messageId) {
@@ -535,7 +556,7 @@ export const ConversationViewer = ({
         }
       }
     },
-    [currentPanel, panelData, setVirtuosoMsg]
+    [currentPanel, panelData, setVirtuosoMsg, syncTimeline]
   );
 
   // This is to handle we just fetched more messages by scrolling up.
@@ -1425,47 +1446,64 @@ export const ConversationViewer = ({
           error={conversationError || isMessagesError}
         />
       )}
-      <VirtuosoMessageListLicense
-        licenseKey={process.env.NEXT_PUBLIC_VIRTUOSO_LICENSE_KEY ?? ""}
+      {/* The wrapper stays mounted when the timeline toggles (e.g. crossing the mobile breakpoint) so
+          the list is not remounted; without the timeline it renders no box. */}
+      <div
+        className={
+          isMessageTimelineVisible ? "relative h-full w-full" : "contents"
+        }
       >
-        <VirtuosoMessageList<VirtuosoMessage, VirtuosoMessageListContext>
-          onRenderedDataChange={onRenderedDataChange}
-          useWindowScroll={isMobile}
-          data={{
-            data: initialListData,
-            scrollModifier: {
-              type: "item-location",
-              location: {
-                index: messageIdToScrollTo ?? "LAST",
-                align: messageIdToScrollTo ? "start" : "end",
-                behavior: "instant",
+        <VirtuosoMessageListLicense
+          licenseKey={process.env.NEXT_PUBLIC_VIRTUOSO_LICENSE_KEY ?? ""}
+        >
+          <VirtuosoMessageList<VirtuosoMessage, VirtuosoMessageListContext>
+            onRenderedDataChange={onRenderedDataChange}
+            useWindowScroll={isMobile}
+            data={{
+              data: initialListData,
+              scrollModifier: {
+                type: "item-location",
+                location: {
+                  index: messageIdToScrollTo ?? "LAST",
+                  align: messageIdToScrollTo ? "start" : "end",
+                  behavior: "instant",
+                },
+                purgeItemSizes: true,
               },
-              purgeItemSizes: true,
-            },
-          }}
-          ref={virtuosoMessageListRef}
-          ItemContent={MessageItem}
-          StickyFooter={AgentInputBar}
-          // Note: do NOT put any verticalpadding here as it will mess with the auto scroll to bottom.
-          className={cn(
-            "dd-privacy-mask",
-            "@container/conversation",
-            "touch-pan-y",
-            "w-full px-5",
-            !isMobile && "overscroll-contain h-full",
-            !agentBuilderContext && "md:px-8"
-          )}
-          shortSizeAlign="top"
-          computeItemKey={computeItemKey}
-          onScroll={onScroll}
-          context={context}
-          itemIdentity={itemIdentity}
-          EmptyPlaceholder={ConversationViewerEmptyState}
-          // Large buffer to avoid manipulating the dom too much when the user scrolls a bit.
-          increaseViewportBy={8192}
-          enforceStickyFooterAtBottom
-        />
-      </VirtuosoMessageListLicense>
+            }}
+            ref={virtuosoMessageListRef}
+            ItemContent={MessageItem}
+            StickyFooter={AgentInputBar}
+            // Note: do NOT put any verticalpadding here as it will mess with the auto scroll to bottom.
+            className={cn(
+              "dd-privacy-mask",
+              "@container/conversation",
+              "touch-pan-y",
+              "w-full px-5",
+              !isMobile && "overscroll-contain h-full",
+              !agentBuilderContext && "md:px-8"
+            )}
+            shortSizeAlign="top"
+            computeItemKey={computeItemKey}
+            onScroll={onScroll}
+            onScrollCapture={onScrollerScroll}
+            context={context}
+            itemIdentity={itemIdentity}
+            EmptyPlaceholder={ConversationViewerEmptyState}
+            // Large buffer to avoid manipulating the dom too much when the user scrolls a bit.
+            increaseViewportBy={8192}
+            enforceStickyFooterAtBottom
+          />
+        </VirtuosoMessageListLicense>
+        {isMessageTimelineVisible && (
+          <MessageTimeline
+            store={timelineStore}
+            getMessageAnswer={getTimelineMessageAnswer}
+            onMessageClick={scrollToTimelineMessage}
+            onWheel={onTimelineWheel}
+          />
+        )}
+      </div>
     </>
   );
 };

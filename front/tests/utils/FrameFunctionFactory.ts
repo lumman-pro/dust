@@ -1,3 +1,4 @@
+import { createFrameSession } from "@app/lib/api/share/frame_session";
 import type { Authenticator } from "@app/lib/auth";
 import type { FileResource } from "@app/lib/resources/file_resource";
 import { SandboxFunctionInvocationResource } from "@app/lib/resources/sandbox_function_invocation_resource";
@@ -9,6 +10,7 @@ import { FeatureFlagFactory } from "@app/tests/utils/FeatureFlagFactory";
 import { FileFactory } from "@app/tests/utils/FileFactory";
 import { createPokeApiMockRequest } from "@app/tests/utils/generic_poke_api_tests";
 import { createPrivateApiMockRequest } from "@app/tests/utils/generic_private_api_tests";
+import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
 import { SpaceFactory } from "@app/tests/utils/SpaceFactory";
 import { FRAME_MANIFEST_FILE } from "@app/types/api/frame_manifest";
 import type {
@@ -16,11 +18,13 @@ import type {
   SandboxFunctionUserIdentityPolicy,
 } from "@app/types/api/sandbox_functions";
 import { GLOBAL_AGENTS_SID } from "@app/types/assistant/assistant";
+import type { FileShareScope } from "@app/types/files";
 import { frameV2ContentType } from "@app/types/files";
 import {
   getConversationFilesBasePath,
   getPodFilesBasePath,
 } from "@app/types/mount_path";
+import type { LightWorkspaceType } from "@app/types/user";
 import type { JSONSchema7 as JSONSchema } from "json-schema";
 
 const inputSchema: JSONSchema = { type: "object" };
@@ -245,6 +249,60 @@ export async function createTestAuthorFrameWithDraft(
   });
 
   return { conversation, frame };
+}
+
+export async function shareTestFrame(
+  auth: Authenticator,
+  frame: FileResource,
+  shareScope: FileShareScope
+): Promise<string> {
+  await frame.setShareScope(auth, shareScope);
+  const shareInfo = await frame.getShareInfo();
+  const token = shareInfo?.shareUrl.split("/").at(-1);
+  if (!token) {
+    throw new Error("Expected the Frame to have a share token.");
+  }
+
+  return token;
+}
+
+export async function createTestFrameSessionCookie(
+  workspace: LightWorkspaceType,
+  email = "viewer@example.com"
+): Promise<string> {
+  const setCookie = await createFrameSession(workspace, { email });
+
+  return setCookie.split(";")[0];
+}
+
+/**
+ * A fast function published in a Pod Frame shared with `shareScope`, in a workspace with public
+ * Frame functions enabled unless `enablePublicFunctions` is false. Returns the share token for the
+ * public routes, which take no request auth.
+ */
+export async function makeTestPublicFrameFunction({
+  userIdentity = "public",
+  shareScope = "public",
+  enablePublicFunctions = true,
+}: {
+  userIdentity?: SandboxFunctionUserIdentityPolicy;
+  shareScope?: FileShareScope;
+  enablePublicFunctions?: boolean;
+} = {}) {
+  const { authenticator, workspace } = await createResourceTest({
+    role: "admin",
+  });
+  if (enablePublicFunctions) {
+    await enablePublicFrameFunctions(authenticator);
+  }
+  const space = await SpaceFactory.project(workspace);
+  const { frame, sandboxFunction } = await createTestFrameFunction(
+    authenticator,
+    { space, slug: "list-todos", userIdentity, executionMode: "fast" }
+  );
+  const token = await shareTestFrame(authenticator, frame, shareScope);
+
+  return { authenticator, frame, sandboxFunction, token, workspace };
 }
 
 export async function makeTestFrameFunction({

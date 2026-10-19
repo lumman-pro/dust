@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   ),
   hasFrameFunctions: false,
   canWriteFrameSource: true,
+  draftPublicationId: null as string | null,
   isMobile: false,
   /** Incremented on every iframe mount (React key change). */
   iframeMounts: 0,
@@ -148,6 +149,10 @@ vi.mock("@app/components/Confirm", async () => {
   };
 });
 
+vi.mock("@app/hooks/useMakeFrameDraftLive", () => ({
+  useMakeFrameDraftLive: () => async () => true,
+}));
+
 vi.mock("@app/lib/swr/frames", () => ({
   useBatchEditFrameText: () => mocks.batchEditFrameText,
   useEditFrameText: () => mocks.editFrameText,
@@ -160,9 +165,12 @@ vi.mock("@app/lib/swr/frames", () => ({
       requiredTools: [],
       isLastPublisher: false,
       hasAuthorizedRequiredTools: true,
+      hasFramePermissions: true,
       isFramePermissionsLoading: false,
       isFramePermissionsError: null,
-      mutateFramePermissions: vi.fn(),
+      draftPublicationId: mocks.draftPublicationId,
+      livePublishedAt: null,
+      mutateFramePermissions: async () => undefined,
     };
   },
 }));
@@ -202,6 +210,7 @@ afterEach(() => {
   vi.clearAllMocks();
   mocks.hasFrameFunctions = false;
   mocks.canWriteFrameSource = true;
+  mocks.draftPublicationId = null;
   mocks.isMobile = false;
   mocks.iframeMounts = 0;
 });
@@ -369,6 +378,51 @@ describe("FrameRenderer", () => {
       "https://app.dust.tt/share/frame/c5d83f0e-4825-4c6f-b33a-6841b1490d19"
     );
     expect(betaLink).toHaveAttribute("target", "_blank");
+  });
+
+  describe("draft controls", () => {
+    const renderV2 = () =>
+      render(
+        <FrameRenderer
+          conversation={conversation}
+          fileId="frame_1"
+          projectId={null}
+          owner={owner}
+          renderMode="v2"
+        />
+      );
+
+    it("shows the Draft chip and Make live for an editor when a draft is pending", () => {
+      mocks.draftPublicationId = "publication-draft";
+
+      renderV2();
+
+      expect(screen.getByText("Draft")).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Make live" })
+      ).toBeInTheDocument();
+    });
+
+    it("hides the draft controls when no draft is pending", () => {
+      renderV2();
+
+      expect(screen.queryByText("Draft")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Make live" })
+      ).not.toBeInTheDocument();
+    });
+
+    it("hides the draft controls from a viewer who cannot edit", () => {
+      mocks.canWriteFrameSource = false;
+      mocks.draftPublicationId = "publication-draft";
+
+      renderV2();
+
+      expect(screen.queryByText("Draft")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Make live" })
+      ).not.toBeInTheDocument();
+    });
   });
 
   it("does not mark a Frame without functions as beta", () => {

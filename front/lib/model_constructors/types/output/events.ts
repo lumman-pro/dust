@@ -130,6 +130,7 @@ export const ERROR_TYPES = [
   "rate_limit_error",
   "overloaded_error",
   "invalid_request_error",
+  "context_length_exceeded",
   "authentication_error",
   "permission_error",
   "not_found_error",

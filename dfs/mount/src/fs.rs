@@ -173,10 +173,19 @@ impl Fs {
      * The root MUST list, and `lookup` MUST find, only the configured folders that the server
      * reports as readable directories, and MUST be read-only.
      */
+    /**
+     * @cc [owner:fontanierh,label:coding] readdir-counts-nothing
+     * `readdir` MUST NOT change any object's lookup count: only `lookup` raises it and only `forget`
+     * lowers it.
+     */
+    /**
+     * @cc [owner:fontanierh,label:product] readdir-supported-kinds
+     * In a dfs directory, `readdir` MUST leave out symlinks and objects of unknown kind, which the
+     * mount does not support yet.
+     */
     pub async fn readdir(&self, ino: Ino) -> Result<Vec<DirEntry>, Errno> {
         if ino != ROOT_INO {
-            // Listing through the server's `List` is not done yet.
-            return Err(self.unsupported_in(ino).await);
+            return self.readdir_in(ino).await;
         }
         let references: Vec<ObjectRef> = self
             .root_entries
@@ -246,16 +255,29 @@ impl Fs {
         self.inodes.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// The error for an operation inside the dfs directory `ino` that the server does not support
-    /// yet: `EOPNOTSUPP`, unless the directory looks missing to the session.
-    async fn unsupported_in(&self, ino: Ino) -> Errno {
-        let Some(object) = self.inodes().object(ino) else {
-            return Errno::ENOENT;
-        };
-        match self.stat(object).await {
-            Ok(_) => Errno::EOPNOTSUPP,
-            Err(errno) => errno,
+    /// Lists the dfs directory `ino`. A directory the session cannot read looks missing.
+    async fn readdir_in(&self, ino: Ino) -> Result<Vec<DirEntry>, Errno> {
+        let object = self.inodes().object(ino).ok_or(Errno::ENOENT)?;
+        let entries = self.remote.list(object.into()).await?;
+        let mut inodes = self.inodes();
+        let mut listed = Vec::with_capacity(entries.len());
+        for entry in entries {
+            let attr = entry.object.ok_or(Errno::EIO)?;
+            // Only the virtual root and `shared` are not objects, and neither is in a dfs directory.
+            let ObjectRef::Object(id) = attr.id else {
+                return Err(Errno::EIO);
+            };
+            // Left out, as `lookup` cannot return them: symlinks and unknown kinds.
+            let Some(kind) = Kind::from_attr(&attr) else {
+                continue;
+            };
+            listed.push(DirEntry {
+                ino: inodes.listed(id),
+                kind,
+                name: entry.name,
+            });
         }
+        Ok(listed)
     }
 
     async fn stat(&self, object: ObjectId) -> Result<Attr, Errno> {

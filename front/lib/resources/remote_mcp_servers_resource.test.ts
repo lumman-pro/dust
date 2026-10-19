@@ -102,6 +102,7 @@ describe("RemoteMCPServerResource.discoverOAuthMetadata", () => {
     oauthMocks.discoverAuthorizationServerMetadata.mockReset();
     oauthMocks.discoverOAuthProtectedResourceMetadata.mockReset();
     oauthMocks.registerClient.mockReset();
+    egressMocks.undiciFetch.mockReset();
 
     oauthMocks.discoverOAuthProtectedResourceMetadata.mockResolvedValue({
       authorization_servers: ["https://auth.example.com"],
@@ -203,6 +204,68 @@ describe("RemoteMCPServerResource.discoverOAuthMetadata", () => {
       );
     }
   );
+
+  it("fetches the protected resource metadata from the URL named in the 401 challenge", async () => {
+    egressMocks.undiciFetch.mockResolvedValueOnce(
+      new Response(null, {
+        status: 401,
+        headers: {
+          "WWW-Authenticate":
+            'Bearer resource_metadata="https://mcp.example.com/mcp/.well-known/oauth-protected-resource"',
+        },
+      })
+    );
+    oauthMocks.registerClient.mockResolvedValue({
+      client_id: "registered-client",
+    });
+
+    const workspace = await WorkspaceFactory.basic();
+    const auth = await Authenticator.internalAdminForWorkspace(workspace.sId);
+    const result = await RemoteMCPServerResource.discoverOAuthMetadata(auth, {
+      serverUrl: "https://mcp.example.com/mcp",
+      provider: oauthProvider,
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(
+      oauthMocks.discoverOAuthProtectedResourceMetadata
+    ).toHaveBeenCalledWith(
+      "https://mcp.example.com/mcp",
+      {
+        resourceMetadataUrl: new URL(
+          "https://mcp.example.com/mcp/.well-known/oauth-protected-resource"
+        ),
+      },
+      expect.any(Function)
+    );
+  });
+
+  it("falls back to the well-known locations when the challenge names no metadata URL", async () => {
+    egressMocks.undiciFetch.mockResolvedValueOnce(
+      new Response(null, {
+        status: 401,
+        headers: { "WWW-Authenticate": 'Bearer realm="mcp"' },
+      })
+    );
+    oauthMocks.registerClient.mockResolvedValue({
+      client_id: "registered-client",
+    });
+
+    const workspace = await WorkspaceFactory.basic();
+    const auth = await Authenticator.internalAdminForWorkspace(workspace.sId);
+    await RemoteMCPServerResource.discoverOAuthMetadata(auth, {
+      serverUrl: "https://mcp.example.com/mcp",
+      provider: oauthProvider,
+    });
+
+    expect(
+      oauthMocks.discoverOAuthProtectedResourceMetadata
+    ).toHaveBeenCalledWith(
+      "https://mcp.example.com/mcp",
+      { resourceMetadataUrl: undefined },
+      expect.any(Function)
+    );
+  });
 });
 
 describe("RemoteMCPServerResource.discoverOAuthMetadata egress routing", () => {

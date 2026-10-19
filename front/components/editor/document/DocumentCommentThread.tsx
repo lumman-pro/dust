@@ -11,59 +11,21 @@ import {
   Button,
   Check,
   cn,
+  DotsHorizontal,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   Icon,
   ReverseLeft,
   Tooltip,
   Trash01,
-  XClose,
 } from "@dust-tt/sparkle";
 import { plural } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { Extensions } from "@tiptap/core";
-import type { ComponentType, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Fragment, useMemo, useRef, useState } from "react";
-
-interface ThreadIconButtonProps {
-  label: string;
-  icon: ComponentType<{ className?: string }>;
-  onClick: () => void;
-  busy?: boolean;
-  mountPortalContainer?: HTMLElement;
-}
-
-const ThreadIconButton = ({
-  label,
-  icon,
-  onClick,
-  busy = false,
-  mountPortalContainer,
-}: ThreadIconButtonProps) => (
-  <Tooltip
-    label={label}
-    tooltipTriggerAsChild
-    mountPortalContainer={mountPortalContainer}
-    trigger={
-      <button
-        type="button"
-        aria-label={label}
-        aria-disabled={busy}
-        onClick={(event) => {
-          event.stopPropagation();
-          if (!busy) {
-            onClick();
-          }
-        }}
-        className={cn(
-          "inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground motion-reduce:transition-none",
-          "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-          "aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-transparent"
-        )}
-      >
-        <Icon visual={icon} size="xs" />
-      </button>
-    }
-  />
-);
 
 export type RenderAuthorAvatar = DocumentProps["renderCommentAuthorAvatar"];
 
@@ -80,6 +42,8 @@ interface MessageBylineProps {
   /** False marks the message as unverified; null shows no mark. */
   verified: boolean | null;
   mountPortalContainer?: HTMLElement;
+  /** Shown at the end of the byline, for the thread's first message. */
+  actions?: ReactNode;
 }
 
 /**
@@ -92,11 +56,12 @@ const MessageByline = ({
   message,
   verified,
   mountPortalContainer,
+  actions,
 }: MessageBylineProps) => {
   const { t } = useLingui();
   return (
-    <div className="flex min-w-0 items-baseline gap-1.5">
-      <span className="min-w-0 truncate text-xs font-medium text-foreground">
+    <div className="flex min-w-0 items-center gap-1">
+      <span className="min-w-0 truncate heading-xs text-foreground">
         {message.author.name}
       </span>
       {verified === false && (
@@ -105,20 +70,25 @@ const MessageByline = ({
           tooltipTriggerAsChild
           mountPortalContainer={mountPortalContainer}
           trigger={
-            <span className="inline-flex shrink-0 items-center gap-1 self-center text-xs text-warning-500">
+            <span className="inline-flex shrink-0 items-center gap-1 text-xs text-warning-500">
               <Icon visual={AlertCircle} size="xs" />
               <Trans>Unverified</Trans>
             </span>
           }
         />
       )}
+      <span
+        aria-hidden="true"
+        className="mx-0.5 size-1 shrink-0 rounded-full bg-primary-400"
+      />
       <time
         dateTime={message.createdAt}
         title={formatDateTime(new Date(message.createdAt))}
-        className="shrink-0 text-xs text-muted-foreground"
+        className="shrink-0 copy-xs text-primary-light"
       >
         {formatRelativeTime(new Date(message.createdAt))}
       </time>
+      {actions && <div className="-my-1 ml-auto flex shrink-0">{actions}</div>}
     </div>
   );
 };
@@ -136,9 +106,10 @@ const ThreadMessage = ({
   renderAuthorAvatar,
   clamped = false,
   mountPortalContainer,
+  actions,
   children,
 }: ThreadMessageProps) => (
-  <div className="flex gap-2">
+  <div className="group/message flex gap-2">
     <span aria-hidden="true" className="mt-0.5 shrink-0">
       {renderAuthorAvatar(message.author, "xxs")}
     </span>
@@ -147,6 +118,7 @@ const ThreadMessage = ({
         message={message}
         verified={verified}
         mountPortalContainer={mountPortalContainer}
+        actions={actions}
       />
       <div
         className={cn(
@@ -333,61 +305,84 @@ export const DocumentCommentDraftCard = ({
 
 interface ThreadActionsProps {
   resolved: boolean;
-  canWrite: boolean;
-  /** Folded in the list, the actions show on hover; the space stays reserved. */
-  folded: boolean;
   busy: boolean;
   onSetResolved: (resolved: boolean) => void;
   onDelete: () => void;
-  onClose?: () => void;
   mountPortalContainer?: HTMLElement;
 }
 
 const ThreadActions = ({
   resolved,
-  canWrite,
-  folded,
   busy,
   onSetResolved,
   onDelete,
-  onClose,
   mountPortalContainer,
 }: ThreadActionsProps) => {
   const { t } = useLingui();
+  const [menuOpen, setMenuOpen] = useState(false);
   return (
     <div
       className={cn(
-        "-mr-1 -mt-1 -mb-2 flex justify-end",
-        folded &&
-          "opacity-0 transition-opacity group-focus-within/thread:opacity-100 group-hover/thread:opacity-100"
+        "-mr-1 flex transition-opacity motion-reduce:transition-none",
+        !menuOpen &&
+          "opacity-0 group-focus-within/message:opacity-100 group-hover/message:opacity-100"
       )}
     >
-      {canWrite && (
-        <>
-          <ThreadIconButton
-            label={resolved ? t`Reopen` : t`Resolve`}
-            icon={resolved ? ReverseLeft : Check}
-            onClick={() => onSetResolved(!resolved)}
-            busy={busy}
+      <Button
+        type="button"
+        size="xs"
+        variant="ghost-secondary"
+        icon={resolved ? ReverseLeft : Check}
+        tooltip={resolved ? t`Reopen` : t`Resolve`}
+        disabled={busy}
+        onClick={(event) => {
+          event.stopPropagation();
+          onSetResolved(!resolved);
+        }}
+      />
+      {/* The menu renders in a portal, whose events still bubble to the thread. */}
+      <span
+        role="presentation"
+        className="flex"
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          // Escape in the menu closes it, not the card. Radix closes the menu before this runs,
+          // so `menuOpen` may already be false: tell the menu apart by its portal instead.
+          if (
+            event.key === "Escape" &&
+            event.target instanceof Node &&
+            !event.currentTarget.contains(event.target)
+          ) {
+            event.stopPropagation();
+          }
+        }}
+      >
+        <DropdownMenu modal={false} open={menuOpen} onOpenChange={setMenuOpen}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost-secondary"
+              icon={DotsHorizontal}
+              aria-label={t`More actions`}
+            />
+          </DropdownMenuTrigger>
+          {/* Closing hands focus back to the trigger, inside the card, so a next Escape closes it. */}
+          <DropdownMenuContent
+            align="end"
+            preventAutoFocusOnClose={false}
             mountPortalContainer={mountPortalContainer}
-          />
-          <ThreadIconButton
-            label={t`Delete comment`}
-            icon={Trash01}
-            onClick={onDelete}
-            busy={busy}
-            mountPortalContainer={mountPortalContainer}
-          />
-        </>
-      )}
-      {onClose && (
-        <ThreadIconButton
-          label={t`Close`}
-          icon={XClose}
-          onClick={onClose}
-          mountPortalContainer={mountPortalContainer}
-        />
-      )}
+          >
+            <DropdownMenuItem
+              icon={Trash01}
+              label={t`Delete`}
+              variant="warning"
+              disabled={busy}
+              onClick={onDelete}
+            />
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </span>
     </div>
   );
 };
@@ -450,8 +445,6 @@ interface DocumentCommentThreadProps {
   onReply: (body: string) => Promise<Result<void, string>>;
   onSetResolved: (resolved: boolean) => void;
   onDelete: () => void;
-  /** Shows a Close action, for the floating card. */
-  onClose?: () => void;
   onElement: (element: HTMLElement | null) => void;
   renderBody: (body: string) => ReactNode;
   onSuggest?: () => Result<string, string>;
@@ -474,7 +467,6 @@ export const DocumentCommentThread = ({
   onReply,
   onSetResolved,
   onDelete,
-  onClose,
   onElement,
   renderBody,
   onSuggest,
@@ -496,6 +488,15 @@ export const DocumentCommentThread = ({
       renderBody={renderBody}
       onApplySuggestion={onApplySuggestion}
       busy={busy}
+    />
+  );
+  const actions = canWrite && (
+    <ThreadActions
+      resolved={resolved}
+      busy={busy}
+      onSetResolved={onSetResolved}
+      onDelete={onDelete}
+      mountPortalContainer={mountPortalContainer}
     />
   );
 
@@ -524,18 +525,6 @@ export const DocumentCommentThread = ({
           variant === "list" && "cursor-pointer px-2.5 py-2"
         )}
       >
-        {(canWrite || onClose) && (
-          <ThreadActions
-            resolved={resolved}
-            canWrite={canWrite}
-            folded={folded}
-            busy={busy}
-            onSetResolved={onSetResolved}
-            onDelete={onDelete}
-            onClose={onClose}
-            mountPortalContainer={mountPortalContainer}
-          />
-        )}
         {error && (
           <p role="alert" className="text-xs text-warning-500">
             {error}
@@ -564,6 +553,7 @@ export const DocumentCommentThread = ({
           renderAuthorAvatar={renderAuthorAvatar}
           clamped={folded}
           mountPortalContainer={mountPortalContainer}
+          actions={actions}
         >
           {renderMessageBody(first.body)}
         </ThreadMessage>

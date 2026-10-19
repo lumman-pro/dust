@@ -41,15 +41,38 @@ const SANDBOX_HIDDEN_SERVER_NAMES: string[] = [
   FILES_SERVER_NAME,
 ];
 
-// Response shaping shared by both token kinds: `?server=` reference resolution and `?light=true`
-// inputSchema stripping.
+// Tools an admin disabled on the server are refused by `/call`, so listing them only sends the
+// agent into guaranteed failures.
+function withoutDisabledTools(view: MCPServerViewType): MCPServerViewType {
+  const disabledToolNames = new Set(
+    (view.toolsMetadata ?? [])
+      .filter((tool) => tool.enabled === false)
+      .map((tool) => tool.toolName)
+  );
+  if (disabledToolNames.size === 0) {
+    return view;
+  }
+
+  return {
+    ...view,
+    server: {
+      ...view.server,
+      tools: view.server.tools.filter(
+        (tool) => !disabledToolNames.has(tool.name)
+      ),
+    },
+  };
+}
+
+// Response shaping shared by both token kinds: disabled tools removal, `?server=` reference
+// resolution and `?light=true` inputSchema stripping.
 function filterServerViews(
   views: MCPServerViewType[],
   { server, light }: { server?: string; light?: string }
 ): MCPServerViewType[] {
-  let serverViews = views.filter(
-    (sv) => !SANDBOX_HIDDEN_SERVER_NAMES.includes(sv.server.name)
-  );
+  let serverViews = views
+    .filter((sv) => !SANDBOX_HIDDEN_SERVER_NAMES.includes(sv.server.name))
+    .map(withoutDisabledTools);
 
   if (server !== undefined) {
     serverViews = selectServerViewsByReference(serverViews, server);

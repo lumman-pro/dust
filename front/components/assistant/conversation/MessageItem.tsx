@@ -296,6 +296,7 @@ export const MessageItem = React.forwardRef<HTMLDivElement, MessageItemProps>(
       return (
         <div
           ref={ref}
+          data-message-id={sId}
           className={cn(
             "mx-auto max-w-conversation",
             topMargin,
@@ -333,6 +334,7 @@ export const MessageItem = React.forwardRef<HTMLDivElement, MessageItemProps>(
       return (
         <div
           ref={ref}
+          data-message-id={sId}
           className={cn(
             "mx-auto max-w-conversation",
             topMargin,
@@ -354,6 +356,7 @@ export const MessageItem = React.forwardRef<HTMLDivElement, MessageItemProps>(
           <div
             key={`message-id-${sId}`}
             ref={ref}
+            data-message-id={sId}
             className={cn(
               "mx-auto max-w-conversation",
               topMargin,
@@ -372,6 +375,7 @@ export const MessageItem = React.forwardRef<HTMLDivElement, MessageItemProps>(
         <div
           key={`message-id-${sId}`}
           ref={ref}
+          data-message-id={sId}
           className={cn(
             "mx-auto max-w-conversation",
             topMargin,

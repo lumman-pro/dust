@@ -42,7 +42,10 @@ import type {
 import type { CompactionSourceConversation } from "@app/types/assistant/compaction";
 import type { SupportedModel } from "@app/types/assistant/models/types";
 import { assertNever } from "@app/types/shared/utils/assert_never";
-import { WorkflowExecutionAlreadyStartedError } from "@temporalio/common";
+import {
+  ActivityFailure,
+  WorkflowExecutionAlreadyStartedError,
+} from "@temporalio/common";
 import type {
   ChildWorkflowHandle,
   WorkflowInterceptorsFactory,
@@ -132,9 +135,10 @@ const { runToolActivity: runRetryableToolActivityWithExplicitCancellation } =
     },
   });
 
-const { claimToolActivityNeverStartedActivity } = proxyActivities<
-  typeof toolActivityStartMarkerActivities
->({
+const {
+  claimToolActivityNeverStartedActivity,
+  isToolActivityCompletedActivity,
+} = proxyActivities<typeof toolActivityStartMarkerActivities>({
   startToCloseTimeout: "1 minute",
   retry: {
     maximumAttempts: 5,
@@ -145,9 +149,19 @@ const { claimToolActivityNeverStartedActivity } = proxyActivities<
  * @cc [owner:tdraier,label:error-handling;concurrency] retry-never-started-once
  * The tool activity MUST be rescheduled at most once, and only after a `runToolActivity` heartbeat
  * timeout for which `claimToolActivityNeverStartedActivity` returned true. Any other failure, or a
- * failure of the rescheduled attempt, MUST be rethrown unchanged; a non-cancellation failure of the
+ * failure of the rescheduled attempt, MUST be rethrown unchanged unless
+ * `recover-completed-without-deferred-events` resolves it; a non-cancellation failure of the
  * claim MUST rethrow the original timeout. Relies on every agent loop worker running
  * `runToolActivity`'s `claim-start-before-work`.
+ */
+/**
+ * @cc [owner:tdraier,label:error-handling;concurrency] recover-completed-without-deferred-events
+ * After a `runToolActivity` heartbeat timeout for which `claimToolActivityNeverStartedActivity`
+ * returned false, the tool activity MUST resolve to a result without deferred events when
+ * `isToolActivityCompletedActivity` returns true, and MUST NOT be rescheduled. When it returns
+ * false or fails with a non-cancellation `ActivityFailure`, the original timeout MUST be rethrown;
+ * any other error MUST propagate unchanged. Relies on `runToolActivity`'s
+ * `mark-completed-before-returning`.
  */
 async function runNonRetryableToolActivity(
   runActivity: typeof runToolActivity,
@@ -162,6 +176,7 @@ async function runNonRetryableToolActivity(
     }
 
     const { workflowId, runId } = workflowInfo();
+    const execution = { workflowId, runId, activityId: err.activityId };
     const logContext = {
       actionId: activityArgs.actionId,
       activityId: err.activityId,
@@ -169,11 +184,7 @@ async function runNonRetryableToolActivity(
     };
     let neverStarted: boolean;
     try {
-      neverStarted = await claimToolActivityNeverStartedActivity({
-        workflowId,
-        runId,
-        activityId: err.activityId,
-      });
+      neverStarted = await claimToolActivityNeverStartedActivity(execution);
     } catch (claimErr) {
       if (isCancellation(claimErr)) {
         throw claimErr;
@@ -185,12 +196,40 @@ async function runNonRetryableToolActivity(
       throw err;
     }
     if (!neverStarted) {
+      if (
+        patched("recover-completed-tool-activity") &&
+        (await checkToolActivityCompleted(execution, logContext))
+      ) {
+        log.warn(
+          "Recovered tool activity whose completion was lost.",
+          logContext
+        );
+        return { deferredEvents: [] };
+      }
       log.warn("Tool activity timed out after it started.", logContext);
       throw err;
     }
 
     log.warn("Rescheduling tool activity that never started.", logContext);
     return runActivity(authType, activityArgs);
+  }
+}
+
+async function checkToolActivityCompleted(
+  execution: Parameters<typeof isToolActivityCompletedActivity>[0],
+  logContext: Record<string, unknown>
+): Promise<boolean> {
+  try {
+    return await isToolActivityCompletedActivity(execution);
+  } catch (err) {
+    if (isCancellation(err) || !(err instanceof ActivityFailure)) {
+      throw err;
+    }
+    log.error("Failed to check whether tool activity completed.", {
+      ...logContext,
+      error: err,
+    });
+    return false;
   }
 }
 

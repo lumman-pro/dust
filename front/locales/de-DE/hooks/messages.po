@@ -265,6 +265,18 @@ msgstr "{skippedAttachmentCount, plural, one {# Anhang wurde übersprungen.} oth
 msgid "Failed to hide the suggestion."
 msgstr "Der Vorschlag konnte nicht ausgeblendet werden."
 
+#: front/hooks/useMakeFrameDraftLive.ts
+msgid "Could not make the changes live"
+msgstr "Die Änderungen konnten nicht live geschaltet werden."
+
+#: front/hooks/useMakeFrameDraftLive.ts
+msgid "Changes are live"
+msgstr "Die Änderungen sind live."
+
+#: front/hooks/useMakeFrameDraftLive.ts
+msgid "The share link now shows this version."
+msgstr "Der Freigabelink zeigt jetzt diese Version."
+
 #: front/hooks/useMarkAllConversationsAsRead.ts
 msgid "All conversations marked as read"
 msgstr "Alle Unterhaltungen als gelesen markiert"

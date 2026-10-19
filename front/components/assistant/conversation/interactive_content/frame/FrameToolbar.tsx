@@ -47,6 +47,8 @@ interface FrameToolbarProps {
   podActions?: FrameToolbarPodActions | null;
   /** Conversation-only actions (e.g. save-to-pod) rendered after the shared cluster. */
   trailing?: ReactNode;
+  /** Conversation-only status (e.g. the pending-draft chip), rendered after the Beta chip. */
+  status?: ReactNode;
 }
 
 /**
@@ -70,6 +72,7 @@ export function FrameToolbar({
   hideEditLabels = false,
   podActions = null,
   trailing,
+  status,
 }: FrameToolbarProps) {
   const { t } = useLingui();
 
@@ -85,6 +88,7 @@ export function FrameToolbar({
         />
       )}
       {hasFrameFunctions && <FrameBetaChip />}
+      {status}
     </div>
   );
 
