@@ -6,11 +6,13 @@ import type { AgentMessageFeedbackDirection } from "@app/lib/api/assistant/conve
 import { Authenticator } from "@app/lib/auth";
 import type { ConversationResource } from "@app/lib/resources/conversation_resource";
 import type { AgentMCPActionWithOutputType } from "@app/types/actions";
+import type { AgentConfigurationType } from "@app/types/assistant/agent";
 import type {
   AgentMessageType,
   LightAgentMessageWithActionsType,
   LightConversationType,
   MessageFeedback,
+  UserMessageType,
   UserMessageTypeWithContentFragments,
 } from "@app/types/assistant/conversation";
 import type { MembershipRoleType } from "@app/types/memberships";
@@ -24,7 +26,15 @@ import { SpaceFactory } from "./SpaceFactory";
 export function makeExtra(
   auth: Authenticator,
   conversation: ConversationResource,
-  { stepContext }: { stepContext?: StepContext } = {}
+  {
+    stepContext,
+    agentConfiguration,
+    userMessage,
+  }: {
+    stepContext?: StepContext;
+    agentConfiguration?: AgentConfigurationType;
+    userMessage?: UserMessageType;
+  } = {}
 ): ToolHandlerExtra & { runContext: AgentLoopRunContext } {
   const runContext = {
     contextType: "agent_loop",
@@ -34,6 +44,8 @@ export function makeExtra(
       owner: auth.getNonNullableWorkspace(),
     },
     stepContext,
+    agentConfiguration,
+    userMessage,
   } as unknown as AgentLoopRunContext;
   return { auth, runContext } as unknown as ToolHandlerExtra & {
     runContext: AgentLoopRunContext;

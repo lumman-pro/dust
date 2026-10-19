@@ -10,7 +10,6 @@ import {
   isSandboxExecTokenPayload,
   isSandboxFunctionInvocationTokenPayload,
 } from "@app/lib/api/sandbox/access_tokens";
-import { isAgentMessageAnsweringAuthorlessMessage } from "@app/lib/api/sandbox/authorless_message";
 import { selectServerViewsByReference } from "@app/lib/api/sandbox/server_view_reference";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { MCPServerViewResource } from "@app/lib/resources/mcp_server_view_resource";
@@ -160,26 +159,29 @@ app.get("/", async (ctx): HandlerResult<GetSandboxToolsResponseType> => {
     });
   }
 
-  const isAuthorlessRes = await isAgentMessageAnsweringAuthorlessMessage(auth, {
-    conversation: conversationResource,
-    agentMessageId: mId,
-  });
-  if (isAuthorlessRes.isErr()) {
+  const agentMessage = agentMessageRes.value;
+  const [userMessageRow] = agentMessage.parentId
+    ? await conversationResource.fetchMessagesByModelIds(auth, [
+        agentMessage.parentId,
+      ])
+    : [];
+  if (!userMessageRow?.userMessage) {
     return apiError(ctx, {
       status_code: 404,
       api_error: {
         type: "message_not_found",
-        message: isAuthorlessRes.error.message,
+        message: `User message answered by agent message ${mId} not found.`,
       },
     });
   }
-  const isWithoutConcreteUser = isAuthorlessRes.value;
+  const isWithoutConcreteUser = userMessageRow.userMessage.userId === null;
 
   // Fetch agent accessible servers.
   const agentConfig = await getPinnedAgentToolingForAgentMessage(auth, {
     agentVersion,
     conversation: conversationResource,
-    agentMessage: agentMessageRes.value,
+    agentMessage,
+    userMessage: userMessageRow,
   });
   if (!agentConfig) {
     return apiError(ctx, {

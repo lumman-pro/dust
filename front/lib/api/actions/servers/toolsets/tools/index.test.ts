@@ -1,19 +1,24 @@
 import { PERSONAL_SERVER_UNUSABLE_MESSAGE } from "@app/lib/actions/personal_actions";
+import { getConversation } from "@app/lib/api/assistant/conversation/fetch";
 import type { Authenticator } from "@app/lib/auth";
+import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import type { MCPServerViewResource } from "@app/lib/resources/mcp_server_view_resource";
 import { AgentConfigurationFactory } from "@app/tests/utils/AgentConfigurationFactory";
+import { makeExtra } from "@app/tests/utils/conversation_test_factories";
 import { ConversationFactory } from "@app/tests/utils/ConversationFactory";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
 import { MCPServerViewFactory } from "@app/tests/utils/MCPServerViewFactory";
 import { RemoteMCPServerFactory } from "@app/tests/utils/RemoteMCPServerFactory";
-import type { ConversationType } from "@app/types/assistant/conversation";
+import type { AgentConfigurationType } from "@app/types/assistant/agent";
+import { isUserMessageType } from "@app/types/assistant/conversation";
+import assert from "assert";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { TOOLS } from "./index";
 
 describe("toolsets tools with a personal-credential server", () => {
   let auth: Authenticator;
-  let conversation: ConversationType;
+  let agentConfiguration: AgentConfigurationType;
   let personalView: MCPServerViewResource;
 
   beforeEach(async () => {
@@ -36,27 +41,33 @@ describe("toolsets tools with a personal-credential server", () => {
       throw updateRes.error;
     }
 
-    const agentConfiguration =
-      await AgentConfigurationFactory.createTestAgent(auth);
-    conversation = await ConversationFactory.create(auth, {
-      agentConfigurationId: agentConfiguration.sId,
-      messagesCreatedAt: [],
-    });
+    agentConfiguration = await AgentConfigurationFactory.createTestAgent(auth);
   });
 
-  function makeExtra({ authorless }: { authorless: boolean }) {
-    return {
+  async function extraForMessage({ authorless }: { authorless: boolean }) {
+    const conversation = await ConversationFactory.create(auth, {
+      agentConfigurationId: agentConfiguration.sId,
+      messagesCreatedAt: [new Date()],
+      authorless,
+    });
+    const conversationRes = await getConversation(auth, conversation.sId);
+    if (conversationRes.isErr()) {
+      throw conversationRes.error;
+    }
+    const userMessage = conversationRes.value.content
+      .flat()
+      .find(isUserMessageType);
+    assert(userMessage, "Expected a user message in the test conversation.");
+    const conversationResource = await ConversationResource.fetchById(
       auth,
-      runContext: {
-        contextType: "agent_loop",
-        agentConfiguration: { sId: "agent-id", actions: [] },
-        conversation,
-        userMessage: {
-          user: authorless ? null : auth.getNonNullableUser().toJSON(),
-        },
-      },
-      signal: new AbortController().signal,
-    } as never;
+      conversation.sId
+    );
+    assert(conversationResource, "Expected the test conversation to exist.");
+
+    return makeExtra(auth, conversationResource, {
+      agentConfiguration,
+      userMessage,
+    });
   }
 
   function getTool(name: "list" | "enable") {
@@ -68,7 +79,10 @@ describe("toolsets tools with a personal-credential server", () => {
   }
 
   async function listedToolsetIds(authorless: boolean): Promise<string[]> {
-    const result = await getTool("list").handler({}, makeExtra({ authorless }));
+    const result = await getTool("list").handler(
+      {},
+      await extraForMessage({ authorless })
+    );
     if (result.isErr()) {
       throw result.error;
     }
@@ -90,7 +104,7 @@ describe("toolsets tools with a personal-credential server", () => {
   it("refuses to enable it for a message nobody wrote", async () => {
     const result = await getTool("enable").handler(
       { toolsetId: personalView.sId },
-      makeExtra({ authorless: true })
+      await extraForMessage({ authorless: true })
     );
 
     expect(result.isErr()).toBe(true);
