@@ -31,6 +31,7 @@ vi.mock(import("@app/lib/tokenization"), () => ({
 
 import { TOOL_NAME_SEPARATOR } from "@app/lib/actions/constants";
 import type { LightMCPToolConfigurationType } from "@app/lib/actions/mcp";
+import { PERSONAL_SERVER_UNUSABLE_MESSAGE } from "@app/lib/actions/personal_actions";
 import { getPrefixedToolName } from "@app/lib/actions/tool_name_utils";
 import { isServerSideMCPServerConfiguration } from "@app/lib/actions/types/guards";
 import { WEBSEARCH_ACTION_NUM_RESULTS } from "@app/lib/actions/utils";
@@ -91,6 +92,10 @@ describe("createSandboxChildAction", () => {
       async (texts) => new Ok(texts.map(() => 2))
     );
 
+    await setUpConversation();
+  });
+
+  async function setUpConversation({ authorless = false } = {}) {
     const setup = await createResourceTest({ role: "admin" });
     workspace = setup.workspace;
     auth = setup.authenticator;
@@ -126,6 +131,7 @@ describe("createSandboxChildAction", () => {
     conversation = await ConversationFactory.create(auth, {
       agentConfigurationId: agentConfig.sId,
       messagesCreatedAt: [new Date()],
+      authorless,
     });
     const conversationResult = await getConversation(auth, conversation.sId);
     if (conversationResult.isErr()) {
@@ -200,7 +206,7 @@ describe("createSandboxChildAction", () => {
       }
     );
     parentActionId = parentAction.sId;
-  });
+  }
 
   async function callChildTool(
     rawInputs: Record<string, unknown> = { objectName: "Contact" },
@@ -554,6 +560,24 @@ describe("createSandboxChildAction", () => {
       throw new Error("Expected the disabled tool call to fail.");
     }
     expect(result.error.message).toBe("Tool is disabled on this server.");
+    expect(vi.mocked(launchSandboxChildToolWorkflow)).not.toHaveBeenCalled();
+  });
+
+  it("rejects personal-credential servers when the message has no author", async () => {
+    await setUpConversation({ authorless: true });
+    await setToolPermission("never_ask");
+    const updateRes = await view.updateOAuthUseCase(auth, "personal_actions");
+    if (updateRes.isErr()) {
+      throw updateRes.error;
+    }
+
+    const result = await callChildTool();
+
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) {
+      throw new Error("Expected the personal-credential tool call to fail.");
+    }
+    expect(result.error.message).toBe(PERSONAL_SERVER_UNUSABLE_MESSAGE);
     expect(vi.mocked(launchSandboxChildToolWorkflow)).not.toHaveBeenCalled();
   });
 

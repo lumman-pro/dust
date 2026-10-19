@@ -196,6 +196,34 @@ describe("GET /api/v1/w/[wId]/sandbox/actions", () => {
     expect(serverViewIds).not.toContain(laterServerView.sId);
   });
 
+  it("hides personal-credential servers only when the message has no author", async () => {
+    async function listsPersonalServerView(authorless: boolean) {
+      const { agentServerView, auth, token, workspace } =
+        await createSandboxTokenTestContext({
+          usePodSpaceForConversation: true,
+          authorless,
+        });
+      assert(agentServerView, "Expected an agent server view.");
+      const updateRes = await agentServerView.updateOAuthUseCase(
+        auth,
+        "personal_actions"
+      );
+      if (updateRes.isErr()) {
+        throw updateRes.error;
+      }
+
+      const response = await getSandboxActions(workspace, token);
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      return body.serverViews
+        .map((serverView: { sId: string }) => serverView.sId)
+        .includes(agentServerView.sId);
+    }
+
+    expect(await listsPersonalServerView(false)).toBe(true);
+    expect(await listsPersonalServerView(true)).toBe(false);
+  });
+
   it("lists servers of the pod and global spaces for invocation tokens", async () => {
     const { auth, token, workspace, globalSpace } =
       await createSandboxFunctionInvocationTokenTestContext();

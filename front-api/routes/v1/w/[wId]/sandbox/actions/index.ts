@@ -1,3 +1,4 @@
+import { isPersonalServerUnusableForMessage } from "@app/lib/actions/personal_actions";
 import { isServerSideMCPServerConfiguration } from "@app/lib/actions/types/guards";
 import { FILES_SERVER_NAME } from "@app/lib/api/actions/servers/files/metadata";
 import { SANDBOX_TOOL_NAME } from "@app/lib/api/actions/servers/sandbox/metadata";
@@ -9,6 +10,7 @@ import {
   isSandboxExecTokenPayload,
   isSandboxFunctionInvocationTokenPayload,
 } from "@app/lib/api/sandbox/access_tokens";
+import { isAgentMessageAnsweringAuthorlessMessage } from "@app/lib/api/sandbox/authorless_message";
 import { selectServerViewsByReference } from "@app/lib/api/sandbox/server_view_reference";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { MCPServerViewResource } from "@app/lib/resources/mcp_server_view_resource";
@@ -158,6 +160,21 @@ app.get("/", async (ctx): HandlerResult<GetSandboxToolsResponseType> => {
     });
   }
 
+  const isAuthorlessRes = await isAgentMessageAnsweringAuthorlessMessage(auth, {
+    conversation: conversationResource,
+    agentMessageId: mId,
+  });
+  if (isAuthorlessRes.isErr()) {
+    return apiError(ctx, {
+      status_code: 404,
+      api_error: {
+        type: "message_not_found",
+        message: isAuthorlessRes.error.message,
+      },
+    });
+  }
+  const isWithoutConcreteUser = isAuthorlessRes.value;
+
   // Fetch agent accessible servers.
   const agentConfig = await getPinnedAgentToolingForAgentMessage(auth, {
     agentVersion,
@@ -217,7 +234,14 @@ app.get("/", async (ctx): HandlerResult<GetSandboxToolsResponseType> => {
   return ctx.json(
     {
       serverViews: filterServerViews(
-        views.map((view) => view.toJSON()),
+        views
+          .filter(
+            (view) =>
+              !isPersonalServerUnusableForMessage(view, {
+                isWithoutConcreteUser,
+              })
+          )
+          .map((view) => view.toJSON()),
         ctx.req.query()
       ),
     },

@@ -29,9 +29,11 @@ process.env.DUST_SANDBOX_JWT_SECRET ??= "test-sandbox-jwt-secret";
 export async function createSandboxTokenTestContext({
   agentScope = "visible",
   usePodSpaceForConversation = false,
+  authorless = false,
 }: {
   agentScope?: "visible" | "hidden";
   usePodSpaceForConversation?: boolean;
+  authorless?: boolean;
 } = {}) {
   const user = await UserFactory.basic();
   const workspace = await WorkspaceFactory.basic();
@@ -81,6 +83,7 @@ export async function createSandboxTokenTestContext({
     agentConfigurationId: agentConfig.sId,
     messagesCreatedAt: [new Date()],
     requestedSpaceIds: [conversationSpace.id],
+    authorless,
   });
   const sandbox = await SandboxFactory.create(auth, conversation);
 

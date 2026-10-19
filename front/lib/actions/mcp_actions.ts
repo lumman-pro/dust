@@ -64,6 +64,7 @@ import {
   MCPOAuthProviderError,
   decideMCPAuthFailureAction,
 } from "@app/lib/actions/mcp_oauth_provider";
+import { isPersonalServerUnusableForMessage } from "@app/lib/actions/personal_actions";
 import {
   classifyToolAbortSignal,
   isToolInterruptionError,
@@ -1241,7 +1242,10 @@ export async function tryListMCPTools(
           return true;
         }
         const view = preFetchedMcpServerViews.get(action.mcpServerViewId);
-        return view?.oAuthUseCase !== "personal_actions";
+        return (
+          !view ||
+          !isPersonalServerUnusableForMessage(view, { isWithoutConcreteUser })
+        );
       })
     : mcpServerActionsWithOrigin;
 

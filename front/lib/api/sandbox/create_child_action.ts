@@ -5,6 +5,10 @@ import {
 } from "@app/lib/actions/mcp_actions";
 import type { AgentLoopMCPApproveExecutionEvent } from "@app/lib/actions/mcp_internal_actions/events";
 import { validateToolInputs } from "@app/lib/actions/mcp_utils";
+import {
+  isPersonalServerUnusableForMessage,
+  PERSONAL_SERVER_UNUSABLE_MESSAGE,
+} from "@app/lib/actions/personal_actions";
 import { isToolExecutionStatusFinal } from "@app/lib/actions/statuses";
 import { makeMCPApproveExecutionEventBase } from "@app/lib/actions/tool_approval_events";
 import { tryGetPrefixedToolName } from "@app/lib/actions/tool_name_utils";
@@ -112,6 +116,14 @@ export async function createSandboxChildAction(
   );
   if (!userMessageRow?.userMessage) {
     return new Err(new Error("User message not found."));
+  }
+
+  if (
+    isPersonalServerUnusableForMessage(view, {
+      isWithoutConcreteUser: userMessageRow.userMessage.userId === null,
+    })
+  ) {
+    return new Err(new Error(PERSONAL_SERVER_UNUSABLE_MESSAGE));
   }
 
   const agentConfiguration = await getPinnedAgentToolingForAgentMessage(auth, {
