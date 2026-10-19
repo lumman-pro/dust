@@ -21,10 +21,11 @@ export type DefaultRemoteMCPServerConfig = {
     | "bearer"
     | "oauth-dynamic"
     | "oauth-static"
-    | "oauth-provider"
+    | "oauth-static-dust-app"
     | null;
-  // First-party OAuth provider backed by a Dust-owned app (credentials in Dust's environment).
-  // Required when `authMethod` is "oauth-provider", unset otherwise.
+  // Static OAuth through Dust's own OAuth app: the provider registered in Dust that holds the
+  // app's credentials in Dust's environment. Required when `authMethod` is
+  // "oauth-static-dust-app", unset otherwise.
   oauthProvider?: OAuthProvider;
   supportedOAuthUseCases?: MCPOAuthUseCase[];
   scope?: string;
@@ -7623,11 +7624,12 @@ export const getDefaultRemoteMCPServerByName = (
 };
 
 /**
- * @cc [owner:LeandreLeBizec,label:mcp;security] oauth-provider-preset-authorization
- * For a preset with `authMethod` "oauth-provider", the returned authorization MUST use the preset's
- * `oauthProvider` and nothing else: never `mcp` (discovery / Dynamic Client Registration) nor
- * `mcp_static` (workspace-entered app credentials). It returns `null` when the preset requires no
- * OAuth (`bearer` or `null` auth method), or when an "oauth-provider" preset lacks `oauthProvider`.
+ * @cc [owner:LeandreLeBizec,label:mcp;security] oauth-static-dust-app-preset-authorization
+ * For a preset with `authMethod` "oauth-static-dust-app", the returned authorization MUST use the
+ * preset's `oauthProvider` and nothing else: never `mcp` (discovery / Dynamic Client Registration)
+ * nor `mcp_static` (workspace-entered app credentials). It returns `null` when the preset requires
+ * no OAuth (`bearer` or `null` auth method), or when an "oauth-static-dust-app" preset lacks
+ * `oauthProvider`.
  */
 export function getDefaultRemoteMCPServerAuthorization(
   config: DefaultRemoteMCPServerConfig
@@ -7643,7 +7645,7 @@ export function getDefaultRemoteMCPServerAuthorization(
       };
     case "oauth-static":
       return { provider: "mcp_static", supported_use_cases: supportedUseCases };
-    case "oauth-provider":
+    case "oauth-static-dust-app":
       return config.oauthProvider
         ? {
             provider: config.oauthProvider,

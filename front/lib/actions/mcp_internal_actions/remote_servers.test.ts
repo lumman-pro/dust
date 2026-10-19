@@ -23,10 +23,13 @@ function makeConfig(
 }
 
 describe("getDefaultRemoteMCPServerAuthorization", () => {
-  it("uses the declared first-party provider for an oauth-provider preset", () => {
+  it("uses the declared provider for an oauth-static-dust-app preset", () => {
     expect(
       getDefaultRemoteMCPServerAuthorization(
-        makeConfig({ authMethod: "oauth-provider", oauthProvider: "notion" })
+        makeConfig({
+          authMethod: "oauth-static-dust-app",
+          oauthProvider: "notion",
+        })
       )
     ).toEqual({
       provider: "notion",
@@ -34,10 +37,10 @@ describe("getDefaultRemoteMCPServerAuthorization", () => {
     });
   });
 
-  it("returns null for an oauth-provider preset without a provider", () => {
+  it("returns null for an oauth-static-dust-app preset without a provider", () => {
     expect(
       getDefaultRemoteMCPServerAuthorization(
-        makeConfig({ authMethod: "oauth-provider" })
+        makeConfig({ authMethod: "oauth-static-dust-app" })
       )
     ).toBeNull();
   });
@@ -76,14 +79,14 @@ describe("getDefaultRemoteMCPServerAuthorization", () => {
 });
 
 describe("DEFAULT_REMOTE_MCP_SERVERS", () => {
-  it("sets oauthProvider exactly on oauth-provider presets", () => {
+  it("sets oauthProvider exactly on oauth-static-dust-app presets", () => {
     for (const config of DEFAULT_REMOTE_MCP_SERVERS) {
       expect({
         name: config.name,
         hasOAuthProvider: config.oauthProvider !== undefined,
       }).toEqual({
         name: config.name,
-        hasOAuthProvider: config.authMethod === "oauth-provider",
+        hasOAuthProvider: config.authMethod === "oauth-static-dust-app",
       });
     }
   });

@@ -40,7 +40,7 @@ function getAuthMethodLabel(
 ): string {
   switch (authMethod) {
     case "oauth-dynamic":
-    case "oauth-provider":
+    case "oauth-static-dust-app":
       return t(msg`Automatic`);
     case "bearer":
       return getBearerAuthMethodLabel(t, defaultServerConfig);

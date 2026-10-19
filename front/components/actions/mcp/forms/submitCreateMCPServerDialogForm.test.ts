@@ -202,7 +202,7 @@ describe("submitCreateMCPServerDialogForm", () => {
     );
   });
 
-  it("connects a first-party OAuth provider preset without discovery", async () => {
+  it("connects an oauth-static-dust-app preset without discovery", async () => {
     vi.mocked(setupOAuthConnection).mockResolvedValue(
       new Ok({
         connection_id: "connection-id",
@@ -219,7 +219,7 @@ describe("submitCreateMCPServerDialogForm", () => {
 
     const result = await submitCreateMCPServerDialogForm({
       owner,
-      values: { ...values, authMethod: "oauth-provider" },
+      values: { ...values, authMethod: "oauth-static-dust-app" },
       authorization: {
         provider: "notion",
         supported_use_cases: ["platform_actions", "personal_actions"],
