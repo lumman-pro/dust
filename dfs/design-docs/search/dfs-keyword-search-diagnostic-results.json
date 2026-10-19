@@ -1,0 +1,927 @@
+{
+  "environment": {
+    "version": {
+      "number": "8.16.0",
+      "build_flavor": "default",
+      "build_type": "docker",
+      "build_hash": "12ff76a92922609df4aba61a368e7adf65589749",
+      "build_date": "2024-11-08T10:05:56.292914697Z",
+      "build_snapshot": false,
+      "lucene_version": "9.12.0",
+      "minimum_wire_compatibility_version": "7.17.0",
+      "minimum_index_compatibility_version": "7.0.0"
+    },
+    "documents": 215,
+    "shards": 1
+  },
+  "queries": {
+    "copy_to_and": {
+      "total": 8,
+      "hits": [
+        {
+          "id": "name_missing_body",
+          "score": 10.722069
+        },
+        {
+          "id": "split_fields",
+          "score": 10.682705
+        },
+        {
+          "id": "draft",
+          "score": 10.643631
+        },
+        {
+          "id": "nonadjacent",
+          "score": 10.604841
+        },
+        {
+          "id": "body_only",
+          "score": 10.566334
+        },
+        {
+          "id": "name_short_body",
+          "score": 10.528104
+        },
+        {
+          "id": "name_long_body",
+          "score": 0.59502363
+        },
+        {
+          "id": "long_body_only",
+          "score": 0.59502363
+        }
+      ]
+    },
+    "combined_and": {
+      "total": 8,
+      "hits": [
+        {
+          "id": "name_missing_body",
+          "score": 15.026235
+        },
+        {
+          "id": "draft",
+          "score": 14.968845
+        },
+        {
+          "id": "name_short_body",
+          "score": 14.944385
+        },
+        {
+          "id": "split_fields",
+          "score": 13.611269
+        },
+        {
+          "id": "nonadjacent",
+          "score": 12.170197
+        },
+        {
+          "id": "body_only",
+          "score": 12.12716
+        },
+        {
+          "id": "name_long_body",
+          "score": 2.4810696
+        },
+        {
+          "id": "long_body_only",
+          "score": 0.700624
+        }
+      ]
+    },
+    "best_fields_and": {
+      "total": 7,
+      "hits": [
+        {
+          "id": "name_missing_body",
+          "score": 29.665716
+        },
+        {
+          "id": "name_short_body",
+          "score": 29.665716
+        },
+        {
+          "id": "name_long_body",
+          "score": 29.665716
+        },
+        {
+          "id": "draft",
+          "score": 24.66239
+        },
+        {
+          "id": "nonadjacent",
+          "score": 13.348818
+        },
+        {
+          "id": "body_only",
+          "score": 13.300357
+        },
+        {
+          "id": "long_body_only",
+          "score": 0.7489872
+        }
+      ]
+    },
+    "best_fields_or": {
+      "total": 9,
+      "hits": [
+        {
+          "id": "name_missing_body",
+          "score": 29.665716
+        },
+        {
+          "id": "name_short_body",
+          "score": 29.665716
+        },
+        {
+          "id": "name_long_body",
+          "score": 29.665716
+        },
+        {
+          "id": "draft",
+          "score": 24.66239
+        },
+        {
+          "id": "split_fields",
+          "score": 17.680046
+        },
+        {
+          "id": "partial_query",
+          "score": 14.093245
+        },
+        {
+          "id": "nonadjacent",
+          "score": 13.348818
+        },
+        {
+          "id": "body_only",
+          "score": 13.300357
+        },
+        {
+          "id": "long_body_only",
+          "score": 0.7489872
+        }
+      ]
+    },
+    "cross_fields_and": {
+      "total": 8,
+      "hits": [
+        {
+          "id": "name_missing_body",
+          "score": 29.665716
+        },
+        {
+          "id": "name_short_body",
+          "score": 29.665716
+        },
+        {
+          "id": "name_long_body",
+          "score": 29.665716
+        },
+        {
+          "id": "draft",
+          "score": 24.66239
+        },
+        {
+          "id": "split_fields",
+          "score": 24.179651
+        },
+        {
+          "id": "nonadjacent",
+          "score": 12.07314
+        },
+        {
+          "id": "body_only",
+          "score": 12.02931
+        },
+        {
+          "id": "long_body_only",
+          "score": 0.6774106
+        }
+      ]
+    },
+    "simple_and": {
+      "total": 8,
+      "hits": [
+        {
+          "id": "name_missing_body",
+          "score": 29.665716
+        },
+        {
+          "id": "name_short_body",
+          "score": 29.665716
+        },
+        {
+          "id": "name_long_body",
+          "score": 29.665716
+        },
+        {
+          "id": "draft",
+          "score": 24.66239
+        },
+        {
+          "id": "split_fields",
+          "score": 24.179651
+        },
+        {
+          "id": "nonadjacent",
+          "score": 13.348818
+        },
+        {
+          "id": "body_only",
+          "score": 13.300357
+        },
+        {
+          "id": "long_body_only",
+          "score": 0.7489872
+        }
+      ]
+    },
+    "simple_mixed_analyzers_and": {
+      "total": 3,
+      "hits": [
+        {
+          "id": "split_filename_parts",
+          "score": 16.114672
+        },
+        {
+          "id": "body_only",
+          "score": 13.300357
+        },
+        {
+          "id": "long_body_only",
+          "score": 0.7489872
+        }
+      ]
+    },
+    "simple_default_field_name_boost": {
+      "total": 8,
+      "hits": [
+        {
+          "id": "name_missing_body",
+          "score": 29.665716
+        },
+        {
+          "id": "name_short_body",
+          "score": 29.665716
+        },
+        {
+          "id": "name_long_body",
+          "score": 29.665716
+        },
+        {
+          "id": "draft",
+          "score": 24.66239
+        },
+        {
+          "id": "split_fields",
+          "score": 24.179651
+        },
+        {
+          "id": "nonadjacent",
+          "score": 13.348818
+        },
+        {
+          "id": "body_only",
+          "score": 13.300357
+        },
+        {
+          "id": "long_body_only",
+          "score": 0.7489872
+        }
+      ]
+    },
+    "combined_plus_name": {
+      "total": 8,
+      "hits": [
+        {
+          "id": "name_missing_body",
+          "score": 44.69195
+        },
+        {
+          "id": "name_short_body",
+          "score": 44.6101
+        },
+        {
+          "id": "draft",
+          "score": 39.631233
+        },
+        {
+          "id": "name_long_body",
+          "score": 32.146786
+        },
+        {
+          "id": "split_fields",
+          "score": 13.611269
+        },
+        {
+          "id": "nonadjacent",
+          "score": 12.170197
+        },
+        {
+          "id": "body_only",
+          "score": 12.12716
+        },
+        {
+          "id": "long_body_only",
+          "score": 0.700624
+        }
+      ]
+    },
+    "literal_phrase": {
+      "total": 6,
+      "hits": [
+        {
+          "id": "name_missing_body",
+          "score": 29.665718
+        },
+        {
+          "id": "name_short_body",
+          "score": 29.665718
+        },
+        {
+          "id": "name_long_body",
+          "score": 29.665718
+        },
+        {
+          "id": "draft",
+          "score": 24.662392
+        },
+        {
+          "id": "body_only",
+          "score": 13.300356
+        },
+        {
+          "id": "long_body_only",
+          "score": 0.7489872
+        }
+      ]
+    },
+    "phrase_and_exclusion": {
+      "total": 5,
+      "hits": [
+        {
+          "id": "name_missing_body",
+          "score": 30.665718
+        },
+        {
+          "id": "name_short_body",
+          "score": 30.665718
+        },
+        {
+          "id": "name_long_body",
+          "score": 30.665718
+        },
+        {
+          "id": "body_only",
+          "score": 14.300356
+        },
+        {
+          "id": "long_body_only",
+          "score": 1.7489872
+        }
+      ]
+    },
+    "required_with_explicit_or": {
+      "total": 9,
+      "hits": [
+        {
+          "id": "partial_query",
+          "score": 34.085045
+        },
+        {
+          "id": "name_missing_body",
+          "score": 29.665716
+        },
+        {
+          "id": "name_short_body",
+          "score": 29.665716
+        },
+        {
+          "id": "name_long_body",
+          "score": 29.665716
+        },
+        {
+          "id": "draft",
+          "score": 24.66239
+        },
+        {
+          "id": "split_fields",
+          "score": 24.179651
+        },
+        {
+          "id": "nonadjacent",
+          "score": 13.348818
+        },
+        {
+          "id": "body_only",
+          "score": 13.300357
+        },
+        {
+          "id": "long_body_only",
+          "score": 0.7489872
+        }
+      ]
+    },
+    "punctuation_name_icu": {
+      "total": 4,
+      "hits": [
+        {
+          "id": "name_missing_body",
+          "score": 3.893118
+        },
+        {
+          "id": "name_short_body",
+          "score": 3.893118
+        },
+        {
+          "id": "name_long_body",
+          "score": 3.893118
+        },
+        {
+          "id": "draft",
+          "score": 3.236517
+        }
+      ]
+    },
+    "punctuation_name_parts": {
+      "total": 5,
+      "hits": [
+        {
+          "id": "name_missing_body",
+          "score": 3.6947417
+        },
+        {
+          "id": "name_short_body",
+          "score": 3.6947417
+        },
+        {
+          "id": "name_long_body",
+          "score": 3.6947417
+        },
+        {
+          "id": "draft",
+          "score": 3.0723033
+        },
+        {
+          "id": "split_filename_parts",
+          "score": 2.2980256
+        }
+      ]
+    },
+    "hyphenated_identifier": {
+      "total": 1,
+      "hits": [
+        {
+          "id": "identifier",
+          "score": 7.1201534
+        }
+      ]
+    },
+    "stemmed_content": {
+      "total": 1,
+      "hits": [
+        {
+          "id": "morphology",
+          "score": 16.697157
+        }
+      ]
+    },
+    "unstemmed_content": {
+      "total": 0,
+      "hits": []
+    },
+    "ordinary_partial_token": {
+      "total": 0,
+      "hits": []
+    },
+    "filename_prefix": {
+      "total": 5,
+      "hits": [
+        {
+          "id": "name_missing_body",
+          "score": 5.802169
+        },
+        {
+          "id": "name_short_body",
+          "score": 5.802169
+        },
+        {
+          "id": "name_long_body",
+          "score": 5.802169
+        },
+        {
+          "id": "split_filename_parts",
+          "score": 5.802169
+        },
+        {
+          "id": "draft",
+          "score": 5.802169
+        }
+      ]
+    },
+    "prefix_longer_than_max_gram": {
+      "total": 0,
+      "hits": []
+    },
+    "full_long_word": {
+      "total": 1,
+      "hits": [
+        {
+          "id": "long_word",
+          "score": 7.8560033
+        }
+      ]
+    },
+    "accent_folding": {
+      "total": 1,
+      "hits": [
+        {
+          "id": "accented",
+          "score": 10.005191
+        }
+      ]
+    },
+    "body_only_keyword": {
+      "total": 2,
+      "hits": [
+        {
+          "id": "body_only",
+          "score": 7.420886
+        },
+        {
+          "id": "long_body_only",
+          "score": 0.41789436
+        }
+      ]
+    },
+    "pure_exclusion": {
+      "total": 214,
+      "hits": [
+        {
+          "id": "name_missing_body",
+          "score": 1.0
+        },
+        {
+          "id": "name_short_body",
+          "score": 1.0
+        },
+        {
+          "id": "name_long_body",
+          "score": 1.0
+        },
+        {
+          "id": "body_only",
+          "score": 1.0
+        },
+        {
+          "id": "long_body_only",
+          "score": 1.0
+        },
+        {
+          "id": "split_fields",
+          "score": 1.0
+        },
+        {
+          "id": "split_filename_parts",
+          "score": 1.0
+        },
+        {
+          "id": "partial_query",
+          "score": 1.0
+        },
+        {
+          "id": "nonadjacent",
+          "score": 1.0
+        },
+        {
+          "id": "morphology",
+          "score": 1.0
+        },
+        {
+          "id": "identifier",
+          "score": 1.0
+        },
+        {
+          "id": "accented",
+          "score": 1.0
+        },
+        {
+          "id": "long_word",
+          "score": 1.0
+        },
+        {
+          "id": "cjk",
+          "score": 1.0
+        },
+        {
+          "id": "background_000",
+          "score": 1.0
+        },
+        {
+          "id": "background_001",
+          "score": 1.0
+        },
+        {
+          "id": "background_002",
+          "score": 1.0
+        },
+        {
+          "id": "background_003",
+          "score": 1.0
+        },
+        {
+          "id": "background_004",
+          "score": 1.0
+        },
+        {
+          "id": "background_005",
+          "score": 1.0
+        },
+        {
+          "id": "background_006",
+          "score": 1.0
+        },
+        {
+          "id": "background_007",
+          "score": 1.0
+        },
+        {
+          "id": "background_008",
+          "score": 1.0
+        },
+        {
+          "id": "background_009",
+          "score": 1.0
+        },
+        {
+          "id": "background_010",
+          "score": 1.0
+        },
+        {
+          "id": "background_011",
+          "score": 1.0
+        },
+        {
+          "id": "background_012",
+          "score": 1.0
+        },
+        {
+          "id": "background_013",
+          "score": 1.0
+        },
+        {
+          "id": "background_014",
+          "score": 1.0
+        },
+        {
+          "id": "background_015",
+          "score": 1.0
+        }
+      ]
+    }
+  },
+  "analysis": {
+    "lexical": {
+      "Q4_budget-final_v2.pdf": [
+        "q4_budget",
+        "final_v2",
+        "pdf"
+      ],
+      "RFC-1234 OAuth2 PKCE": [
+        "rfc",
+        "1234",
+        "oauth2",
+        "pkce"
+      ],
+      "CamelCaseReport.pdf": [
+        "camelcasereport.pdf"
+      ],
+      "Réunion Équipe": [
+        "reunion",
+        "equipe"
+      ],
+      "東京 予算報告書": [
+        "東京",
+        "予算",
+        "報告書"
+      ],
+      "C++ C# .NET": [
+        "c",
+        "c",
+        "net"
+      ],
+      "employees requested increases": [
+        "employees",
+        "requested",
+        "increases"
+      ]
+    },
+    "filename": {
+      "Q4_budget-final_v2.pdf": [
+        "q4",
+        "budget",
+        "final",
+        "v2",
+        "pdf"
+      ],
+      "RFC-1234 OAuth2 PKCE": [
+        "rfc",
+        "1234",
+        "oauth2",
+        "pkce"
+      ],
+      "CamelCaseReport.pdf": [
+        "camel",
+        "case",
+        "report",
+        "pdf"
+      ],
+      "Réunion Équipe": [
+        "reunion",
+        "equipe"
+      ],
+      "東京 予算報告書": [
+        "東京",
+        "予算報告書"
+      ],
+      "C++ C# .NET": [
+        "c",
+        "c",
+        "net"
+      ],
+      "employees requested increases": [
+        "employees",
+        "requested",
+        "increases"
+      ]
+    },
+    "lexical_en": {
+      "Q4_budget-final_v2.pdf": [
+        "q4_budget",
+        "final_v2",
+        "pdf"
+      ],
+      "RFC-1234 OAuth2 PKCE": [
+        "rfc",
+        "1234",
+        "oauth2",
+        "pkce"
+      ],
+      "CamelCaseReport.pdf": [
+        "camelcasereport.pdf"
+      ],
+      "Réunion Équipe": [
+        "reunion",
+        "equipe"
+      ],
+      "東京 予算報告書": [
+        "東京",
+        "予算",
+        "報告書"
+      ],
+      "C++ C# .NET": [
+        "c",
+        "c",
+        "net"
+      ],
+      "employees requested increases": [
+        "employee",
+        "request",
+        "increase"
+      ]
+    },
+    "filename_edge": {
+      "Q4_budget-final_v2.pdf": [
+        "q4",
+        "bu",
+        "bud",
+        "budg",
+        "budge",
+        "budget",
+        "fi",
+        "fin",
+        "fina",
+        "final",
+        "v2",
+        "pd",
+        "pdf"
+      ],
+      "RFC-1234 OAuth2 PKCE": [
+        "rf",
+        "rfc",
+        "12",
+        "123",
+        "1234",
+        "oa",
+        "oau",
+        "oaut",
+        "oauth",
+        "oauth2",
+        "pk",
+        "pkc",
+        "pkce"
+      ],
+      "CamelCaseReport.pdf": [
+        "ca",
+        "cam",
+        "came",
+        "camel",
+        "ca",
+        "cas",
+        "case",
+        "re",
+        "rep",
+        "repo",
+        "repor",
+        "report",
+        "pd",
+        "pdf"
+      ],
+      "Réunion Équipe": [
+        "re",
+        "reu",
+        "reun",
+        "reuni",
+        "reunio",
+        "reunion",
+        "eq",
+        "equ",
+        "equi",
+        "equip",
+        "equipe"
+      ],
+      "東京 予算報告書": [
+        "東京",
+        "予算",
+        "予算報",
+        "予算報告",
+        "予算報告書"
+      ],
+      "C++ C# .NET": [
+        "c",
+        "c",
+        "ne",
+        "net"
+      ],
+      "employees requested increases": [
+        "em",
+        "emp",
+        "empl",
+        "emplo",
+        "employ",
+        "employe",
+        "employee",
+        "employees",
+        "re",
+        "req",
+        "requ",
+        "reque",
+        "reques",
+        "request",
+        "requeste",
+        "requested",
+        "in",
+        "inc",
+        "incr",
+        "incre",
+        "increa",
+        "increas",
+        "increase",
+        "increases"
+      ]
+    }
+  },
+  "paired_filename_scores": {
+    "copy_to_and": {
+      "name_missing_body": 10.722069,
+      "name_short_body": 10.528104,
+      "name_long_body": 0.59502363
+    },
+    "combined_and": {
+      "name_missing_body": 15.026235,
+      "name_short_body": 14.944385,
+      "name_long_body": 2.4810696
+    },
+    "best_fields_and": {
+      "name_missing_body": 29.665716,
+      "name_short_body": 29.665716,
+      "name_long_body": 29.665716
+    },
+    "cross_fields_and": {
+      "name_missing_body": 29.665716,
+      "name_short_body": 29.665716,
+      "name_long_body": 29.665716
+    },
+    "simple_and": {
+      "name_missing_body": 29.665716,
+      "name_short_body": 29.665716,
+      "name_long_body": 29.665716
+    },
+    "combined_plus_name": {
+      "name_missing_body": 44.69195,
+      "name_short_body": 44.6101,
+      "name_long_body": 32.146786
+    }
+  }
+}

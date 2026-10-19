@@ -1,0 +1,18 @@
+{
+  "version": "8.16.0",
+  "mapping": "accepted",
+  "sample_objects": 5,
+  "expected_hits": 3,
+  "excluded_other_tenant": true,
+  "excluded_missing_keyword": true,
+  "cross_field_filename_parts_match": true,
+  "body_excerpts": "present",
+  "unsigned_long_max": "preserved",
+  "filename_parts": [
+    "q4",
+    "budget",
+    "final",
+    "v2",
+    "pdf"
+  ]
+}

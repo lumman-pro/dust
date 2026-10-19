@@ -56,3 +56,11 @@ applications and sandbox mounts address files.
 ## Mount
 
 The [mount design](MOUNT.md) describes the library behind the dfs FUSE client for Linux.
+
+## Search
+
+The [object search proposal](search/dfs-object-search-revised-design.md) defines the
+`dfs.objects` index, multilingual analysis, prefix and phrase matching, selected attribute
+projections, and future ranking features. Its linked JSON definitions and diagnostic results
+record the validated Elasticsearch 8.16 proposal. The lexer/parser and query compiler are deferred
+to the application implementation.

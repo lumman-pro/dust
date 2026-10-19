@@ -1,0 +1,3805 @@
+{
+  "elasticsearch": {
+    "number": "8.16.0",
+    "build_flavor": "default",
+    "build_type": "docker",
+    "build_hash": "12ff76a92922609df4aba61a368e7adf65589749",
+    "build_date": "2024-11-08T10:05:56.292914697Z",
+    "build_snapshot": false,
+    "lucene_version": "9.12.0",
+    "minimum_wire_compatibility_version": "7.17.0",
+    "minimum_index_compatibility_version": "7.0.0"
+  },
+  "document_count": 138,
+  "mapping_source": "dfs.objects_1.mappings.proposed.json",
+  "settings_source": "dfs.objects_1.settings.proposed.json",
+  "local_settings_changes": {
+    "removed_allocation_require": true,
+    "shards": 1,
+    "replicas": 0
+  },
+  "checks": [
+    {
+      "label": "prefix matches filename, content, and selected xattr",
+      "input": "repo",
+      "interactive": true,
+      "expected_present": [
+        "name_prefix",
+        "body_prefix",
+        "attribute_prefix",
+        "name_components",
+        "camel",
+        "tag_prefix"
+      ],
+      "expected_absent": [
+        "wrong_tenant",
+        "no_permission",
+        "deleted",
+        "only_a"
+      ],
+      "expected_exact": null,
+      "hits": [
+        "name_prefix",
+        "name_components",
+        "camel",
+        "singular",
+        "reverse_cross_prefix",
+        "exact_phrase",
+        "inexact_inflection",
+        "inexact_order",
+        "inexact_gap",
+        "bilingual",
+        "composite",
+        "composite_wrong_type",
+        "composite_wrong_form",
+        "draft",
+        "supplementary",
+        "folder",
+        "attribute_prefix",
+        "tag_prefix",
+        "cross_metadata",
+        "inexact_value_boundary",
+        "body_prefix",
+        "cross_prefix",
+        "exact_body_phrase",
+        "inexact_split"
+      ],
+      "passed": true
+    },
+    {
+      "label": "completed fragment is not silently a prefix",
+      "input": "repo",
+      "interactive": false,
+      "expected_present": [],
+      "expected_absent": [],
+      "expected_exact": [],
+      "hits": [],
+      "passed": true
+    },
+    {
+      "label": "quoted word has no prefix or stemming",
+      "input": "\"report\"",
+      "interactive": false,
+      "expected_present": [
+        "singular"
+      ],
+      "expected_absent": [
+        "name_prefix",
+        "name_components",
+        "english_running"
+      ],
+      "expected_exact": null,
+      "hits": [
+        "supplementary",
+        "singular",
+        "inexact_inflection",
+        "composite_wrong_form"
+      ],
+      "passed": true
+    },
+    {
+      "label": "quoted plural remains plural",
+      "input": "\"reports\"",
+      "interactive": false,
+      "expected_present": [
+        "name_prefix"
+      ],
+      "expected_absent": [
+        "singular"
+      ],
+      "expected_exact": null,
+      "hits": [
+        "inexact_order",
+        "draft",
+        "name_prefix",
+        "reverse_cross_prefix",
+        "bilingual",
+        "folder",
+        "camel",
+        "exact_phrase",
+        "composite",
+        "composite_wrong_type",
+        "inexact_gap",
+        "name_components",
+        "inexact_split",
+        "body_prefix",
+        "cross_prefix",
+        "exact_body_phrase",
+        "attribute_prefix",
+        "tag_prefix",
+        "inexact_value_boundary",
+        "cross_metadata"
+      ],
+      "passed": true
+    },
+    {
+      "label": "quoted phrase is adjacent, ordered, and unstemmed",
+      "input": "\"annual reports\"",
+      "interactive": false,
+      "expected_present": [
+        "exact_phrase",
+        "exact_body_phrase",
+        "camel"
+      ],
+      "expected_absent": [
+        "inexact_inflection",
+        "inexact_order",
+        "inexact_gap",
+        "inexact_split",
+        "inexact_value_boundary"
+      ],
+      "expected_exact": null,
+      "hits": [
+        "camel",
+        "exact_phrase",
+        "composite",
+        "composite_wrong_type",
+        "exact_body_phrase"
+      ],
+      "passed": true
+    },
+    {
+      "label": "quote stays exact during autocomplete",
+      "input": "\"annual reports\"",
+      "interactive": true,
+      "expected_present": [
+        "exact_phrase"
+      ],
+      "expected_absent": [
+        "inexact_inflection",
+        "inexact_gap",
+        "inexact_split"
+      ],
+      "expected_exact": null,
+      "hits": [
+        "camel",
+        "exact_phrase",
+        "composite",
+        "composite_wrong_type",
+        "exact_body_phrase"
+      ],
+      "passed": true
+    },
+    {
+      "label": "retain stop words in exact phrase",
+      "input": "\"state of the art\"",
+      "interactive": false,
+      "expected_present": [
+        "stop_words"
+      ],
+      "expected_absent": [
+        "missing_stop_words"
+      ],
+      "expected_exact": null,
+      "hits": [
+        "stop_words"
+      ],
+      "passed": true
+    },
+    {
+      "label": "required terms span filename and body",
+      "input": "A B",
+      "interactive": false,
+      "expected_present": [
+        "cross_fields"
+      ],
+      "expected_absent": [
+        "only_a",
+        "only_b"
+      ],
+      "expected_exact": null,
+      "hits": [
+        "cross_fields"
+      ],
+      "passed": true
+    },
+    {
+      "label": "cross-field final prefix",
+      "input": "budget repo",
+      "interactive": true,
+      "expected_present": [
+        "cross_prefix",
+        "reverse_cross_prefix",
+        "cross_metadata"
+      ],
+      "expected_absent": [
+        "only_a"
+      ],
+      "expected_exact": null,
+      "hits": [
+        "cross_metadata",
+        "cross_prefix",
+        "draft",
+        "name_prefix",
+        "reverse_cross_prefix",
+        "composite",
+        "composite_wrong_type",
+        "composite_wrong_form"
+      ],
+      "passed": true
+    },
+    {
+      "label": "cross-field and metadata stemming",
+      "input": "employee request",
+      "interactive": false,
+      "expected_present": [
+        "english_stem",
+        "metadata_stem"
+      ],
+      "expected_absent": [],
+      "expected_exact": null,
+      "hits": [
+        "english_stem",
+        "metadata_stem"
+      ],
+      "passed": true
+    },
+    {
+      "label": "filename stemming after component splitting",
+      "input": "report",
+      "interactive": false,
+      "expected_present": [
+        "name_prefix",
+        "name_components",
+        "camel"
+      ],
+      "expected_absent": [],
+      "expected_exact": null,
+      "hits": [
+        "supplementary",
+        "singular",
+        "inexact_inflection",
+        "composite_wrong_form",
+        "name_prefix",
+        "reverse_cross_prefix",
+        "bilingual",
+        "folder",
+        "camel",
+        "exact_phrase",
+        "inexact_order",
+        "composite",
+        "composite_wrong_type",
+        "draft",
+        "inexact_gap",
+        "inexact_split",
+        "body_prefix",
+        "cross_prefix",
+        "exact_body_phrase",
+        "name_components",
+        "attribute_prefix",
+        "tag_prefix",
+        "inexact_value_boundary",
+        "cross_metadata"
+      ],
+      "passed": true
+    },
+    {
+      "label": "English pony/ponies",
+      "input": "pony",
+      "interactive": false,
+      "expected_present": [
+        "english_irregular_suffix"
+      ],
+      "expected_absent": [],
+      "expected_exact": null,
+      "hits": [
+        "english_irregular_suffix"
+      ],
+      "passed": true
+    },
+    {
+      "label": "English run/running",
+      "input": "run",
+      "interactive": false,
+      "expected_present": [
+        "english_running"
+      ],
+      "expected_absent": [],
+      "expected_exact": null,
+      "hits": [
+        "english_running"
+      ],
+      "passed": true
+    },
+    {
+      "label": "French journal/journaux and société/sociétés",
+      "input": "journal société",
+      "interactive": false,
+      "expected_present": [
+        "french_stem",
+        "bilingual",
+        "metadata_french_stem"
+      ],
+      "expected_absent": [],
+      "expected_exact": null,
+      "hits": [
+        "french_stem",
+        "bilingual",
+        "metadata_french_stem"
+      ],
+      "passed": true
+    },
+    {
+      "label": "French cheval/chevaux",
+      "input": "cheval",
+      "interactive": false,
+      "expected_present": [
+        "french_plural"
+      ],
+      "expected_absent": [],
+      "expected_exact": null,
+      "hits": [
+        "french_plural"
+      ],
+      "passed": true
+    },
+    {
+      "label": "French elision",
+      "input": "avion",
+      "interactive": false,
+      "expected_present": [
+        "french_elision"
+      ],
+      "expected_absent": [],
+      "expected_exact": null,
+      "hits": [
+        "french_no_article",
+        "french_elision"
+      ],
+      "passed": true
+    },
+    {
+      "label": "French prefix after apostrophe",
+      "input": "avio",
+      "interactive": true,
+      "expected_present": [
+        "french_elision",
+        "french_no_article"
+      ],
+      "expected_absent": [],
+      "expected_exact": null,
+      "hits": [
+        "french_elision",
+        "french_no_article"
+      ],
+      "passed": true
+    },
+    {
+      "label": "quoted French article remains required",
+      "input": "\"l’avion est\"",
+      "interactive": false,
+      "expected_present": [
+        "french_elision"
+      ],
+      "expected_absent": [
+        "french_no_article"
+      ],
+      "expected_exact": null,
+      "hits": [
+        "french_elision"
+      ],
+      "passed": true
+    },
+    {
+      "label": "English prefix after apostrophe",
+      "input": "reill",
+      "interactive": true,
+      "expected_present": [
+        "english_apostrophe"
+      ],
+      "expected_absent": [],
+      "expected_exact": null,
+      "hits": [
+        "english_apostrophe"
+      ],
+      "passed": true
+    },
+    {
+      "label": "quoted apostrophe normalization",
+      "input": "\"O'Reilly describes\"",
+      "interactive": false,
+      "expected_present": [
+        "english_apostrophe"
+      ],
+      "expected_absent": [],
+      "expected_exact": null,
+      "hits": [
+        "english_apostrophe"
+      ],
+      "passed": true
+    },
+    {
+      "label": "composed and decomposed keyword normalization",
+      "input": "filename:\"CAFÉ.pdf\"",
+      "interactive": false,
+      "expected_present": [],
+      "expected_absent": [],
+      "expected_exact": [
+        "decomposed_accent"
+      ],
+      "hits": [
+        "decomposed_accent"
+      ],
+      "passed": true
+    },
+    {
+      "label": "composed and decomposed selected tag",
+      "input": "tag:\"réseau\"",
+      "interactive": false,
+      "expected_present": [],
+      "expected_absent": [],
+      "expected_exact": [
+        "decomposed_accent"
+      ],
+      "hits": [
+        "decomposed_accent"
+      ],
+      "passed": true
+    },
+    {
+      "label": "mixed-language cross-field conjunction",
+      "input": "report société",
+      "interactive": false,
+      "expected_present": [
+        "bilingual"
+      ],
+      "expected_absent": [],
+      "expected_exact": null,
+      "hits": [
+        "bilingual"
+      ],
+      "passed": true
+    },
+    {
+      "label": "accent and case normalization",
+      "input": "REUNION equipe",
+      "interactive": false,
+      "expected_present": [
+        "accent"
+      ],
+      "expected_absent": [],
+      "expected_exact": null,
+      "hits": [
+        "accent"
+      ],
+      "passed": true
+    },
+    {
+      "label": "quoted accented name",
+      "input": "\"reunion equipe\"",
+      "interactive": false,
+      "expected_present": [
+        "accent"
+      ],
+      "expected_absent": [],
+      "expected_exact": null,
+      "hits": [
+        "accent"
+      ],
+      "passed": true
+    },
+    {
+      "label": "type is a hard filter, not lexical text",
+      "input": "budget type:pdf",
+      "interactive": false,
+      "expected_present": [
+        "filter_pdf",
+        "filter_pdf_not_text"
+      ],
+      "expected_absent": [
+        "filter_false_extension",
+        "filter_type_word"
+      ],
+      "expected_exact": null,
+      "hits": [
+        "cross_metadata",
+        "length_short",
+        "length_long",
+        "cross_prefix",
+        "filter_pdf",
+        "filter_other_owner",
+        "draft",
+        "old",
+        "name_prefix",
+        "reverse_cross_prefix",
+        "composite",
+        "composite_wrong_form",
+        "filter_pdf_not_text"
+      ],
+      "passed": true
+    },
+    {
+      "label": "modifier at cursor does not prefix an earlier word",
+      "input": "budget repo type:pdf",
+      "interactive": true,
+      "expected_present": [],
+      "expected_absent": [],
+      "expected_exact": [],
+      "hits": [],
+      "passed": true
+    },
+    {
+      "label": "filter and prefix together at cursor",
+      "input": "type:pdf budget repo",
+      "interactive": true,
+      "expected_present": [
+        "cross_prefix",
+        "reverse_cross_prefix"
+      ],
+      "expected_absent": [
+        "filter_false_extension",
+        "filter_type_word"
+      ],
+      "expected_exact": null,
+      "hits": [
+        "cross_metadata",
+        "cross_prefix",
+        "draft",
+        "name_prefix",
+        "reverse_cross_prefix",
+        "composite",
+        "composite_wrong_form"
+      ],
+      "passed": true
+    },
+    {
+      "label": "quoted phrase plus type filter plus cross-field prefix",
+      "input": "type:pdf \"annual reports\" budg",
+      "interactive": true,
+      "expected_present": [
+        "composite"
+      ],
+      "expected_absent": [
+        "composite_wrong_type",
+        "composite_wrong_form",
+        "inexact_split"
+      ],
+      "expected_exact": null,
+      "hits": [
+        "composite"
+      ],
+      "passed": true
+    },
+    {
+      "label": "normalized exact selected xattr",
+      "input": "tag:\"reseau securite\"",
+      "interactive": false,
+      "expected_present": [],
+      "expected_absent": [],
+      "expected_exact": [
+        "filter_pdf"
+      ],
+      "hits": [
+        "filter_pdf"
+      ],
+      "passed": true
+    },
+    {
+      "label": "compound exact xattr filters",
+      "input": "owner:alice-id source:gdrive type:pdf",
+      "interactive": false,
+      "expected_present": [],
+      "expected_absent": [],
+      "expected_exact": [
+        "filter_pdf"
+      ],
+      "hits": [
+        "filter_pdf"
+      ],
+      "passed": true
+    },
+    {
+      "label": "date is typed range",
+      "input": "budget before:2026-01-01",
+      "interactive": false,
+      "expected_present": [],
+      "expected_absent": [],
+      "expected_exact": [
+        "old"
+      ],
+      "hits": [
+        "old"
+      ],
+      "passed": true
+    },
+    {
+      "label": "negative query and active prefix",
+      "input": "-draft repo",
+      "interactive": true,
+      "expected_present": [
+        "name_prefix"
+      ],
+      "expected_absent": [
+        "draft",
+        "wrong_tenant",
+        "deleted",
+        "no_permission"
+      ],
+      "expected_exact": null,
+      "hits": [
+        "name_prefix",
+        "name_components",
+        "camel",
+        "singular",
+        "reverse_cross_prefix",
+        "exact_phrase",
+        "inexact_inflection",
+        "inexact_order",
+        "inexact_gap",
+        "bilingual",
+        "composite",
+        "composite_wrong_type",
+        "composite_wrong_form",
+        "supplementary",
+        "folder",
+        "attribute_prefix",
+        "tag_prefix",
+        "cross_metadata",
+        "inexact_value_boundary",
+        "body_prefix",
+        "cross_prefix",
+        "exact_body_phrase",
+        "inexact_split"
+      ],
+      "passed": true
+    },
+    {
+      "label": "long filename prefix exceeds configured acceleration",
+      "input": "electroencephalograph",
+      "interactive": true,
+      "expected_present": [
+        "long_prefix"
+      ],
+      "expected_absent": [],
+      "expected_exact": null,
+      "hits": [
+        "long_prefix",
+        "long_body_prefix"
+      ],
+      "passed": true
+    },
+    {
+      "label": "long content prefix exceeds configured acceleration",
+      "input": "electroencephalographic",
+      "interactive": true,
+      "expected_present": [
+        "long_body_prefix"
+      ],
+      "expected_absent": [],
+      "expected_exact": null,
+      "hits": [
+        "long_prefix",
+        "long_body_prefix"
+      ],
+      "passed": true
+    },
+    {
+      "label": "ordinary CJK segmentation retained",
+      "input": "報告書",
+      "interactive": false,
+      "expected_present": [
+        "cjk"
+      ],
+      "expected_absent": [],
+      "expected_exact": null,
+      "hits": [
+        "cjk"
+      ],
+      "passed": true
+    },
+    {
+      "label": "supplementary character prefix",
+      "input": "𠮷",
+      "interactive": true,
+      "expected_present": [
+        "supplementary"
+      ],
+      "expected_absent": [],
+      "expected_exact": null,
+      "hits": [
+        "supplementary"
+      ],
+      "passed": true
+    },
+    {
+      "label": "whole filename equality preserves punctuation",
+      "input": "filename:\"literal-v1.2.pdf\"",
+      "interactive": false,
+      "expected_present": [],
+      "expected_absent": [],
+      "expected_exact": [
+        "exact_name"
+      ],
+      "hits": [
+        "exact_name"
+      ],
+      "passed": true
+    },
+    {
+      "label": "directory kind modifier",
+      "input": "type:folder",
+      "interactive": false,
+      "expected_present": [],
+      "expected_absent": [],
+      "expected_exact": [
+        "folder"
+      ],
+      "hits": [
+        "folder"
+      ],
+      "passed": true
+    },
+    {
+      "label": "literal PDF suffix remains searchable",
+      "input": "\"pdf\"",
+      "interactive": false,
+      "expected_present": [
+        "name_prefix",
+        "name_components"
+      ],
+      "expected_absent": [],
+      "expected_exact": null,
+      "hits": [
+        "filter_type_word",
+        "name_components",
+        "exact_name",
+        "nonexact_name",
+        "name_prefix",
+        "singular",
+        "cross_fields",
+        "cross_prefix",
+        "reverse_cross_prefix",
+        "english_stem",
+        "english_running",
+        "french_stem",
+        "french_plural",
+        "bilingual",
+        "decomposed_accent",
+        "filter_pdf",
+        "filter_false_extension",
+        "filter_other_owner",
+        "long_prefix",
+        "folder",
+        "camel",
+        "exact_phrase",
+        "inexact_inflection",
+        "inexact_order",
+        "missing_stop_words",
+        "accent",
+        "composite",
+        "composite_wrong_type",
+        "composite_wrong_form",
+        "draft",
+        "inexact_gap",
+        "stop_words"
+      ],
+      "passed": true
+    },
+    {
+      "label": "trailing whitespace commits the active word",
+      "input": "repo ",
+      "interactive": true,
+      "expected_present": [],
+      "expected_absent": [],
+      "expected_exact": [],
+      "hits": [],
+      "passed": true
+    },
+    {
+      "label": "unrelated body length does not change filename score",
+      "scores": {
+        "length_short": 16.35145,
+        "length_long": 16.35145
+      },
+      "passed": true
+    },
+    {
+      "label": "stemmed content hit highlights original text",
+      "passed": true
+    },
+    {
+      "label": "prefix hit highlights filename",
+      "passed": true
+    },
+    {
+      "label": "query-time ranking features are available without source parsing",
+      "passed": true
+    },
+    {
+      "label": "a non-date u64 timestamp does not prevent indexing the object",
+      "passed": true
+    }
+  ],
+  "analyzers": {
+    "Reports.pdf": {
+      "dfs_text": [
+        {
+          "token": "reports.pdf",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 11
+        }
+      ],
+      "dfs_filename": [
+        {
+          "token": "reports",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 7
+        },
+        {
+          "token": "pdf",
+          "position": 1,
+          "start_offset": 8,
+          "end_offset": 11
+        }
+      ],
+      "dfs_filename_en": [
+        {
+          "token": "report",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 7
+        },
+        {
+          "token": "pdf",
+          "position": 1,
+          "start_offset": 8,
+          "end_offset": 11
+        }
+      ],
+      "dfs_filename_fr": [
+        {
+          "token": "report",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 7
+        },
+        {
+          "token": "pdf",
+          "position": 1,
+          "start_offset": 8,
+          "end_offset": 11
+        }
+      ],
+      "dfs_text_en": [
+        {
+          "token": "reports.pdf",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 11
+        }
+      ],
+      "dfs_text_fr": [
+        {
+          "token": "reports.pdf",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 11
+        }
+      ]
+    },
+    "Q4_Reports-final_v2.pdf": {
+      "dfs_text": [
+        {
+          "token": "q4_reports",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 10
+        },
+        {
+          "token": "final_v2",
+          "position": 1,
+          "start_offset": 11,
+          "end_offset": 19
+        },
+        {
+          "token": "pdf",
+          "position": 2,
+          "start_offset": 20,
+          "end_offset": 23
+        }
+      ],
+      "dfs_filename": [
+        {
+          "token": "q4",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "reports",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 10
+        },
+        {
+          "token": "final",
+          "position": 2,
+          "start_offset": 11,
+          "end_offset": 16
+        },
+        {
+          "token": "v2",
+          "position": 3,
+          "start_offset": 17,
+          "end_offset": 19
+        },
+        {
+          "token": "pdf",
+          "position": 4,
+          "start_offset": 20,
+          "end_offset": 23
+        }
+      ],
+      "dfs_filename_en": [
+        {
+          "token": "q4",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "report",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 10
+        },
+        {
+          "token": "final",
+          "position": 2,
+          "start_offset": 11,
+          "end_offset": 16
+        },
+        {
+          "token": "v2",
+          "position": 3,
+          "start_offset": 17,
+          "end_offset": 19
+        },
+        {
+          "token": "pdf",
+          "position": 4,
+          "start_offset": 20,
+          "end_offset": 23
+        }
+      ],
+      "dfs_filename_fr": [
+        {
+          "token": "q4",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "report",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 10
+        },
+        {
+          "token": "final",
+          "position": 2,
+          "start_offset": 11,
+          "end_offset": 16
+        },
+        {
+          "token": "v2",
+          "position": 3,
+          "start_offset": 17,
+          "end_offset": 19
+        },
+        {
+          "token": "pdf",
+          "position": 4,
+          "start_offset": 20,
+          "end_offset": 23
+        }
+      ],
+      "dfs_text_en": [
+        {
+          "token": "q4_report",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 10
+        },
+        {
+          "token": "final_v2",
+          "position": 1,
+          "start_offset": 11,
+          "end_offset": 19
+        },
+        {
+          "token": "pdf",
+          "position": 2,
+          "start_offset": 20,
+          "end_offset": 23
+        }
+      ],
+      "dfs_text_fr": [
+        {
+          "token": "q4_report",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 10
+        },
+        {
+          "token": "final_v2",
+          "position": 1,
+          "start_offset": 11,
+          "end_offset": 19
+        },
+        {
+          "token": "pdf",
+          "position": 2,
+          "start_offset": 20,
+          "end_offset": 23
+        }
+      ]
+    },
+    "AnnualReports.pdf": {
+      "dfs_text": [
+        {
+          "token": "annualreports.pdf",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 17
+        }
+      ],
+      "dfs_filename": [
+        {
+          "token": "annual",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 6
+        },
+        {
+          "token": "reports",
+          "position": 1,
+          "start_offset": 6,
+          "end_offset": 13
+        },
+        {
+          "token": "pdf",
+          "position": 2,
+          "start_offset": 14,
+          "end_offset": 17
+        }
+      ],
+      "dfs_filename_en": [
+        {
+          "token": "annual",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 6
+        },
+        {
+          "token": "report",
+          "position": 1,
+          "start_offset": 6,
+          "end_offset": 13
+        },
+        {
+          "token": "pdf",
+          "position": 2,
+          "start_offset": 14,
+          "end_offset": 17
+        }
+      ],
+      "dfs_filename_fr": [
+        {
+          "token": "anual",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 6
+        },
+        {
+          "token": "report",
+          "position": 1,
+          "start_offset": 6,
+          "end_offset": 13
+        },
+        {
+          "token": "pdf",
+          "position": 2,
+          "start_offset": 14,
+          "end_offset": 17
+        }
+      ],
+      "dfs_text_en": [
+        {
+          "token": "annualreports.pdf",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 17
+        }
+      ],
+      "dfs_text_fr": [
+        {
+          "token": "anualreports.pdf",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 17
+        }
+      ]
+    },
+    "archive.tar.gz": {
+      "dfs_text": [
+        {
+          "token": "archive.tar.gz",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 14
+        }
+      ],
+      "dfs_filename": [
+        {
+          "token": "archive",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 7
+        },
+        {
+          "token": "tar",
+          "position": 1,
+          "start_offset": 8,
+          "end_offset": 11
+        },
+        {
+          "token": "gz",
+          "position": 2,
+          "start_offset": 12,
+          "end_offset": 14
+        }
+      ],
+      "dfs_filename_en": [
+        {
+          "token": "archiv",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 7
+        },
+        {
+          "token": "tar",
+          "position": 1,
+          "start_offset": 8,
+          "end_offset": 11
+        },
+        {
+          "token": "gz",
+          "position": 2,
+          "start_offset": 12,
+          "end_offset": 14
+        }
+      ],
+      "dfs_filename_fr": [
+        {
+          "token": "archiv",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 7
+        },
+        {
+          "token": "tar",
+          "position": 1,
+          "start_offset": 8,
+          "end_offset": 11
+        },
+        {
+          "token": "gz",
+          "position": 2,
+          "start_offset": 12,
+          "end_offset": 14
+        }
+      ],
+      "dfs_text_en": [
+        {
+          "token": "archive.tar.gz",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 14
+        }
+      ],
+      "dfs_text_fr": [
+        {
+          "token": "archive.tar.gz",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 14
+        }
+      ]
+    },
+    ".gitignore": {
+      "dfs_text": [
+        {
+          "token": "gitignore",
+          "position": 0,
+          "start_offset": 1,
+          "end_offset": 10
+        }
+      ],
+      "dfs_filename": [
+        {
+          "token": "gitignore",
+          "position": 0,
+          "start_offset": 1,
+          "end_offset": 10
+        }
+      ],
+      "dfs_filename_en": [
+        {
+          "token": "gitignor",
+          "position": 0,
+          "start_offset": 1,
+          "end_offset": 10
+        }
+      ],
+      "dfs_filename_fr": [
+        {
+          "token": "gitignor",
+          "position": 0,
+          "start_offset": 1,
+          "end_offset": 10
+        }
+      ],
+      "dfs_text_en": [
+        {
+          "token": "gitignor",
+          "position": 0,
+          "start_offset": 1,
+          "end_offset": 10
+        }
+      ],
+      "dfs_text_fr": [
+        {
+          "token": "gitignor",
+          "position": 0,
+          "start_offset": 1,
+          "end_offset": 10
+        }
+      ]
+    },
+    "v1.2": {
+      "dfs_text": [
+        {
+          "token": "v1.2",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 4
+        }
+      ],
+      "dfs_filename": [
+        {
+          "token": "v1",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "2",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 4
+        }
+      ],
+      "dfs_filename_en": [
+        {
+          "token": "v1",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "2",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 4
+        }
+      ],
+      "dfs_filename_fr": [
+        {
+          "token": "v1",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "2",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 4
+        }
+      ],
+      "dfs_text_en": [
+        {
+          "token": "v1.2",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 4
+        }
+      ],
+      "dfs_text_fr": [
+        {
+          "token": "v1.2",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 4
+        }
+      ]
+    },
+    "東京 予算報告書": {
+      "dfs_text": [
+        {
+          "token": "東京",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "予算",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 5
+        },
+        {
+          "token": "報告書",
+          "position": 2,
+          "start_offset": 5,
+          "end_offset": 8
+        }
+      ],
+      "dfs_filename": [
+        {
+          "token": "東京",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "予算報告書",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 8
+        }
+      ],
+      "dfs_filename_en": [
+        {
+          "token": "東京",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "予算報告書",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 8
+        }
+      ],
+      "dfs_filename_fr": [
+        {
+          "token": "東京",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "予算報告書",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 8
+        }
+      ],
+      "dfs_text_en": [
+        {
+          "token": "東京",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "予算",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 5
+        },
+        {
+          "token": "報告書",
+          "position": 2,
+          "start_offset": 5,
+          "end_offset": 8
+        }
+      ],
+      "dfs_text_fr": [
+        {
+          "token": "東京",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "予算",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 5
+        },
+        {
+          "token": "報告書",
+          "position": 2,
+          "start_offset": 5,
+          "end_offset": 8
+        }
+      ]
+    },
+    "C++ C#": {
+      "dfs_text": [
+        {
+          "token": "c",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 1
+        },
+        {
+          "token": "c",
+          "position": 1,
+          "start_offset": 4,
+          "end_offset": 5
+        }
+      ],
+      "dfs_filename": [
+        {
+          "token": "c",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 1
+        },
+        {
+          "token": "c",
+          "position": 1,
+          "start_offset": 4,
+          "end_offset": 5
+        }
+      ],
+      "dfs_filename_en": [
+        {
+          "token": "c",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 1
+        },
+        {
+          "token": "c",
+          "position": 1,
+          "start_offset": 4,
+          "end_offset": 5
+        }
+      ],
+      "dfs_filename_fr": [
+        {
+          "token": "c",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 1
+        },
+        {
+          "token": "c",
+          "position": 1,
+          "start_offset": 4,
+          "end_offset": 5
+        }
+      ],
+      "dfs_text_en": [
+        {
+          "token": "c",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 1
+        },
+        {
+          "token": "c",
+          "position": 1,
+          "start_offset": 4,
+          "end_offset": 5
+        }
+      ],
+      "dfs_text_fr": [
+        {
+          "token": "c",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 1
+        },
+        {
+          "token": "c",
+          "position": 1,
+          "start_offset": 4,
+          "end_offset": 5
+        }
+      ]
+    },
+    "L’avion des sociétés": {
+      "dfs_text": [
+        {
+          "token": "l",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 1
+        },
+        {
+          "token": "avion",
+          "position": 1,
+          "start_offset": 2,
+          "end_offset": 7
+        },
+        {
+          "token": "des",
+          "position": 2,
+          "start_offset": 8,
+          "end_offset": 11
+        },
+        {
+          "token": "societes",
+          "position": 3,
+          "start_offset": 12,
+          "end_offset": 20
+        }
+      ],
+      "dfs_filename": [
+        {
+          "token": "l",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 1
+        },
+        {
+          "token": "avion",
+          "position": 1,
+          "start_offset": 2,
+          "end_offset": 7
+        },
+        {
+          "token": "des",
+          "position": 2,
+          "start_offset": 8,
+          "end_offset": 11
+        },
+        {
+          "token": "societes",
+          "position": 3,
+          "start_offset": 12,
+          "end_offset": 20
+        }
+      ],
+      "dfs_filename_en": [
+        {
+          "token": "l",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 1
+        },
+        {
+          "token": "avion",
+          "position": 1,
+          "start_offset": 2,
+          "end_offset": 7
+        },
+        {
+          "token": "des",
+          "position": 2,
+          "start_offset": 8,
+          "end_offset": 11
+        },
+        {
+          "token": "societ",
+          "position": 3,
+          "start_offset": 12,
+          "end_offset": 20
+        }
+      ],
+      "dfs_filename_fr": [
+        {
+          "token": "l",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 1
+        },
+        {
+          "token": "avion",
+          "position": 1,
+          "start_offset": 2,
+          "end_offset": 7
+        },
+        {
+          "token": "des",
+          "position": 2,
+          "start_offset": 8,
+          "end_offset": 11
+        },
+        {
+          "token": "societ",
+          "position": 3,
+          "start_offset": 12,
+          "end_offset": 20
+        }
+      ],
+      "dfs_text_en": [
+        {
+          "token": "l'avion",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 7
+        },
+        {
+          "token": "des",
+          "position": 1,
+          "start_offset": 8,
+          "end_offset": 11
+        },
+        {
+          "token": "societ",
+          "position": 2,
+          "start_offset": 12,
+          "end_offset": 20
+        }
+      ],
+      "dfs_text_fr": [
+        {
+          "token": "avion",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 7
+        },
+        {
+          "token": "des",
+          "position": 1,
+          "start_offset": 8,
+          "end_offset": 11
+        },
+        {
+          "token": "societ",
+          "position": 2,
+          "start_offset": 12,
+          "end_offset": 20
+        }
+      ]
+    },
+    "ponies running reports": {
+      "dfs_text": [
+        {
+          "token": "ponies",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 6
+        },
+        {
+          "token": "running",
+          "position": 1,
+          "start_offset": 7,
+          "end_offset": 14
+        },
+        {
+          "token": "reports",
+          "position": 2,
+          "start_offset": 15,
+          "end_offset": 22
+        }
+      ],
+      "dfs_filename": [
+        {
+          "token": "ponies",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 6
+        },
+        {
+          "token": "running",
+          "position": 1,
+          "start_offset": 7,
+          "end_offset": 14
+        },
+        {
+          "token": "reports",
+          "position": 2,
+          "start_offset": 15,
+          "end_offset": 22
+        }
+      ],
+      "dfs_filename_en": [
+        {
+          "token": "poni",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 6
+        },
+        {
+          "token": "run",
+          "position": 1,
+          "start_offset": 7,
+          "end_offset": 14
+        },
+        {
+          "token": "report",
+          "position": 2,
+          "start_offset": 15,
+          "end_offset": 22
+        }
+      ],
+      "dfs_filename_fr": [
+        {
+          "token": "pon",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 6
+        },
+        {
+          "token": "runing",
+          "position": 1,
+          "start_offset": 7,
+          "end_offset": 14
+        },
+        {
+          "token": "report",
+          "position": 2,
+          "start_offset": 15,
+          "end_offset": 22
+        }
+      ],
+      "dfs_text_en": [
+        {
+          "token": "poni",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 6
+        },
+        {
+          "token": "run",
+          "position": 1,
+          "start_offset": 7,
+          "end_offset": 14
+        },
+        {
+          "token": "report",
+          "position": 2,
+          "start_offset": 15,
+          "end_offset": 22
+        }
+      ],
+      "dfs_text_fr": [
+        {
+          "token": "pon",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 6
+        },
+        {
+          "token": "runing",
+          "position": 1,
+          "start_offset": 7,
+          "end_offset": 14
+        },
+        {
+          "token": "report",
+          "position": 2,
+          "start_offset": 15,
+          "end_offset": 22
+        }
+      ]
+    },
+    "journaux chevaux": {
+      "dfs_text": [
+        {
+          "token": "journaux",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 8
+        },
+        {
+          "token": "chevaux",
+          "position": 1,
+          "start_offset": 9,
+          "end_offset": 16
+        }
+      ],
+      "dfs_filename": [
+        {
+          "token": "journaux",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 8
+        },
+        {
+          "token": "chevaux",
+          "position": 1,
+          "start_offset": 9,
+          "end_offset": 16
+        }
+      ],
+      "dfs_filename_en": [
+        {
+          "token": "journaux",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 8
+        },
+        {
+          "token": "chevaux",
+          "position": 1,
+          "start_offset": 9,
+          "end_offset": 16
+        }
+      ],
+      "dfs_filename_fr": [
+        {
+          "token": "journal",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 8
+        },
+        {
+          "token": "cheval",
+          "position": 1,
+          "start_offset": 9,
+          "end_offset": 16
+        }
+      ],
+      "dfs_text_en": [
+        {
+          "token": "journaux",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 8
+        },
+        {
+          "token": "chevaux",
+          "position": 1,
+          "start_offset": 9,
+          "end_offset": 16
+        }
+      ],
+      "dfs_text_fr": [
+        {
+          "token": "journal",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 8
+        },
+        {
+          "token": "cheval",
+          "position": 1,
+          "start_offset": 9,
+          "end_offset": 16
+        }
+      ]
+    },
+    "𠮷report": {
+      "dfs_text": [
+        {
+          "token": "𠮷",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "report",
+          "position": 1,
+          "start_offset": 2,
+          "end_offset": 8
+        }
+      ],
+      "dfs_filename": [
+        {
+          "token": "𠮷report",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 8
+        }
+      ],
+      "dfs_filename_en": [
+        {
+          "token": "𠮷report",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 8
+        }
+      ],
+      "dfs_filename_fr": [
+        {
+          "token": "𠮷report",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 8
+        }
+      ],
+      "dfs_text_en": [
+        {
+          "token": "𠮷",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "report",
+          "position": 1,
+          "start_offset": 2,
+          "end_offset": 8
+        }
+      ],
+      "dfs_text_fr": [
+        {
+          "token": "𠮷",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "report",
+          "position": 1,
+          "start_offset": 2,
+          "end_offset": 8
+        }
+      ]
+    }
+  },
+  "prefix_rewrites": {
+    "name.parts:repo": {
+      "_shards": {
+        "total": 1,
+        "successful": 1,
+        "failed": 0
+      },
+      "valid": true,
+      "explanations": [
+        {
+          "index": "codex-dfs-object-search-v1",
+          "valid": true,
+          "explanation": "ConstantScore(name.parts._index_prefix:repo)"
+        }
+      ]
+    },
+    "content_text:repo": {
+      "_shards": {
+        "total": 1,
+        "successful": 1,
+        "failed": 0
+      },
+      "valid": true,
+      "explanations": [
+        {
+          "index": "codex-dfs-object-search-v1",
+          "valid": true,
+          "explanation": "ConstantScore(content_text._index_prefix:repo)"
+        }
+      ]
+    },
+    "content_text:electroencephalographic": {
+      "_shards": {
+        "total": 1,
+        "successful": 1,
+        "failed": 0
+      },
+      "valid": true,
+      "explanations": [
+        {
+          "index": "codex-dfs-object-search-v1",
+          "valid": true,
+          "explanation": "content_text:electroencephalographic*"
+        }
+      ]
+    },
+    "name.parts:𠮷": {
+      "_shards": {
+        "total": 1,
+        "successful": 1,
+        "failed": 0
+      },
+      "valid": true,
+      "explanations": [
+        {
+          "index": "codex-dfs-object-search-v1",
+          "valid": true,
+          "explanation": "ConstantScore(name.parts._index_prefix:𠮷)"
+        }
+      ]
+    }
+  },
+  "expensive_query_gate": {
+    "repo": {
+      "allowed": true,
+      "hits": [
+        "name_prefix",
+        "name_components",
+        "camel",
+        "singular",
+        "reverse_cross_prefix",
+        "exact_phrase",
+        "inexact_inflection",
+        "inexact_order",
+        "inexact_gap",
+        "bilingual",
+        "composite",
+        "composite_wrong_type",
+        "composite_wrong_form",
+        "draft",
+        "supplementary",
+        "folder",
+        "attribute_prefix",
+        "tag_prefix",
+        "cross_metadata",
+        "inexact_value_boundary",
+        "body_prefix",
+        "cross_prefix",
+        "exact_body_phrase",
+        "inexact_split"
+      ]
+    },
+    "electroencephalographic": {
+      "allowed": false,
+      "error": "{\"error\":{\"root_cause\":[{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}],\"type\":\"search_phase_execution_exception\",\"reason\":\"all shards failed\",\"phase\":\"query\",\"grouped\":true,\"failed_shards\":[{\"shard\":0,\"index\":\"codex-dfs-object-search-v1\",\"node\":\"jL35eYVsRr6Jmn0EFmqHlA\",\"reason\":{\"type\":\"query_shard_exception\",\"reason\":\"failed to create query: [prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\",\"index_uuid\":\"-X87HqrGQHiTrpZc_pKw0g\",\"index\":\"codex-dfs-object-search-v1\",\"caused_by\":{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}}}],\"caused_by\":{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}},\"status\":400}"
+    }
+  },
+  "stem_highlights": [
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "french_stem",
+      "_score": 11.97962,
+      "_source": {
+        "name": "Journaux.pdf",
+        "file_type": "pdf"
+      },
+      "highlight": {
+        "name": [
+          "<em>Journaux</em>.pdf"
+        ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "bilingual",
+      "_score": 4.661337,
+      "_source": {
+        "name": "Reports.pdf",
+        "file_type": "pdf"
+      },
+      "highlight": {
+        "content_text": [
+          "Les <em>journaux</em> des sociétés."
+        ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "metadata_french_stem",
+      "_score": 1.2770067,
+      "_source": {
+        "name": "Documents",
+        "file_type": "pdf"
+      }
+    }
+  ],
+  "prefix_highlights": [
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "name_prefix",
+      "_score": 1.0,
+      "_source": {
+        "name": "Reports.pdf",
+        "file_type": "pdf"
+      },
+      "highlight": {
+        "name": [
+          "<em>Reports.pdf</em>"
+        ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "name_components",
+      "_score": 1.0,
+      "_source": {
+        "name": "Q4_Reports-final_v2.pdf",
+        "file_type": "pdf"
+      },
+      "highlight": {
+        "name": [
+          "Q4_<em>Reports</em>-final_v2.pdf"
+        ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "camel",
+      "_score": 1.0,
+      "_source": {
+        "name": "AnnualReports.pdf",
+        "file_type": "pdf"
+      },
+      "highlight": {
+        "name": [
+          "Annual<em>Reports</em>.pdf"
+        ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "singular",
+      "_score": 1.0,
+      "_source": {
+        "name": "Report.pdf",
+        "file_type": "pdf"
+      },
+      "highlight": {
+        "name": [
+          "<em>Report.pdf</em>"
+        ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "reverse_cross_prefix",
+      "_score": 1.0,
+      "_source": {
+        "name": "Reports.pdf",
+        "file_type": "pdf"
+      },
+      "highlight": {
+        "name": [
+          "<em>Reports.pdf</em>"
+        ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "exact_phrase",
+      "_score": 1.0,
+      "_source": {
+        "name": "Annual reports.pdf",
+        "file_type": "pdf"
+      },
+      "highlight": {
+        "name": [
+          "Annual <em>reports.pdf</em>"
+        ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "inexact_inflection",
+      "_score": 1.0,
+      "_source": {
+        "name": "Annual report.pdf",
+        "file_type": "pdf"
+      },
+      "highlight": {
+        "name": [
+          "Annual <em>report.pdf</em>"
+        ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "inexact_order",
+      "_score": 1.0,
+      "_source": {
+        "name": "Reports annual.pdf",
+        "file_type": "pdf"
+      },
+      "highlight": {
+        "name": [
+          "<em>Reports</em> annual.pdf"
+        ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "inexact_gap",
+      "_score": 1.0,
+      "_source": {
+        "name": "Annual revised reports.pdf",
+        "file_type": "pdf"
+      },
+      "highlight": {
+        "name": [
+          "Annual revised <em>reports.pdf</em>"
+        ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "bilingual",
+      "_score": 1.0,
+      "_source": {
+        "name": "Reports.pdf",
+        "file_type": "pdf"
+      },
+      "highlight": {
+        "name": [
+          "<em>Reports.pdf</em>"
+        ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "composite",
+      "_score": 1.0,
+      "_source": {
+        "name": "Annual reports.pdf",
+        "file_type": "pdf"
+      },
+      "highlight": {
+        "name": [
+          "Annual <em>reports.pdf</em>"
+        ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "composite_wrong_type",
+      "_score": 1.0,
+      "_source": {
+        "name": "Annual reports.pdf",
+        "file_type": "txt"
+      },
+      "highlight": {
+        "name": [
+          "Annual <em>reports.pdf</em>"
+        ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "composite_wrong_form",
+      "_score": 1.0,
+      "_source": {
+        "name": "Annual report.pdf",
+        "file_type": "pdf"
+      },
+      "highlight": {
+        "name": [
+          "Annual <em>report.pdf</em>"
+        ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "draft",
+      "_score": 1.0,
+      "_source": {
+        "name": "Reports draft.pdf",
+        "file_type": "pdf"
+      },
+      "highlight": {
+        "name": [
+          "<em>Reports</em> draft.pdf"
+        ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "supplementary",
+      "_score": 1.0,
+      "_source": {
+        "name": "𠮷report",
+        "file_type": "pdf"
+      },
+      "highlight": {
+        "name": [
+          "𠮷<em>report</em>"
+        ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "folder",
+      "_score": 1.0,
+      "_source": {
+        "name": "Reports.pdf",
+        "file_type": "folder"
+      },
+      "highlight": {
+        "name": [
+          "<em>Reports.pdf</em>"
+        ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "attribute_prefix",
+      "_score": 0.75,
+      "_source": {
+        "name": "Reference",
+        "file_type": "pdf"
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "tag_prefix",
+      "_score": 0.5,
+      "_source": {
+        "name": "Tagged item",
+        "file_type": "pdf"
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "cross_metadata",
+      "_score": 0.375,
+      "_source": {
+        "name": "Budget",
+        "file_type": "pdf"
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "inexact_value_boundary",
+      "_score": 0.375,
+      "_source": {
+        "name": "Notes",
+        "file_type": "pdf"
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "body_prefix",
+      "_score": 0.25,
+      "_source": {
+        "name": "Minutes.txt",
+        "file_type": "txt"
+      },
+      "highlight": {
+        "content_text": [
+          "<em>Reports</em> from the committee."
+        ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "cross_prefix",
+      "_score": 0.25,
+      "_source": {
+        "name": "Budget.pdf",
+        "file_type": "pdf"
+      },
+      "highlight": {
+        "content_text": [
+          "<em>Reports</em> for the board."
+        ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "exact_body_phrase",
+      "_score": 0.25,
+      "_source": {
+        "name": "Board notes",
+        "file_type": "pdf"
+      },
+      "highlight": {
+        "content_text": [
+          "The annual <em>reports</em> were delivered."
+        ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "inexact_split",
+      "_score": 0.25,
+      "_source": {
+        "name": "Annual",
+        "file_type": "pdf"
+      },
+      "highlight": {
+        "content_text": [
+          "<em>Reports</em>"
+        ]
+      }
+    }
+  ],
+  "future_ranking_feature_values": [
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "length_short",
+      "_score": 16.35145,
+      "_source": {
+        "name": "Quasar budget",
+        "file_type": "pdf"
+      },
+      "fields": {
+        "content_text.token_count": [
+          1
+        ],
+        "modified_at": [
+          "2026-10-01T00:00:00.000Z"
+        ],
+        "name.token_count": [
+          2
+        ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "length_long",
+      "_score": 16.35145,
+      "_source": {
+        "name": "Quasar budget",
+        "file_type": "pdf"
+      },
+      "fields": {
+        "content_text.token_count": [
+          10000
+        ],
+        "modified_at": [
+          "2026-10-01T00:00:00.000Z"
+        ],
+        "name.token_count": [
+          2
+        ]
+      }
+    }
+  ],
+  "prefix_mechanism_comparison": {
+    "plain": {
+      "usage": {
+        "store_size": "105.7kb",
+        "store_size_in_bytes": 108303,
+        "all_fields": {
+          "total": "95.9kb",
+          "total_in_bytes": 98265,
+          "inverted_index": {
+            "total": "57.8kb",
+            "total_in_bytes": 59194
+          },
+          "stored_fields": "37.3kb",
+          "stored_fields_in_bytes": 38253,
+          "doc_values": "201b",
+          "doc_values_in_bytes": 201,
+          "points": "416b",
+          "points_in_bytes": 416,
+          "norms": "201b",
+          "norms_in_bytes": 201,
+          "term_vectors": "0b",
+          "term_vectors_in_bytes": 0,
+          "knn_vectors": "0b",
+          "knn_vectors_in_bytes": 0
+        },
+        "fields": {
+          "_id": {
+            "total": "1.2kb",
+            "total_in_bytes": 1235,
+            "inverted_index": {
+              "total": "950b",
+              "total_in_bytes": 950
+            },
+            "stored_fields": "285b",
+            "stored_fields_in_bytes": 285,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "_primary_term": {
+            "total": "0b",
+            "total_in_bytes": 0,
+            "inverted_index": {
+              "total": "0b",
+              "total_in_bytes": 0
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "_seq_no": {
+            "total": "617b",
+            "total_in_bytes": 617,
+            "inverted_index": {
+              "total": "0b",
+              "total_in_bytes": 0
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "201b",
+            "doc_values_in_bytes": 201,
+            "points": "416b",
+            "points_in_bytes": 416,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "_source": {
+            "total": "37kb",
+            "total_in_bytes": 37968,
+            "inverted_index": {
+              "total": "0b",
+              "total_in_bytes": 0
+            },
+            "stored_fields": "37kb",
+            "stored_fields_in_bytes": 37968,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "_version": {
+            "total": "0b",
+            "total_in_bytes": 0,
+            "inverted_index": {
+              "total": "0b",
+              "total_in_bytes": 0
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "text": {
+            "total": "57kb",
+            "total_in_bytes": 58445,
+            "inverted_index": {
+              "total": "56.8kb",
+              "total_in_bytes": 58244
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "201b",
+            "norms_in_bytes": 201,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          }
+        }
+      },
+      "queries": {
+        "repo": {
+          "total": 200,
+          "long_found": false
+        },
+        "electroencephalographic": {
+          "total": 1,
+          "long_found": true
+        }
+      }
+    },
+    "prefixes": {
+      "usage": {
+        "store_size": "155kb",
+        "store_size_in_bytes": 158722,
+        "all_fields": {
+          "total": "144.7kb",
+          "total_in_bytes": 148213,
+          "inverted_index": {
+            "total": "106.5kb",
+            "total_in_bytes": 109142
+          },
+          "stored_fields": "37.3kb",
+          "stored_fields_in_bytes": 38253,
+          "doc_values": "201b",
+          "doc_values_in_bytes": 201,
+          "points": "416b",
+          "points_in_bytes": 416,
+          "norms": "201b",
+          "norms_in_bytes": 201,
+          "term_vectors": "0b",
+          "term_vectors_in_bytes": 0,
+          "knn_vectors": "0b",
+          "knn_vectors_in_bytes": 0
+        },
+        "fields": {
+          "_id": {
+            "total": "1.2kb",
+            "total_in_bytes": 1235,
+            "inverted_index": {
+              "total": "950b",
+              "total_in_bytes": 950
+            },
+            "stored_fields": "285b",
+            "stored_fields_in_bytes": 285,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "_primary_term": {
+            "total": "0b",
+            "total_in_bytes": 0,
+            "inverted_index": {
+              "total": "0b",
+              "total_in_bytes": 0
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "_seq_no": {
+            "total": "617b",
+            "total_in_bytes": 617,
+            "inverted_index": {
+              "total": "0b",
+              "total_in_bytes": 0
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "201b",
+            "doc_values_in_bytes": 201,
+            "points": "416b",
+            "points_in_bytes": 416,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "_source": {
+            "total": "37kb",
+            "total_in_bytes": 37968,
+            "inverted_index": {
+              "total": "0b",
+              "total_in_bytes": 0
+            },
+            "stored_fields": "37kb",
+            "stored_fields_in_bytes": 37968,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "_version": {
+            "total": "0b",
+            "total_in_bytes": 0,
+            "inverted_index": {
+              "total": "0b",
+              "total_in_bytes": 0
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "text": {
+            "total": "57kb",
+            "total_in_bytes": 58445,
+            "inverted_index": {
+              "total": "56.8kb",
+              "total_in_bytes": 58244
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "201b",
+            "norms_in_bytes": 201,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "text._index_prefix": {
+            "total": "48.7kb",
+            "total_in_bytes": 49948,
+            "inverted_index": {
+              "total": "48.7kb",
+              "total_in_bytes": 49948
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          }
+        }
+      },
+      "queries": {
+        "repo": {
+          "total": 200,
+          "long_found": false
+        },
+        "electroencephalographic": {
+          "total": 1,
+          "long_found": true
+        }
+      }
+    },
+    "bilingual_prefixes": {
+      "usage": {
+        "store_size": "281.2kb",
+        "store_size_in_bytes": 287994,
+        "all_fields": {
+          "total": "259.6kb",
+          "total_in_bytes": 265887,
+          "inverted_index": {
+            "total": "221.1kb",
+            "total_in_bytes": 226414
+          },
+          "stored_fields": "37.3kb",
+          "stored_fields_in_bytes": 38253,
+          "doc_values": "201b",
+          "doc_values_in_bytes": 201,
+          "points": "416b",
+          "points_in_bytes": 416,
+          "norms": "603b",
+          "norms_in_bytes": 603,
+          "term_vectors": "0b",
+          "term_vectors_in_bytes": 0,
+          "knn_vectors": "0b",
+          "knn_vectors_in_bytes": 0
+        },
+        "fields": {
+          "_id": {
+            "total": "1.2kb",
+            "total_in_bytes": 1235,
+            "inverted_index": {
+              "total": "950b",
+              "total_in_bytes": 950
+            },
+            "stored_fields": "285b",
+            "stored_fields_in_bytes": 285,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "_primary_term": {
+            "total": "0b",
+            "total_in_bytes": 0,
+            "inverted_index": {
+              "total": "0b",
+              "total_in_bytes": 0
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "_seq_no": {
+            "total": "617b",
+            "total_in_bytes": 617,
+            "inverted_index": {
+              "total": "0b",
+              "total_in_bytes": 0
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "201b",
+            "doc_values_in_bytes": 201,
+            "points": "416b",
+            "points_in_bytes": 416,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "_source": {
+            "total": "37kb",
+            "total_in_bytes": 37968,
+            "inverted_index": {
+              "total": "0b",
+              "total_in_bytes": 0
+            },
+            "stored_fields": "37kb",
+            "stored_fields_in_bytes": 37968,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "_version": {
+            "total": "0b",
+            "total_in_bytes": 0,
+            "inverted_index": {
+              "total": "0b",
+              "total_in_bytes": 0
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "text": {
+            "total": "57kb",
+            "total_in_bytes": 58445,
+            "inverted_index": {
+              "total": "56.8kb",
+              "total_in_bytes": 58244
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "201b",
+            "norms_in_bytes": 201,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "text._index_prefix": {
+            "total": "48.7kb",
+            "total_in_bytes": 49948,
+            "inverted_index": {
+              "total": "48.7kb",
+              "total_in_bytes": 49948
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "text.en": {
+            "total": "57.4kb",
+            "total_in_bytes": 58833,
+            "inverted_index": {
+              "total": "57.2kb",
+              "total_in_bytes": 58632
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "201b",
+            "norms_in_bytes": 201,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "text.fr": {
+            "total": "57.4kb",
+            "total_in_bytes": 58841,
+            "inverted_index": {
+              "total": "57.2kb",
+              "total_in_bytes": 58640
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "201b",
+            "norms_in_bytes": 201,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          }
+        }
+      },
+      "queries": {
+        "repo": {
+          "total": 200,
+          "long_found": false
+        },
+        "electroencephalographic": {
+          "total": 1,
+          "long_found": true
+        }
+      }
+    },
+    "edge": {
+      "usage": {
+        "store_size": "409.9kb",
+        "store_size_in_bytes": 419770,
+        "all_fields": {
+          "total": "394.2kb",
+          "total_in_bytes": 403730,
+          "inverted_index": {
+            "total": "355.9kb",
+            "total_in_bytes": 364458
+          },
+          "stored_fields": "37.3kb",
+          "stored_fields_in_bytes": 38253,
+          "doc_values": "201b",
+          "doc_values_in_bytes": 201,
+          "points": "416b",
+          "points_in_bytes": 416,
+          "norms": "402b",
+          "norms_in_bytes": 402,
+          "term_vectors": "0b",
+          "term_vectors_in_bytes": 0,
+          "knn_vectors": "0b",
+          "knn_vectors_in_bytes": 0
+        },
+        "fields": {
+          "_id": {
+            "total": "1.2kb",
+            "total_in_bytes": 1235,
+            "inverted_index": {
+              "total": "950b",
+              "total_in_bytes": 950
+            },
+            "stored_fields": "285b",
+            "stored_fields_in_bytes": 285,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "_primary_term": {
+            "total": "0b",
+            "total_in_bytes": 0,
+            "inverted_index": {
+              "total": "0b",
+              "total_in_bytes": 0
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "_seq_no": {
+            "total": "617b",
+            "total_in_bytes": 617,
+            "inverted_index": {
+              "total": "0b",
+              "total_in_bytes": 0
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "201b",
+            "doc_values_in_bytes": 201,
+            "points": "416b",
+            "points_in_bytes": 416,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "_source": {
+            "total": "37kb",
+            "total_in_bytes": 37968,
+            "inverted_index": {
+              "total": "0b",
+              "total_in_bytes": 0
+            },
+            "stored_fields": "37kb",
+            "stored_fields_in_bytes": 37968,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "_version": {
+            "total": "0b",
+            "total_in_bytes": 0,
+            "inverted_index": {
+              "total": "0b",
+              "total_in_bytes": 0
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "text": {
+            "total": "57kb",
+            "total_in_bytes": 58445,
+            "inverted_index": {
+              "total": "56.8kb",
+              "total_in_bytes": 58244
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "201b",
+            "norms_in_bytes": 201,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "text.prefix": {
+            "total": "298.3kb",
+            "total_in_bytes": 305465,
+            "inverted_index": {
+              "total": "298.1kb",
+              "total_in_bytes": 305264
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "201b",
+            "norms_in_bytes": 201,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          }
+        }
+      },
+      "queries": {
+        "repo": {
+          "total": 200,
+          "long_found": false
+        },
+        "electroencephalographic": {
+          "total": 0,
+          "long_found": false
+        }
+      }
+    },
+    "search_as_you_type": {
+      "usage": {
+        "store_size": "778.7kb",
+        "store_size_in_bytes": 797391,
+        "all_fields": {
+          "total": "643.8kb",
+          "total_in_bytes": 659314,
+          "inverted_index": {
+            "total": "605.3kb",
+            "total_in_bytes": 619841
+          },
+          "stored_fields": "37.3kb",
+          "stored_fields_in_bytes": 38253,
+          "doc_values": "201b",
+          "doc_values_in_bytes": 201,
+          "points": "416b",
+          "points_in_bytes": 416,
+          "norms": "603b",
+          "norms_in_bytes": 603,
+          "term_vectors": "0b",
+          "term_vectors_in_bytes": 0,
+          "knn_vectors": "0b",
+          "knn_vectors_in_bytes": 0
+        },
+        "fields": {
+          "_id": {
+            "total": "1.2kb",
+            "total_in_bytes": 1235,
+            "inverted_index": {
+              "total": "950b",
+              "total_in_bytes": 950
+            },
+            "stored_fields": "285b",
+            "stored_fields_in_bytes": 285,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "_primary_term": {
+            "total": "0b",
+            "total_in_bytes": 0,
+            "inverted_index": {
+              "total": "0b",
+              "total_in_bytes": 0
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "_seq_no": {
+            "total": "617b",
+            "total_in_bytes": 617,
+            "inverted_index": {
+              "total": "0b",
+              "total_in_bytes": 0
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "201b",
+            "doc_values_in_bytes": 201,
+            "points": "416b",
+            "points_in_bytes": 416,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "_source": {
+            "total": "37kb",
+            "total_in_bytes": 37968,
+            "inverted_index": {
+              "total": "0b",
+              "total_in_bytes": 0
+            },
+            "stored_fields": "37kb",
+            "stored_fields_in_bytes": 37968,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "_version": {
+            "total": "0b",
+            "total_in_bytes": 0,
+            "inverted_index": {
+              "total": "0b",
+              "total_in_bytes": 0
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "text": {
+            "total": "57kb",
+            "total_in_bytes": 58445,
+            "inverted_index": {
+              "total": "56.8kb",
+              "total_in_bytes": 58244
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "201b",
+            "norms_in_bytes": 201,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "text._2gram": {
+            "total": "86kb",
+            "total_in_bytes": 88086,
+            "inverted_index": {
+              "total": "85.8kb",
+              "total_in_bytes": 87885
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "201b",
+            "norms_in_bytes": 201,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "text._3gram": {
+            "total": "103.7kb",
+            "total_in_bytes": 106279,
+            "inverted_index": {
+              "total": "103.5kb",
+              "total_in_bytes": 106078
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "201b",
+            "norms_in_bytes": 201,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          },
+          "text._index_prefix": {
+            "total": "358kb",
+            "total_in_bytes": 366684,
+            "inverted_index": {
+              "total": "358kb",
+              "total_in_bytes": 366684
+            },
+            "stored_fields": "0b",
+            "stored_fields_in_bytes": 0,
+            "doc_values": "0b",
+            "doc_values_in_bytes": 0,
+            "points": "0b",
+            "points_in_bytes": 0,
+            "norms": "0b",
+            "norms_in_bytes": 0,
+            "term_vectors": "0b",
+            "term_vectors_in_bytes": 0,
+            "knn_vectors": "0b",
+            "knn_vectors_in_bytes": 0
+          }
+        }
+      },
+      "queries": {
+        "repo": {
+          "total": 200,
+          "long_found": false
+        },
+        "electroencephalographic": {
+          "total": 1,
+          "long_found": true
+        }
+      }
+    }
+  },
+  "compiled_example": {
+    "input": "type:pdf \"annual reports\" budg",
+    "query": {
+      "bool": {
+        "filter": [
+          {
+            "term": {
+              "tenant_id": "tenant-a"
+            }
+          },
+          {
+            "term": {
+              "is_deleted": false
+            }
+          },
+          {
+            "terms": {
+              "read_inheritance_ids": [
+                "grant-a"
+              ]
+            }
+          },
+          {
+            "term": {
+              "file_type": "pdf"
+            }
+          }
+        ],
+        "must": [
+          {
+            "dis_max": {
+              "queries": [
+                {
+                  "dis_max": {
+                    "queries": [
+                      {
+                        "match_phrase": {
+                          "name": {
+                            "query": "annual reports",
+                            "boost": 4.0,
+                            "slop": 0
+                          }
+                        }
+                      },
+                      {
+                        "match_phrase": {
+                          "name.parts": {
+                            "query": "annual reports",
+                            "boost": 4.0,
+                            "slop": 0
+                          }
+                        }
+                      }
+                    ],
+                    "tie_breaker": 0.0
+                  }
+                },
+                {
+                  "dis_max": {
+                    "queries": [
+                      {
+                        "match_phrase": {
+                          "attributes.title": {
+                            "query": "annual reports",
+                            "boost": 3.0,
+                            "slop": 0
+                          }
+                        }
+                      }
+                    ],
+                    "tie_breaker": 0.0
+                  }
+                },
+                {
+                  "dis_max": {
+                    "queries": [
+                      {
+                        "match_phrase": {
+                          "attributes.tags.text": {
+                            "query": "annual reports",
+                            "boost": 2.0,
+                            "slop": 0
+                          }
+                        }
+                      }
+                    ],
+                    "tie_breaker": 0.0
+                  }
+                },
+                {
+                  "dis_max": {
+                    "queries": [
+                      {
+                        "match_phrase": {
+                          "attributes.description": {
+                            "query": "annual reports",
+                            "boost": 1.5,
+                            "slop": 0
+                          }
+                        }
+                      }
+                    ],
+                    "tie_breaker": 0.0
+                  }
+                },
+                {
+                  "dis_max": {
+                    "queries": [
+                      {
+                        "match_phrase": {
+                          "content_text": {
+                            "query": "annual reports",
+                            "boost": 1.0,
+                            "slop": 0
+                          }
+                        }
+                      }
+                    ],
+                    "tie_breaker": 0.0
+                  }
+                }
+              ],
+              "tie_breaker": 0.1
+            }
+          },
+          {
+            "dis_max": {
+              "queries": [
+                {
+                  "dis_max": {
+                    "queries": [
+                      {
+                        "match": {
+                          "name": {
+                            "query": "budg",
+                            "boost": 4.0,
+                            "operator": "and"
+                          }
+                        }
+                      },
+                      {
+                        "match": {
+                          "name.parts": {
+                            "query": "budg",
+                            "boost": 4.0,
+                            "operator": "and"
+                          }
+                        }
+                      },
+                      {
+                        "match": {
+                          "name.en": {
+                            "query": "budg",
+                            "operator": "and",
+                            "boost": 2.6
+                          }
+                        }
+                      },
+                      {
+                        "match": {
+                          "name.fr": {
+                            "query": "budg",
+                            "operator": "and",
+                            "boost": 2.6
+                          }
+                        }
+                      },
+                      {
+                        "constant_score": {
+                          "filter": {
+                            "match_bool_prefix": {
+                              "name": {
+                                "query": "budg",
+                                "operator": "and"
+                              }
+                            }
+                          },
+                          "boost": 1.0
+                        }
+                      },
+                      {
+                        "constant_score": {
+                          "filter": {
+                            "match_bool_prefix": {
+                              "name.parts": {
+                                "query": "budg",
+                                "operator": "and"
+                              }
+                            }
+                          },
+                          "boost": 1.0
+                        }
+                      }
+                    ],
+                    "tie_breaker": 0.0
+                  }
+                },
+                {
+                  "dis_max": {
+                    "queries": [
+                      {
+                        "match": {
+                          "attributes.title": {
+                            "query": "budg",
+                            "boost": 3.0,
+                            "operator": "and"
+                          }
+                        }
+                      },
+                      {
+                        "match": {
+                          "attributes.title.en": {
+                            "query": "budg",
+                            "operator": "and",
+                            "boost": 1.9500000000000002
+                          }
+                        }
+                      },
+                      {
+                        "match": {
+                          "attributes.title.fr": {
+                            "query": "budg",
+                            "operator": "and",
+                            "boost": 1.9500000000000002
+                          }
+                        }
+                      },
+                      {
+                        "constant_score": {
+                          "filter": {
+                            "match_bool_prefix": {
+                              "attributes.title": {
+                                "query": "budg",
+                                "operator": "and"
+                              }
+                            }
+                          },
+                          "boost": 0.75
+                        }
+                      }
+                    ],
+                    "tie_breaker": 0.0
+                  }
+                },
+                {
+                  "dis_max": {
+                    "queries": [
+                      {
+                        "match": {
+                          "attributes.tags.text": {
+                            "query": "budg",
+                            "boost": 2.0,
+                            "operator": "and"
+                          }
+                        }
+                      },
+                      {
+                        "match": {
+                          "attributes.tags.en": {
+                            "query": "budg",
+                            "operator": "and",
+                            "boost": 1.3
+                          }
+                        }
+                      },
+                      {
+                        "match": {
+                          "attributes.tags.fr": {
+                            "query": "budg",
+                            "operator": "and",
+                            "boost": 1.3
+                          }
+                        }
+                      },
+                      {
+                        "constant_score": {
+                          "filter": {
+                            "match_bool_prefix": {
+                              "attributes.tags.text": {
+                                "query": "budg",
+                                "operator": "and"
+                              }
+                            }
+                          },
+                          "boost": 0.5
+                        }
+                      }
+                    ],
+                    "tie_breaker": 0.0
+                  }
+                },
+                {
+                  "dis_max": {
+                    "queries": [
+                      {
+                        "match": {
+                          "attributes.description": {
+                            "query": "budg",
+                            "boost": 1.5,
+                            "operator": "and"
+                          }
+                        }
+                      },
+                      {
+                        "match": {
+                          "attributes.description.en": {
+                            "query": "budg",
+                            "operator": "and",
+                            "boost": 0.9750000000000001
+                          }
+                        }
+                      },
+                      {
+                        "match": {
+                          "attributes.description.fr": {
+                            "query": "budg",
+                            "operator": "and",
+                            "boost": 0.9750000000000001
+                          }
+                        }
+                      },
+                      {
+                        "constant_score": {
+                          "filter": {
+                            "match_bool_prefix": {
+                              "attributes.description": {
+                                "query": "budg",
+                                "operator": "and"
+                              }
+                            }
+                          },
+                          "boost": 0.375
+                        }
+                      }
+                    ],
+                    "tie_breaker": 0.0
+                  }
+                },
+                {
+                  "dis_max": {
+                    "queries": [
+                      {
+                        "match": {
+                          "content_text": {
+                            "query": "budg",
+                            "boost": 1.0,
+                            "operator": "and"
+                          }
+                        }
+                      },
+                      {
+                        "match": {
+                          "content_text.en": {
+                            "query": "budg",
+                            "operator": "and",
+                            "boost": 0.65
+                          }
+                        }
+                      },
+                      {
+                        "match": {
+                          "content_text.fr": {
+                            "query": "budg",
+                            "operator": "and",
+                            "boost": 0.65
+                          }
+                        }
+                      },
+                      {
+                        "constant_score": {
+                          "filter": {
+                            "match_bool_prefix": {
+                              "content_text": {
+                                "query": "budg",
+                                "operator": "and"
+                              }
+                            }
+                          },
+                          "boost": 0.25
+                        }
+                      }
+                    ],
+                    "tie_breaker": 0.0
+                  }
+                }
+              ],
+              "tie_breaker": 0.1
+            }
+          }
+        ],
+        "must_not": []
+      }
+    }
+  }
+}

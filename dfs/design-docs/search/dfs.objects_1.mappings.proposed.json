@@ -1,0 +1,258 @@
+{
+  "dynamic": "strict",
+  "_meta": {
+    "schema_version": 1,
+    "entity": "dfs_object",
+    "design_status": "proposal",
+    "supported_stemming_languages": [
+      "en",
+      "fr"
+    ]
+  },
+  "properties": {
+    "tenant_id": {
+      "type": "keyword"
+    },
+    "object_id": {
+      "type": "keyword"
+    },
+    "parent_id": {
+      "type": "keyword"
+    },
+    "ancestor_ids": {
+      "type": "keyword"
+    },
+    "read_inheritance_ids": {
+      "type": "keyword"
+    },
+    "kind": {
+      "type": "keyword"
+    },
+    "is_deleted": {
+      "type": "boolean"
+    },
+    "name": {
+      "type": "text",
+      "analyzer": "dfs_text",
+      "index_options": "offsets",
+      "position_increment_gap": 100,
+      "index_prefixes": {
+        "min_chars": 1,
+        "max_chars": 10
+      },
+      "fields": {
+        "parts": {
+          "type": "text",
+          "analyzer": "dfs_filename",
+          "index_options": "offsets",
+          "index_prefixes": {
+            "min_chars": 1,
+            "max_chars": 10
+          }
+        },
+        "en": {
+          "type": "text",
+          "analyzer": "dfs_filename_en",
+          "index_options": "offsets"
+        },
+        "fr": {
+          "type": "text",
+          "analyzer": "dfs_filename_fr",
+          "index_options": "offsets"
+        },
+        "keyword": {
+          "type": "keyword"
+        },
+        "folded": {
+          "type": "keyword",
+          "normalizer": "dfs_folded"
+        },
+        "token_count": {
+          "type": "token_count",
+          "analyzer": "dfs_filename",
+          "index": false,
+          "doc_values": true
+        }
+      }
+    },
+    "content_text": {
+      "type": "text",
+      "analyzer": "dfs_text",
+      "index_options": "offsets",
+      "position_increment_gap": 100,
+      "index_prefixes": {
+        "min_chars": 1,
+        "max_chars": 5
+      },
+      "fields": {
+        "en": {
+          "type": "text",
+          "analyzer": "dfs_text_en",
+          "index_options": "offsets"
+        },
+        "fr": {
+          "type": "text",
+          "analyzer": "dfs_text_fr",
+          "index_options": "offsets"
+        },
+        "token_count": {
+          "type": "token_count",
+          "analyzer": "dfs_text",
+          "index": false,
+          "doc_values": true
+        }
+      }
+    },
+    "mime_type": {
+      "type": "keyword"
+    },
+    "file_type": {
+      "type": "keyword"
+    },
+    "extension": {
+      "type": "keyword"
+    },
+    "size_bytes": {
+      "type": "unsigned_long"
+    },
+    "mtime_ms": {
+      "type": "unsigned_long"
+    },
+    "created_at_ms": {
+      "type": "unsigned_long"
+    },
+    "ctime_ms": {
+      "type": "unsigned_long",
+      "index": false,
+      "doc_values": false
+    },
+    "atime_ms": {
+      "type": "unsigned_long",
+      "index": false,
+      "doc_values": false
+    },
+    "modified_at": {
+      "type": "date"
+    },
+    "created_at": {
+      "type": "date"
+    },
+    "projected_at": {
+      "type": "date"
+    },
+    "attributes": {
+      "type": "object",
+      "dynamic": "strict",
+      "properties": {
+        "title": {
+          "type": "text",
+          "analyzer": "dfs_text",
+          "index_options": "offsets",
+          "position_increment_gap": 100,
+          "index_prefixes": {
+            "min_chars": 1,
+            "max_chars": 10
+          },
+          "fields": {
+            "en": {
+              "type": "text",
+              "analyzer": "dfs_text_en",
+              "index_options": "offsets"
+            },
+            "fr": {
+              "type": "text",
+              "analyzer": "dfs_text_fr",
+              "index_options": "offsets"
+            }
+          }
+        },
+        "description": {
+          "type": "text",
+          "analyzer": "dfs_text",
+          "index_options": "offsets",
+          "position_increment_gap": 100,
+          "index_prefixes": {
+            "min_chars": 1,
+            "max_chars": 5
+          },
+          "fields": {
+            "en": {
+              "type": "text",
+              "analyzer": "dfs_text_en",
+              "index_options": "offsets"
+            },
+            "fr": {
+              "type": "text",
+              "analyzer": "dfs_text_fr",
+              "index_options": "offsets"
+            }
+          }
+        },
+        "tags": {
+          "type": "keyword",
+          "normalizer": "dfs_folded",
+          "fields": {
+            "text": {
+              "type": "text",
+              "analyzer": "dfs_text",
+              "index_options": "offsets",
+              "position_increment_gap": 100,
+              "index_prefixes": {
+                "min_chars": 1,
+                "max_chars": 5
+              }
+            },
+            "en": {
+              "type": "text",
+              "analyzer": "dfs_text_en",
+              "index_options": "offsets"
+            },
+            "fr": {
+              "type": "text",
+              "analyzer": "dfs_text_fr",
+              "index_options": "offsets"
+            }
+          }
+        },
+        "owner_ids": {
+          "type": "keyword"
+        },
+        "source": {
+          "type": "keyword"
+        },
+        "source_modified_at": {
+          "type": "date"
+        }
+      }
+    },
+    "content_status": {
+      "type": "keyword"
+    },
+    "xattr_names": {
+      "type": "keyword"
+    },
+    "xattr_pair_hashes": {
+      "type": "keyword"
+    },
+    "attr_version": {
+      "type": "unsigned_long",
+      "index": false,
+      "doc_values": false
+    },
+    "content_version": {
+      "type": "unsigned_long",
+      "index": false,
+      "doc_values": false
+    },
+    "text_source_object_id": {
+      "type": "keyword",
+      "index": false,
+      "doc_values": false
+    },
+    "text_source_content_version": {
+      "type": "unsigned_long",
+      "index": false,
+      "doc_values": false
+    }
+  }
+}
