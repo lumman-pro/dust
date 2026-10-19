@@ -1,6 +1,8 @@
 import { getMCPServerRequirements } from "@app/lib/actions/mcp_internal_actions/input_configuration";
+import { isPhasedOutAgentMemoryView } from "@app/lib/api/actions/servers/agent_memory/metadata";
 import type { MCPServerViewType } from "@app/lib/api/mcp";
 import type { Authenticator } from "@app/lib/auth";
+import { getFeatureFlags } from "@app/lib/auth";
 import { MCPServerViewResource } from "@app/lib/resources/mcp_server_view_resource";
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
@@ -9,7 +11,8 @@ import { Err, Ok } from "@app/types/shared/result";
  * @cc [owner:fabiencelier,label:security;product] suggestable-tools-match-list-tools
  * A tool that a suggestion adds to or removes from an agent MUST be one `listAvailableTools` offers
  * the caller: a view of a global or regular space the caller is a member of, of a `manual` or
- * `auto` server, and not restricted to skills (the agent save silently drops those). Recording and
+ * `auto` server, not restricted to skills (the agent save silently drops those), and not agent
+ * memory once it is phased out (see `agent-memory-not-offered-with-user-memory`). Recording and
  * applying a tool suggestion both resolve its tool through this, so a tool that stopped qualifying
  * in between is refused when the suggestion is accepted.
  */
@@ -25,6 +28,7 @@ export async function fetchSuggestableTools(
     mode: "configuration",
     isRestrictedToSkills: false,
   });
+  const featureFlags = await getFeatureFlags(auth);
 
   const suggestable = new Map<string, MCPServerViewType>();
   for (const view of views) {
@@ -39,7 +43,8 @@ export async function fetchSuggestableTools(
     if (
       json &&
       (json.server.availability === "manual" ||
-        json.server.availability === "auto")
+        json.server.availability === "auto") &&
+      !isPhasedOutAgentMemoryView(json, featureFlags)
     ) {
       suggestable.set(view.sId, json);
     }

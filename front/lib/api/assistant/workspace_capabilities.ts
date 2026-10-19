@@ -3,6 +3,7 @@ import {
   getMcpServerViewDisplayName,
   isToolWithKnowledge,
 } from "@app/lib/actions/mcp_helper";
+import { isPhasedOutAgentMemoryView } from "@app/lib/api/actions/servers/agent_memory/metadata";
 import { getWhitelistedProviders } from "@app/lib/api/assistant/models";
 import config from "@app/lib/api/config";
 import type { MCPServerType, MCPServerViewType } from "@app/lib/api/mcp";
@@ -160,6 +161,7 @@ export async function listAvailableTools(
         mode: "configuration",
       }
     );
+  const featureFlags = await getFeatureFlags(auth);
 
   return mcpServerViews
     .map((v) => v.toJSON())
@@ -168,6 +170,7 @@ export async function listAvailableTools(
       (v) =>
         v.server.availability === "manual" || v.server.availability === "auto"
     )
+    .filter((v) => !isPhasedOutAgentMemoryView(v, featureFlags))
     .filter((v) => !isToolWithKnowledge(v))
     .map((mcpServerView) => ({
       sId: mcpServerView.sId,

@@ -1,7 +1,27 @@
 import type { ServerMetadata } from "@app/lib/actions/mcp_internal_actions/tool_definition";
+import type { MCPServerViewType } from "@app/lib/api/mcp";
+import type { WhitelistableFeature } from "@app/types/shared/feature_flags";
 import { z } from "zod";
 
 export const AGENT_MEMORY_SERVER_NAME = "agent_memory" as const;
+
+/**
+ * @cc [owner:aubin-tchoi,label:product] agent-memory-not-offered-with-user-memory
+ * On workspaces with the `user_memory` feature flag, agent memory is being phased out in favor of
+ * user memory: it MUST NOT be offered for adding to agents, neither in the agent builder's tool
+ * picker nor through `listAvailableTools` (sidekick, suggestions, workspace management tools).
+ * Agents that already have it keep it.
+ */
+export function isPhasedOutAgentMemoryView(
+  view: MCPServerViewType,
+  featureFlags: WhitelistableFeature[]
+): boolean {
+  return (
+    featureFlags.includes("user_memory") &&
+    view.serverType === "internal" &&
+    view.server.name === AGENT_MEMORY_SERVER_NAME
+  );
+}
 export const AGENT_MEMORY_RETRIEVE_TOOL_NAME = "retrieve";
 export const AGENT_MEMORY_RECORD_TOOL_NAME = "record_entries";
 export const AGENT_MEMORY_ERASE_TOOL_NAME = "erase_entries";

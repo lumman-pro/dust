@@ -15,7 +15,9 @@ import { useMCPServerViewsContext } from "@app/components/shared/tools_picker/MC
 import type { BuilderAction } from "@app/components/shared/tools_picker/types";
 import { nameToStorageFormat } from "@app/lib/actions/default_mcp_action";
 import { getMCPServerRequirements } from "@app/lib/actions/mcp_internal_actions/input_configuration";
+import { isPhasedOutAgentMemoryView } from "@app/lib/api/actions/servers/agent_memory/metadata";
 import type { MCPServerViewType } from "@app/lib/api/mcp";
+import { useFeatureFlags } from "@app/lib/auth/AuthContext";
 import { useSearchSkillsInfinite } from "@app/lib/swr/skill_configurations";
 import type { SkillListItemType } from "@app/types/assistant/skill_configuration";
 import type { LightWorkspaceType } from "@app/types/user";
@@ -137,6 +139,7 @@ export const useToolSelection = ({
     mcpServerViewsWithoutKnowledge,
     isMCPServerViewsLoading,
   } = useMCPServerViewsContext();
+  const { featureFlags } = useFeatureFlags();
 
   const isSelectedMCPServerView = useCallback(
     (view: MCPServerViewTypeWithLabel, actions: BuilderAction[]) => {
@@ -176,10 +179,13 @@ export const useToolSelection = ({
           );
         });
 
-    const topViews = mcpServerViewsWithoutKnowledge.filter((view) =>
+    const offeredViews = mcpServerViewsWithoutKnowledge.filter(
+      (view) => !isPhasedOutAgentMemoryView(view, featureFlags)
+    );
+    const topViews = offeredViews.filter((view) =>
       TOP_MCP_SERVER_VIEWS.includes(view.server.name)
     );
-    const nonTopViews = mcpServerViewsWithoutKnowledge.filter(
+    const nonTopViews = offeredViews.filter(
       (view) => !TOP_MCP_SERVER_VIEWS.includes(view.server.name)
     );
 
@@ -190,6 +196,7 @@ export const useToolSelection = ({
   }, [
     searchQuery,
     mcpServerViewsWithoutKnowledge,
+    featureFlags,
     selectedActions,
     isSelectedMCPServerView,
   ]);
