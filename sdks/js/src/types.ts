@@ -3672,6 +3672,7 @@ const InternalAllowedIconSchema = FlexibleEnumSchema<
   | "BrightDataLogo"
   | "ToolsIcon"
   | "CanvaLogo"
+  | "CartaLogo"
   | "ClariLogo"
   | "ClayLogo"
   | "ClickUpLogo"

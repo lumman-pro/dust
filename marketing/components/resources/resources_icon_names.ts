@@ -199,6 +199,7 @@ export const INTERNAL_ALLOWED_ICONS = [
   "BrightDataLogo",
   "ToolsIcon",
   "CanvaLogo",
+  "CartaLogo",
   "ClariLogo",
   "CommandLineIcon",
   "ConfluenceLogo",

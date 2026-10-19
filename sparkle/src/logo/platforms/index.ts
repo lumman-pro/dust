@@ -13,6 +13,7 @@ export { default as AttioLogo } from "./Attio";
 export { default as BigQueryLogo } from "./BigQuery";
 export { default as BrightDataLogo } from "./BrightData";
 export { default as CanvaLogo } from "./Canva";
+export { default as CartaLogo } from "./Carta";
 export { default as ChromeLogo } from "./Chrome";
 export { default as ClariLogo } from "./Clari";
 export { default as ClaudeLogo } from "./Claude";

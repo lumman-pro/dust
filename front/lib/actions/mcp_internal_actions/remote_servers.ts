@@ -7587,6 +7587,68 @@ export const DEFAULT_REMOTE_MCP_SERVERS: DefaultRemoteMCPServerConfig[] = [
       },
     },
   },
+  {
+    id: 10059,
+    name: "Carta",
+    description:
+      "Carta tools for cap table ownership, valuations, pro-forma rounds, exit scenarios, investment metrics, and fund performance.",
+    url: "https://mcp.app.carta.com/mcp",
+    icon: "CartaLogo",
+    documentationUrl:
+      "https://docs.carta.com/api-platform/guides/guides/claude-mcp-setup/",
+    connectionInstructions:
+      "Carta uses OAuth with dynamic client registration. Sign in with your Carta account to authorize access. Access follows your Carta permissions for cap table, investor, and CRM data.",
+    authMethod: "oauth-dynamic",
+    toolStakes: {
+      welcome: "never_ask",
+      discover: "never_ask",
+      fetch: "never_ask",
+      list_contexts: "never_ask",
+      set_context: "low",
+      list_accounts: "never_ask",
+      get_current_user: "never_ask",
+      cap_table_chart: "never_ask",
+      cap_table_healthcheck: "never_ask",
+    },
+    toolDisplayLabels: {
+      welcome: {
+        running: "Getting started with Carta",
+        done: "Got started with Carta",
+      },
+      discover: {
+        running: "Discovering Carta capabilities",
+        done: "Discovered Carta capabilities",
+      },
+      fetch: {
+        running: "Fetching data from Carta",
+        done: "Fetched data from Carta",
+      },
+      list_contexts: {
+        running: "Listing Carta contexts",
+        done: "Listed Carta contexts",
+      },
+      set_context: {
+        running: "Setting Carta context",
+        done: "Set Carta context",
+      },
+      list_accounts: {
+        running: "Listing Carta accounts",
+        done: "Listed Carta accounts",
+      },
+      get_current_user: {
+        running: "Fetching current Carta user",
+        done: "Fetched current Carta user",
+      },
+      cap_table_chart: {
+        running: "Generating a Carta cap table chart",
+        done: "Generated a Carta cap table chart",
+      },
+      cap_table_healthcheck: {
+        running: "Running a Carta cap table health check",
+        done: "Ran a Carta cap table health check",
+      },
+    },
+  },
 ];
 
 export const getDefaultRemoteMCPServerByURL = (

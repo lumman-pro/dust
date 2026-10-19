@@ -15,6 +15,7 @@ import AttioLogo from "./Attio";
 import BigQueryLogo from "./BigQuery";
 import BrightDataLogo from "./BrightData";
 import CanvaLogo from "./Canva";
+import CartaLogo from "./Carta";
 import ChromeLogo from "./Chrome";
 import ClariLogo from "./Clari";
 import ClaudeLogo from "./Claude";
@@ -150,6 +151,7 @@ export const PLATFORM_LOGOS = {
   BigQueryLogo,
   BrightDataLogo,
   CanvaLogo,
+  CartaLogo,
   ChromeLogo,
   ClariLogo,
   ClaudeLogo,
