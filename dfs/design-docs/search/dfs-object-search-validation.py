@@ -14,6 +14,7 @@ from urllib.request import Request, urlopen
 
 
 ROOT = Path(__file__).parent
+DEFINITIONS = ROOT.parents[1] / "server/src/search/indices"
 BASE = "http://127.0.0.1:19217"
 INDEX = "codex-dfs-object-search-v1"
 RESULTS = ROOT / "dfs-object-search-validation-results.json"
@@ -159,10 +160,10 @@ def document(name, content=None, **extra):
 info = request("GET", "/")
 assert info["cluster_name"] == "codex-dfs-search-analysis", info
 assert info["version"]["number"] == "8.16.0", info
-settings = json.loads((ROOT / "dfs.objects_1.settings.proposed.json").read_text())
+settings = json.loads((DEFINITIONS / "objects_1.settings.us-central1.json").read_text())
 settings.pop("routing.allocation.require.workload")
 settings.update({"number_of_shards": 1, "number_of_replicas": 0})
-mappings = json.loads((ROOT / "dfs.objects_1.mappings.proposed.json").read_text())
+mappings = json.loads((DEFINITIONS / "objects_1.mappings.json").read_text())
 recreate(INDEX, {"settings": settings, "mappings": mappings})
 
 documents = {
@@ -393,8 +394,8 @@ for variant in ["plain", "prefixes", "bilingual_prefixes", "edge", "search_as_yo
     comparison[variant] = {"usage": usage[index], "queries": searches}
 
 output = {"elasticsearch": info["version"], "document_count": len(documents),
-          "mapping_source": "dfs.objects_1.mappings.proposed.json",
-          "settings_source": "dfs.objects_1.settings.proposed.json",
+          "mapping_source": "../../server/src/search/indices/objects_1.mappings.json",
+          "settings_source": "../../server/src/search/indices/objects_1.settings.us-central1.json",
           "local_settings_changes": {"removed_allocation_require": True, "shards": 1, "replicas": 0},
           "checks": checks, "analyzers": analyzers, "prefix_rewrites": rewrites,
           "expensive_query_gate": prefix_gate, "stem_highlights": highlight["hits"]["hits"],

@@ -1,0 +1,120 @@
+{
+  "number_of_shards": 1,
+  "number_of_replicas": 0,
+  "refresh_interval": "5s",
+  "analysis": {
+    "normalizer": {
+      "dfs_folded": {
+        "type": "custom",
+        "filter": [
+          "icu_folding"
+        ]
+      }
+    },
+    "filter": {
+      "dfs_name_parts": {
+        "type": "word_delimiter_graph",
+        "split_on_numerics": false,
+        "preserve_original": false,
+        "stem_english_possessive": false
+      },
+      "dfs_english_stem": {
+        "type": "stemmer",
+        "language": "porter2"
+      },
+      "dfs_english_possessive": {
+        "type": "stemmer",
+        "language": "possessive_english"
+      },
+      "dfs_french_stem": {
+        "type": "stemmer",
+        "language": "light_french"
+      },
+      "dfs_french_elision": {
+        "type": "elision",
+        "articles_case": true,
+        "articles": [
+          "l",
+          "m",
+          "t",
+          "qu",
+          "n",
+          "s",
+          "j",
+          "d",
+          "c",
+          "jusqu",
+          "quoiqu",
+          "lorsqu",
+          "puisqu"
+        ]
+      }
+    },
+    "analyzer": {
+      "dfs_text": {
+        "type": "custom",
+        "tokenizer": "icu_tokenizer",
+        "filter": [
+          "icu_folding"
+        ],
+        "char_filter": [
+          "dfs_apostrophe_boundaries"
+        ]
+      },
+      "dfs_text_en": {
+        "type": "custom",
+        "tokenizer": "icu_tokenizer",
+        "filter": [
+          "dfs_english_possessive",
+          "icu_folding",
+          "dfs_english_stem"
+        ]
+      },
+      "dfs_text_fr": {
+        "type": "custom",
+        "tokenizer": "icu_tokenizer",
+        "filter": [
+          "dfs_french_elision",
+          "icu_folding",
+          "dfs_french_stem"
+        ]
+      },
+      "dfs_filename": {
+        "type": "custom",
+        "tokenizer": "whitespace",
+        "filter": [
+          "dfs_name_parts",
+          "icu_folding"
+        ]
+      },
+      "dfs_filename_en": {
+        "type": "custom",
+        "tokenizer": "whitespace",
+        "filter": [
+          "dfs_name_parts",
+          "icu_folding",
+          "dfs_english_stem"
+        ]
+      },
+      "dfs_filename_fr": {
+        "type": "custom",
+        "tokenizer": "whitespace",
+        "filter": [
+          "dfs_name_parts",
+          "icu_folding",
+          "dfs_french_stem"
+        ]
+      }
+    },
+    "char_filter": {
+      "dfs_apostrophe_boundaries": {
+        "type": "mapping",
+        "mappings": [
+          "\\u0027 => \\u0020",
+          "\\u2019 => \\u0020",
+          "\\u2018 => \\u0020"
+        ]
+      }
+    }
+  }
+}

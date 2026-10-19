@@ -5,10 +5,13 @@ This revision supersedes the earlier analysis/query recommendations in
 [the first proposal](dfs-object-search-index-design.md) and
 [the keyword-only note](dfs-full-keyword-search-design.md).
 
-**Final status: research complete; index and mapping proposal ready for implementation review.**
-The proposed JSON has passed the executable checks below. Remaining rollout work is to implement
-the projection and query compiler, register the producer xattributes, and validate relevance,
-capacity, and operational settings on a representative production corpus.
+**Status: research complete; initial index definition and bootstrap implemented in DFS.**
+The [DFS search module](../../server/src/search.rs) embeds versioned mappings and regional settings;
+its [bootstrap command](../../server/src/search/README.md) previews the creation request or creates
+the index and write alias together. Remaining work is the object projection and durable indexing,
+extraction lifecycle, authorization rechecks, application lexer/parser/query compiler, and producer
+xattribute registry. Relevance, capacity, and operational settings still require validation on a
+representative production corpus.
 
 **Recommendation:** one `dfs.objects` alias, backed initially by `dfs.objects_1`, with one ES
 document per original DFS object. Retain distinct filename, extracted-content, and selected
@@ -26,12 +29,19 @@ match different fields. Keep typed metadata and timestamps available for later L
 | Node allocation | `index.routing.allocation.require.workload: filesystem` |
 | Initial operational settings | 3 primary shards, 1 replica, `5s` refresh; provisional pending capacity validation |
 
-The complete, executable proposal is in the [mapping](dfs.objects_1.mappings.proposed.json) and
-[settings](dfs.objects_1.settings.proposed.json). The [verification harness](dfs-object-search-validation.py)
+The active, executable definition is in the [mapping](../../server/src/search/indices/objects_1.mappings.json)
+and [production settings](../../server/src/search/indices/objects_1.settings.us-central1.json). The
+original proposed JSON files remain alongside this note as research snapshots. The
+[verification harness](dfs-object-search-validation.py)
 loaded those exact files into a disposable ES 8.16 instance, changing only shard/replica counts and
 removing the production allocation constraint. [Results](dfs-object-search-validation-results.json):
 **46 checks passed on 138 synthetic objects**, plus a separate comparison of five prefix/indexing
 configurations. This establishes mechanics; it is not a production relevance or capacity benchmark.
+
+The initial bootstrap also passed three focused [Rust tests](../../server/tests/search.rs) for
+creation, preflight failures, and acknowledgement handling. Live ES validation confirmed offline
+previews for all three regions, index/write-alias creation, and rejection of a repeat creation
+without replacing the index or losing the indexed probe object.
 
 **The requested behavior determines the query structure.** The following examples use case/accent
 normalization. Quotes mean consecutive, ordered, unstemmed analyzed tokens at zero slop. They do

@@ -11,8 +11,8 @@
     "minimum_index_compatibility_version": "7.0.0"
   },
   "document_count": 138,
-  "mapping_source": "dfs.objects_1.mappings.proposed.json",
-  "settings_source": "dfs.objects_1.settings.proposed.json",
+  "mapping_source": "../../server/src/search/indices/objects_1.mappings.json",
+  "settings_source": "../../server/src/search/indices/objects_1.settings.us-central1.json",
   "local_settings_changes": {
     "removed_allocation_require": true,
     "shards": 1,
@@ -2054,7 +2054,7 @@
     },
     "electroencephalographic": {
       "allowed": false,
-      "error": "{\"error\":{\"root_cause\":[{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}],\"type\":\"search_phase_execution_exception\",\"reason\":\"all shards failed\",\"phase\":\"query\",\"grouped\":true,\"failed_shards\":[{\"shard\":0,\"index\":\"codex-dfs-object-search-v1\",\"node\":\"jL35eYVsRr6Jmn0EFmqHlA\",\"reason\":{\"type\":\"query_shard_exception\",\"reason\":\"failed to create query: [prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\",\"index_uuid\":\"-X87HqrGQHiTrpZc_pKw0g\",\"index\":\"codex-dfs-object-search-v1\",\"caused_by\":{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}}}],\"caused_by\":{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}},\"status\":400}"
+      "error": "{\"error\":{\"root_cause\":[{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}],\"type\":\"search_phase_execution_exception\",\"reason\":\"all shards failed\",\"phase\":\"query\",\"grouped\":true,\"failed_shards\":[{\"shard\":0,\"index\":\"codex-dfs-object-search-v1\",\"node\":\"THEFp__5Tr-1y-UuTP7Baw\",\"reason\":{\"type\":\"query_shard_exception\",\"reason\":\"failed to create query: [prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\",\"index_uuid\":\"2rlhZzMvR6ybROtVJ8aPlA\",\"index\":\"codex-dfs-object-search-v1\",\"caused_by\":{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}}}],\"caused_by\":{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}},\"status\":400}"
     }
   },
   "stem_highlights": [
