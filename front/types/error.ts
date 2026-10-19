@@ -172,6 +172,7 @@ const API_ERROR_TYPES = [
   ...CONVERSATION_ERROR_TYPES,
   // MCP:
   "mcp_auth_error",
+  "personal_tools_unavailable",
   "invalid_mcp_server_id",
   "mcp_server_not_found",
   // Workos:

@@ -64,7 +64,10 @@ import {
   MCPOAuthProviderError,
   decideMCPAuthFailureAction,
 } from "@app/lib/actions/mcp_oauth_provider";
-import { isServerUsableForMessage } from "@app/lib/actions/personal_actions";
+import {
+  isServerUsableForMessage,
+  PERSONAL_SERVER_UNUSABLE_MESSAGE,
+} from "@app/lib/actions/personal_actions";
 import {
   classifyToolAbortSignal,
   isToolInterruptionError,
@@ -540,6 +543,13 @@ export async function* tryCallMCPTool(
                 },
               ],
             };
+          case "personal_tools_unavailable":
+            return {
+              isError: true,
+              content: [
+                { type: "text", text: PERSONAL_SERVER_UNUSABLE_MESSAGE },
+              ],
+            };
           case "personal_auth_required":
             // Not a tool error: isError must be false so the content flows through
             // to getExitOrPauseEvents, which detects the AGENT_PAUSE_TOOL_OUTPUT
@@ -878,6 +888,7 @@ function makeServerSideMCPConnectionParams(
  */
 type ServerSideMCPConnectionError =
   | { type: "not_found" }
+  | { type: "personal_tools_unavailable" }
   | { type: "personal_auth_required"; provider: OAuthProvider; scope?: string }
   | { type: "admin_auth_required"; message: string }
   | { type: "connection_failed"; message: string };
@@ -898,6 +909,17 @@ async function connectServerSideMCP(
   );
   if (!mcpServerView) {
     return new Err({ type: "not_found" });
+  }
+
+  if (
+    isAgentLoopRunContext(toolContext.runContext) &&
+    !isServerUsableForMessage(mcpServerView, {
+      isWithoutConcreteUser: isUserMessageWithoutConcreteUser(
+        toolContext.runContext.userMessage
+      ),
+    })
+  ) {
+    return new Err({ type: "personal_tools_unavailable" });
   }
 
   const connectionParams = makeServerSideMCPConnectionParams(mcpServerView);

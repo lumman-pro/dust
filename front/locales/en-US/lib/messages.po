@@ -558,6 +558,10 @@ msgid "The tool rejected the credentials."
 msgstr "The tool rejected the credentials."
 
 #: front/lib/api_error_messages.ts
+msgid "These tools use each person's own credentials, so they can't be used for a message Dust posted."
+msgstr "These tools use each person's own credentials, so they can't be used for a message Dust posted."
+
+#: front/lib/api_error_messages.ts
 msgid "The tool identifier is invalid."
 msgstr "The tool identifier is invalid."
 

@@ -1,3 +1,4 @@
+import type { LightMCPToolConfigurationType } from "@app/lib/actions/mcp";
 import type { ToolHandlerExtra } from "@app/lib/actions/mcp_internal_actions/tool_definition";
 import type { ToolExecutionStatus } from "@app/lib/actions/statuses";
 import type { AgentLoopRunContext, StepContext } from "@app/lib/actions/types";
@@ -29,11 +30,15 @@ export function makeExtra(
   {
     stepContext,
     agentConfiguration,
+    agentMessage,
     userMessage,
+    toolConfiguration,
   }: {
     stepContext?: StepContext;
     agentConfiguration?: AgentConfigurationType;
+    agentMessage?: AgentMessageType;
     userMessage?: UserMessageType;
+    toolConfiguration?: LightMCPToolConfigurationType;
   } = {}
 ): ToolHandlerExtra & { runContext: AgentLoopRunContext } {
   const runContext = {
@@ -45,7 +50,9 @@ export function makeExtra(
     },
     stepContext,
     agentConfiguration,
+    agentMessage,
     userMessage,
+    toolConfiguration,
   } as unknown as AgentLoopRunContext;
   return { auth, runContext } as unknown as ToolHandlerExtra & {
     runContext: AgentLoopRunContext;

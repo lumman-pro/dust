@@ -152,6 +152,7 @@ export const API_ERROR_MESSAGES: Record<APIErrorType, MessageDescriptor> = {
   message_outdated: msg`This message has changed. Refresh the page and try again.`,
   conversation_context_usage_not_found: msg`Conversation context usage not found.`,
   mcp_auth_error: msg`The tool rejected the credentials.`,
+  personal_tools_unavailable: msg`These tools use each person's own credentials, so they can't be used for a message Dust posted.`,
   invalid_mcp_server_id: msg`The tool identifier is invalid.`,
   mcp_server_not_found: msg`Tool not found.`,
   workos_organization_not_found: msg`Organization not found.`,

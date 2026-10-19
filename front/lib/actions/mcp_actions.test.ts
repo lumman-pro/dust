@@ -23,7 +23,9 @@ import type { InternalMCPServerNameType } from "@app/lib/actions/mcp_internal_ac
 import type { DataSourcesToolConfigurationType } from "@app/lib/actions/mcp_internal_actions/input_schemas";
 import type { MCPConnectionParams } from "@app/lib/actions/mcp_metadata";
 import { connectToMCPServer } from "@app/lib/actions/mcp_metadata";
+import { PERSONAL_SERVER_UNUSABLE_MESSAGE } from "@app/lib/actions/personal_actions";
 import type { AgentLoopRunContext } from "@app/lib/actions/types";
+import { getConversation } from "@app/lib/api/assistant/conversation/fetch";
 import type { ServerSideMCPToolTypeWithStakeAndRetryPolicy } from "@app/lib/api/mcp";
 import { Authenticator } from "@app/lib/auth";
 import {
@@ -31,22 +33,31 @@ import {
   MessageModel,
 } from "@app/lib/models/agent/conversation";
 import type { AgentMCPActionResource } from "@app/lib/resources/agent_mcp_action_resource";
+import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { InternalMCPServerInMemoryResource } from "@app/lib/resources/internal_mcp_server_in_memory_resource";
 import { MCPServerViewResource } from "@app/lib/resources/mcp_server_view_resource";
 import { RemoteMCPServerToolMetadataResource } from "@app/lib/resources/remote_mcp_server_tool_metadata_resource";
 import { SpaceResource } from "@app/lib/resources/space_resource";
 import { generateRandomModelSId } from "@app/lib/resources/string_ids_server";
 import { AgentConfigurationFactory } from "@app/tests/utils/AgentConfigurationFactory";
+import { makeExtra } from "@app/tests/utils/conversation_test_factories";
 import { ConversationFactory } from "@app/tests/utils/ConversationFactory";
+import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
 import { GroupFactory } from "@app/tests/utils/GroupFactory";
+import { MCPServerViewFactory } from "@app/tests/utils/MCPServerViewFactory";
 import { MembershipFactory } from "@app/tests/utils/MembershipFactory";
 import { getTestStreamEndpoint } from "@app/tests/utils/models";
+import { RemoteMCPServerFactory } from "@app/tests/utils/RemoteMCPServerFactory";
 import { UserFactory } from "@app/tests/utils/UserFactory";
 import { WorkspaceFactory } from "@app/tests/utils/WorkspaceFactory";
 import type { AgentMCPActionWithOutputType } from "@app/types/actions";
 import type {
   AgentMessageType,
   UserMessageType,
+} from "@app/types/assistant/conversation";
+import {
+  isAgentMessageType,
+  isUserMessageType,
 } from "@app/types/assistant/conversation";
 import { Ok } from "@app/types/shared/result";
 import type { WorkspaceType } from "@app/types/user";
@@ -889,6 +900,104 @@ describe("tryCallMCPTool", () => {
       withToolResultProcessingSpy,
       "withToolResultProcessing was not called — tool result path may not use wrappers"
     ).toHaveBeenCalled();
+  });
+});
+
+describe("tryCallMCPTool personal-credential servers", () => {
+  it("refuses to run one for a message nobody wrote, even when it was listed before the switch", async () => {
+    const { authenticator, globalSpace, workspace } = await createResourceTest({
+      role: "admin",
+    });
+    const server = await RemoteMCPServerFactory.create(workspace);
+    const view = await MCPServerViewFactory.create(
+      workspace,
+      server.sId,
+      globalSpace
+    );
+    const agentConfig =
+      await AgentConfigurationFactory.createTestAgent(authenticator);
+    const conversation = await ConversationFactory.create(authenticator, {
+      agentConfigurationId: agentConfig.sId,
+      messagesCreatedAt: [new Date()],
+      authorless: true,
+    });
+    const conversationRes = await getConversation(
+      authenticator,
+      conversation.sId
+    );
+    if (conversationRes.isErr()) {
+      throw conversationRes.error;
+    }
+    const messages = conversationRes.value.content.flat();
+    const userMessage = messages.find(isUserMessageType);
+    const agentMessage = messages.find(isAgentMessageType);
+    assert(userMessage && agentMessage);
+    const conversationResource = await ConversationResource.fetchById(
+      authenticator,
+      conversation.sId
+    );
+    assert(conversationResource);
+
+    // The admin scopes the server to personal credentials after the model picked the tool.
+    const updateRes = await view.updateOAuthUseCase(
+      authenticator,
+      "personal_actions"
+    );
+    if (updateRes.isErr()) {
+      throw updateRes.error;
+    }
+
+    const toolConfiguration: LightServerSideMCPToolConfigurationType = {
+      id: -1,
+      sId: generateRandomModelSId(),
+      type: "mcp_configuration",
+      name: "tool",
+      dataSources: null,
+      tables: null,
+      childAgentId: null,
+      timeFrame: null,
+      jsonSchema: null,
+      additionalConfiguration: {},
+      mcpServerViewId: view.sId,
+      dustAppConfiguration: null,
+      internalMCPServerId: null,
+      secretName: null,
+      dustProject: null,
+      originalName: "tool",
+      mcpServerName: "remote",
+      availability: "manual",
+      permission: "never_ask",
+      toolServerId: server.sId,
+      retryPolicy: "no_retry",
+      timeoutMs: undefined,
+    };
+    const { runContext } = makeExtra(authenticator, conversationResource, {
+      agentConfiguration: agentConfig,
+      agentMessage,
+      userMessage,
+      toolConfiguration,
+    });
+
+    const resultGenerator = tryCallMCPTool(
+      authenticator,
+      {},
+      { runContext },
+      {
+        progressToken: agentMessage.agentMessageId,
+        makeToolNotificationEvent: async () => {
+          throw new Error("Expected no notification.");
+        },
+      }
+    );
+    let result = await resultGenerator.next();
+    while (!result.done) {
+      result = await resultGenerator.next();
+    }
+
+    expect(result.value.isError).toBe(true);
+    expect(result.value.content).toEqual([
+      { type: "text", text: PERSONAL_SERVER_UNUSABLE_MESSAGE },
+    ]);
   });
 });
 

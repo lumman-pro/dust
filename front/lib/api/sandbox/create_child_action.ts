@@ -23,6 +23,7 @@ import { resolveSkillMCPServers } from "@app/lib/api/assistant/skill_actions";
 import { createMCPAction } from "@app/lib/api/mcp/create_mcp";
 import { pauseSandboxBashForBlockedChild } from "@app/lib/api/sandbox/sandbox_child_block";
 import type { Authenticator } from "@app/lib/auth";
+import { DustError } from "@app/lib/error";
 import { getSupportedModelConfig } from "@app/lib/llms/model_configurations";
 import { notifyManualActionRequired } from "@app/lib/notifications/triggers/manual-action-required";
 import { AgentMCPActionResource } from "@app/lib/resources/agent_mcp_action_resource";
@@ -123,7 +124,12 @@ export async function createSandboxChildAction(
       isWithoutConcreteUser: userMessageRow.userMessage.userId === null,
     })
   ) {
-    return new Err(new Error(PERSONAL_SERVER_UNUSABLE_MESSAGE));
+    return new Err(
+      new DustError(
+        "personal_tools_unavailable",
+        PERSONAL_SERVER_UNUSABLE_MESSAGE
+      )
+    );
   }
 
   const agentConfiguration = await getPinnedAgentToolingForAgentMessage(auth, {

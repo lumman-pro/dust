@@ -50,6 +50,7 @@ export type DustErrorCode =
   | "name_conflict"
   | "action_not_found"
   | "action_not_blocked"
+  | "personal_tools_unavailable"
   | "action_not_editable"
   | "invalid_edited_arguments"
   | "mcp_access_token_error"

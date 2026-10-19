@@ -4,12 +4,14 @@ import { MCPServerViewFactory } from "@app/tests/utils/MCPServerViewFactory";
 import { RemoteMCPServerFactory } from "@app/tests/utils/RemoteMCPServerFactory";
 import {
   createPersistedFrameFunctionInvocationTokenTestContext,
+  createPersistedSandboxActionToken,
   createPersistedSandboxFunctionInvocationTokenTestContext,
+  createSandboxTokenTestContext,
 } from "@app/tests/utils/SandboxTokenFactory";
 import { SpaceFactory } from "@app/tests/utils/SpaceFactory";
 import { Ok } from "@app/types/shared/result";
 import { honoApp } from "@front-api/app";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { assert, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@app/lib/api/sandbox_functions/events", async (importOriginal) => {
   const actual =
@@ -364,5 +366,34 @@ describe("POST /api/v1/w/[wId]/sandbox/actions/call (function invocation)", () =
     });
 
     expect(response.status).toBe(404);
+  });
+});
+
+describe("POST /api/v1/w/[wId]/sandbox/actions/call (conversation sandbox)", () => {
+  it("refuses personal-credential servers when the message has no author", async () => {
+    const context = await createSandboxTokenTestContext({
+      usePodSpaceForConversation: true,
+      authorless: true,
+    });
+    const { agentServerView, auth, workspace } = context;
+    assert(agentServerView, "Expected an agent server view.");
+    const updateRes = await agentServerView.updateOAuthUseCase(
+      auth,
+      "personal_actions"
+    );
+    if (updateRes.isErr()) {
+      throw updateRes.error;
+    }
+    const { token } = await createPersistedSandboxActionToken(context);
+
+    const response = await callSandboxTool(workspace, token, {
+      serverViewId: agentServerView.sId,
+      toolName: "tool",
+      arguments: {},
+    });
+
+    expect(response.status).toBe(403);
+    const body = await response.json();
+    expect(body.error.type).toBe("personal_tools_unavailable");
   });
 });
