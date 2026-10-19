@@ -52,6 +52,7 @@ function renderWithPreviewProviders(children: React.ReactNode) {
           virtuosoMsg: null,
           data: undefined,
           wasAutoOpenDismissedForFileId: () => false,
+          frameOpenedFrom: null,
         }}
       >
         <FilePreviewProvider owner={mockOwner}>{children}</FilePreviewProvider>

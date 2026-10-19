@@ -151,6 +151,7 @@ function renderWithSidePanel(
           virtuosoMsg: null,
           data: undefined,
           wasAutoOpenDismissedForFileId: () => false,
+          frameOpenedFrom: null,
         }}
       >
         <FilePreviewProvider owner={mockOwner}>{ui}</FilePreviewProvider>
@@ -259,6 +260,7 @@ describe("getFilePreviewPlugin", () => {
           virtuosoMsg: null,
           data: undefined,
           wasAutoOpenDismissedForFileId: () => false,
+          frameOpenedFrom: null,
         }}
       >
         <FilePreviewProvider owner={mockOwner}>

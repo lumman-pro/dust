@@ -1,5 +1,6 @@
 import { AuthenticatedVisualizationActionIframe } from "@app/components/assistant/conversation/actions/AuthenticatedVisualizationActionIframe";
 import { DEFAULT_FRAME_PANEL_SIZE } from "@app/components/assistant/conversation/constant";
+import { useConversationSidePanelContext } from "@app/components/assistant/conversation/ConversationSidePanelContext";
 import { ConversationSidePanelHeader } from "@app/components/assistant/conversation/ConversationSidePanelHeader";
 import { CenteredState } from "@app/components/assistant/conversation/interactive_content/CenteredState";
 import { ExportContentDropdown } from "@app/components/assistant/conversation/interactive_content/ExportContentDropdown";
@@ -7,7 +8,7 @@ import { FrameBetaChip } from "@app/components/assistant/conversation/interactiv
 import { FrameEditControls } from "@app/components/assistant/conversation/interactive_content/frame/FrameEditControls";
 import { ShareFramePopover } from "@app/components/assistant/conversation/interactive_content/frame/ShareFramePopover";
 import { useFrameEditSession } from "@app/components/assistant/conversation/interactive_content/frame/useFrameEditSession";
-import { trackFrameExpand } from "@app/components/assistant/conversation/interactive_content/frameTracking";
+import { useFrameTracking } from "@app/components/assistant/conversation/interactive_content/useFrameTracking";
 import { useSidePanelFullScreen } from "@app/components/assistant/conversation/useSidePanelFullScreen";
 import { ConfirmContext } from "@app/components/Confirm";
 import { PinPodBannerButton } from "@app/components/pod/files/PinPodBannerButton";
@@ -50,6 +51,34 @@ import {
 } from "@dust-tt/sparkle";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { useCallback, useContext, useMemo, useRef, useState } from "react";
+
+// Where the panel cannot be resized, the full screen hash is set but nothing changes on screen, so it
+// is not a full screen.
+function useSidePanelFrameTracking({
+  conversation,
+  fileId,
+  isFullScreen,
+  canEnterFullScreen,
+}: {
+  conversation?: ConversationWithoutContentType;
+  fileId: string;
+  isFullScreen: boolean;
+  canEnterFullScreen: boolean;
+}) {
+  const { isPanelClosing, frameOpenedFrom } = useConversationSidePanelContext();
+  useFrameTracking({
+    frameId: fileId,
+    location: conversation
+      ? { type: "conversation", id: conversation.sId }
+      : null,
+    openedFrom: frameOpenedFrom,
+    isVisible: !isPanelClosing,
+    fullScreen: {
+      isFullScreen: isFullScreen && canEnterFullScreen,
+      uiElement: "conversation_side_panel",
+    },
+  });
+}
 
 interface FrameRendererProps {
   conversation?: ConversationWithoutContentType;
@@ -130,16 +159,12 @@ export function FrameRenderer({
     closePanel: onClosePanel,
   } = useSidePanelFullScreen(DEFAULT_FRAME_PANEL_SIZE);
 
-  const enterFullScreenAndTrack = () => {
-    if (conversation && canEnterFullScreen) {
-      trackFrameExpand({
-        frameId: fileId,
-        uiElement: "conversation_side_panel",
-        location: { type: "conversation", id: conversation.sId },
-      });
-    }
-    enterFullScreen();
-  };
+  useSidePanelFrameTracking({
+    conversation,
+    fileId,
+    isFullScreen,
+    canEnterFullScreen,
+  });
 
   const { fileContent, error, mutateFileContent, isFileContentLoading } =
     useFileContent({
@@ -509,7 +534,7 @@ export function FrameRenderer({
                 onRevert={onRevert}
                 isFullScreen={isFullScreen}
                 exitFullScreen={exitFullScreen}
-                enterFullScreen={enterFullScreenAndTrack}
+                enterFullScreen={enterFullScreen}
                 shareUrl={fileShare?.shareUrl}
                 reloadFile={reloadFile}
               />

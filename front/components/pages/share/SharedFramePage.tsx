@@ -1,5 +1,5 @@
-import { trackFrameOpen } from "@app/components/assistant/conversation/interactive_content/frameTracking";
 import { PublicInteractiveContentContainer } from "@app/components/assistant/conversation/interactive_content/PublicInteractiveContentContainer";
+import { useFrameTracking } from "@app/components/assistant/conversation/interactive_content/useFrameTracking";
 import Custom404 from "@app/components/pages/Custom404";
 import CustomErrorPage from "@app/components/pages/CustomErrorPage";
 import { EmailVerificationFlow } from "@app/components/pages/share/EmailVerificationFlow";
@@ -14,7 +14,7 @@ import { useUser } from "@app/lib/swr/user";
 import { getFaviconPath } from "@app/lib/utils";
 import { LogIn01, Spinner } from "@dust-tt/sparkle";
 import { useLingui } from "@lingui/react/macro";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useCookies } from "react-cookie";
 
 // Origins from which the share frame is considered as embedded.
@@ -26,7 +26,7 @@ function buildLoginUrl() {
   return `${config.getApiBaseUrl()}/api/workos/login?returnTo=${encodeURIComponent(returnTo)}`;
 }
 
-// Tracks the open once the frame successfully loads, not again when it is refetched.
+// Shown once the share metadata and the frame have loaded.
 // Takes the objects as returned by their hooks so the null checks stay out of SharedFramePage.
 function useTrackSharedFrameOpen({
   frameMetadata,
@@ -35,26 +35,19 @@ function useTrackSharedFrameOpen({
   frameMetadata: ReturnType<typeof usePublicFrame>["frameMetadata"];
   shareMetadata: ReturnType<typeof useShareFrameMetadata>["shareMetadata"];
 }) {
-  const frameId = frameMetadata?.sId;
-  const workspaceId = shareMetadata?.workspaceId;
-  const requiresEmailVerification = !!shareMetadata?.requiresEmailVerification;
-  const trackedFrameIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!frameId || !workspaceId || trackedFrameIdRef.current === frameId) {
-      return;
-    }
-    trackedFrameIdRef.current = frameId;
+  useFrameTracking({
+    frameId: frameMetadata?.sId ?? null,
+    location: { type: "public_share" },
+    openedFrom: { source: "user", uiElement: "shared_link" },
+    isVisible: !!shareMetadata,
     // Viewers are often anonymous, so the workspace is not attached to the event on its own.
-    trackFrameOpen({
-      frameId,
-      origin: { source: "user", uiElement: "shared_link" },
-      location: { type: "public_share" },
-      extra: {
-        workspace_id: workspaceId,
-        requires_email_verification: requiresEmailVerification,
-      },
-    });
-  }, [frameId, workspaceId, requiresEmailVerification]);
+    extra: shareMetadata
+      ? {
+          workspace_id: shareMetadata.workspaceId,
+          requires_email_verification: shareMetadata.requiresEmailVerification,
+        }
+      : undefined,
+  });
 }
 
 /**

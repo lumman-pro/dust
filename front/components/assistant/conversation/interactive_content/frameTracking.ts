@@ -6,7 +6,7 @@ import {
 } from "@app/lib/tracking";
 
 // PostHog events for Frames being opened (`frames:frame:open`) and put in full screen
-// (`frames:frame:expand`).
+// (`frames:frame:expand`). Views send them through `useFrameTracking`, which decides when.
 
 // Who opened it: the agent publishing it, the page showing it on load, or the user clicking.
 export type FrameOpenSource = "agent" | "auto" | "user";
@@ -53,8 +53,7 @@ export interface FrameOpenOrigin {
  * @cc [owner:theogz,label:product] frame-open-event-names-frame-and-location
  * `frames:frame:open` MUST carry the Frame's file sId (`frame_id`), how and where it was opened
  * (`source`, `ui_element`, `location_resource_type`) and, outside a public share, the sId of the
- * conversation or Pod it was opened in (`location_resource_id`). Callers MUST fire it once per Frame
- * shown: refreshing or republishing a Frame already on screen is not an open.
+ * conversation or Pod it was opened in (`location_resource_id`).
  */
 export function trackFrameOpen({
   frameId,
@@ -93,7 +92,7 @@ function locationExtra(location: FrameOpenLocation): TrackingExtra {
 /**
  * @cc [owner:theogz,label:product] frame-expand-event-names-frame-and-location
  * `frames:frame:expand` MUST carry the same `frame_id`, `ui_element` and location properties as
- * `frames:frame:open`, and fire only when entering full screen, never when leaving it.
+ * `frames:frame:open`.
  */
 export function trackFrameExpand({
   frameId,

@@ -1,5 +1,8 @@
 import { FrameRenderer } from "@app/components/assistant/conversation/interactive_content/FrameRenderer";
-import { trackFrameExpand } from "@app/components/assistant/conversation/interactive_content/frameTracking";
+import {
+  trackFrameExpand,
+  trackFrameOpen,
+} from "@app/components/assistant/conversation/interactive_content/frameTracking";
 import { LightWorkspaceFactory } from "@app/tests/utils/LightWorkspaceFactory";
 import type { ConversationWithoutContentType } from "@app/types/assistant/conversation";
 import type { EditTextFn } from "@app/types/assistant/visualization";
@@ -12,7 +15,29 @@ import {
 } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { act } from "react";
+import type { ImperativePanelHandle } from "react-resizable-panels";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+// Side panel handle; null like in Analytics and the agent builder preview, where the panel cannot be
+// resized. Read by the side panel context mock below at render time.
+let sidePanelHandle: ImperativePanelHandle | null = null;
+
+function makeSidePanelHandle(): ImperativePanelHandle {
+  return {
+    collapse: vi.fn(),
+    expand: vi.fn(),
+    getId: () => "side_panel",
+    getSize: () => 40,
+    isCollapsed: () => false,
+    isExpanded: () => true,
+    resize: vi.fn(),
+  };
+}
+
+const FRAME_CLICK = {
+  source: "user",
+  uiElement: "message_frame_card",
+} as const;
 
 const mocks = vi.hoisted(() => ({
   batchEditFrameText: vi.fn(),
@@ -28,8 +53,6 @@ const mocks = vi.hoisted(() => ({
     }) => null
   ),
   hasFrameFunctions: false,
-  // Side panel handle; null like in Analytics and the agent builder preview.
-  panel: null as { getSize: () => number; resize: () => void } | null,
   isFrameAuthor: true,
   isMobile: false,
   /** Incremented on every iframe mount (React key change). */
@@ -59,15 +82,17 @@ vi.mock(
   () => ({
     useConversationSidePanelContext: () => ({
       closePanel: vi.fn(),
-      panelRef: { current: mocks.panel },
+      panelRef: { current: sidePanelHandle },
       layoutBeforeFullScreenRef: { current: null },
+      isPanelClosing: false,
+      frameOpenedFrom: FRAME_CLICK,
     }),
   })
 );
 
 vi.mock(
   "@app/components/assistant/conversation/interactive_content/frameTracking",
-  () => ({ trackFrameExpand: vi.fn() })
+  () => ({ trackFrameExpand: vi.fn(), trackFrameOpen: vi.fn() })
 );
 
 vi.mock(
@@ -105,9 +130,11 @@ vi.mock("@app/components/navigation/DesktopNavigationContext", () => ({
 vi.mock("@app/hooks/conversations", () => ({
   useVisualizationRevert: () => ({ handleVisualizationRevert: vi.fn() }),
 }));
-vi.mock("@app/hooks/useHashParams", () => ({
-  useHashParam: () => [undefined, vi.fn()],
-}));
+// Keeps its value like the real hook, so entering full screen changes `isFullScreen`.
+vi.mock("@app/hooks/useHashParams", async () => {
+  const { useState } = await vi.importActual<typeof import("react")>("react");
+  return { useHashParam: () => useState<string | undefined>(undefined) };
+});
 vi.mock("@app/hooks/useNotification", () => ({
   useSendNotification: () => vi.fn(),
   useSendApiErrorNotification: () => vi.fn(),
@@ -200,7 +227,7 @@ afterEach(() => {
   mocks.isFrameAuthor = true;
   mocks.isMobile = false;
   mocks.iframeMounts = 0;
-  mocks.panel = null;
+  sidePanelHandle = null;
 });
 
 describe("FrameRenderer", () => {
@@ -362,8 +389,29 @@ describe("FrameRenderer", () => {
     );
   });
 
+  it("tracks the open of the shown Frame with what opened it", () => {
+    render(
+      <FrameRenderer
+        conversation={conversation}
+        fileId="frame_1"
+        projectId={null}
+        owner={owner}
+        contentHash="frame_1@42"
+        renderMode="v2"
+      />
+    );
+
+    expect(trackFrameOpen).toHaveBeenCalledTimes(1);
+    expect(trackFrameOpen).toHaveBeenCalledWith({
+      frameId: "frame_1",
+      origin: FRAME_CLICK,
+      location: { type: "conversation", id: "conversation_1" },
+      extra: undefined,
+    });
+  });
+
   it("tracks full screen in a conversation side panel", () => {
-    mocks.panel = { getSize: () => 40, resize: vi.fn() };
+    sidePanelHandle = makeSidePanelHandle();
     render(
       <FrameRenderer
         conversation={conversation}

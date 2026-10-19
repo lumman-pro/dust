@@ -1,18 +1,11 @@
 import {
   ConversationSidePanelProvider,
   useConversationSidePanelContext,
-  useRegisterSidePanelConversation,
 } from "@app/components/assistant/conversation/ConversationSidePanelContext";
-import { trackFrameOpen } from "@app/components/assistant/conversation/interactive_content/frameTracking";
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const activeConversation = vi.hoisted(() => ({ id: "conv_1" }));
-
-vi.mock(
-  "@app/components/assistant/conversation/interactive_content/frameTracking",
-  () => ({ trackFrameOpen: vi.fn() })
-);
 
 const FRAME_CLICK = {
   source: "user",
@@ -72,18 +65,6 @@ vi.mock("@app/hooks/useHashParams", async () => {
   };
 });
 
-// Like the conversation page, Analytics or the agent builder preview: the host registers the
-// conversation it shows, which is not always the one in the URL.
-function renderSidePanelHosting(conversationId: string) {
-  return renderHook(
-    () => {
-      useRegisterSidePanelConversation(conversationId);
-      return useConversationSidePanelContext();
-    },
-    { wrapper: ConversationSidePanelProvider }
-  );
-}
-
 function renderSidePanel() {
   return renderHook(() => useConversationSidePanelContext(), {
     wrapper: ConversationSidePanelProvider,
@@ -93,7 +74,6 @@ function renderSidePanel() {
 beforeEach(() => {
   hash.reset();
   activeConversation.id = "conv_1";
-  vi.mocked(trackFrameOpen).mockClear();
 });
 
 describe("ConversationSidePanelProvider history", () => {
@@ -381,31 +361,32 @@ describe("ConversationSidePanelProvider hash encoding", () => {
   });
 });
 
-describe("ConversationSidePanelProvider Frame open tracking", () => {
-  it("counts a Frame once while it refreshes, and again once replaced", () => {
-    const { result } = renderSidePanelHosting("cnv_hosted");
+describe("ConversationSidePanelProvider Frame origin", () => {
+  it("exposes what opened the shown Frame, and keeps it while the Frame refreshes", () => {
+    const { result } = renderSidePanel();
+    const autoOpen = {
+      source: "agent",
+      uiElement: "side_panel_auto_open",
+    } as const;
     act(() =>
       result.current.openPanel({
         type: "interactive_content",
         fileId: "fil_1",
         timestamp: "1",
-        openedFrom: { source: "agent", uiElement: "side_panel_auto_open" },
+        openedFrom: autoOpen,
       })
     );
+    expect(result.current.frameOpenedFrom).toEqual(autoOpen);
+
     act(() =>
       result.current.openPanel({
         type: "interactive_content",
         fileId: "fil_1",
         timestamp: "2",
-        openedFrom: { source: "agent", uiElement: "side_panel_auto_open" },
+        openedFrom: FRAME_CLICK,
       })
     );
-    expect(trackFrameOpen).toHaveBeenCalledTimes(1);
-    expect(trackFrameOpen).toHaveBeenCalledWith({
-      frameId: "fil_1",
-      origin: { source: "agent", uiElement: "side_panel_auto_open" },
-      location: { type: "conversation", id: "cnv_hosted" },
-    });
+    expect(result.current.frameOpenedFrom).toEqual(autoOpen);
 
     act(() =>
       result.current.openPanel({
@@ -414,36 +395,10 @@ describe("ConversationSidePanelProvider Frame open tracking", () => {
         openedFrom: FRAME_CLICK,
       })
     );
-    expect(trackFrameOpen).toHaveBeenCalledTimes(2);
+    expect(result.current.frameOpenedFrom).toEqual(FRAME_CLICK);
   });
 
-  it("does not count closing a Frame or going back to it", () => {
-    const { result } = renderSidePanelHosting("cnv_hosted");
-    const frame = {
-      type: "interactive_content",
-      fileId: "fil_1",
-      openedFrom: FRAME_CLICK,
-    } as const;
-    act(() => result.current.openPanel(frame));
-    act(() => result.current.openPanel({ type: "files" }));
-    act(() => result.current.closePanel());
-    expect(result.current.currentPanel).toBe("interactive_content");
-    act(() => result.current.togglePanel(frame));
-    expect(trackFrameOpen).toHaveBeenCalledTimes(1);
-  });
-
-  it("counts a Frame opened from the URL as page_url", () => {
-    hash.set({ spid: "fil_1@123", spt: "interactive_content" });
-    renderSidePanelHosting("cnv_hosted");
-    expect(trackFrameOpen).toHaveBeenCalledTimes(1);
-    expect(trackFrameOpen).toHaveBeenCalledWith({
-      frameId: "fil_1",
-      origin: { source: "user", uiElement: "page_url" },
-      location: { type: "conversation", id: "cnv_hosted" },
-    });
-  });
-
-  it("does not count Frames when no host registered a conversation", () => {
+  it("has no origin for a Frame shown again through the history", () => {
     const { result } = renderSidePanel();
     act(() =>
       result.current.openPanel({
@@ -452,6 +407,18 @@ describe("ConversationSidePanelProvider Frame open tracking", () => {
         openedFrom: FRAME_CLICK,
       })
     );
-    expect(trackFrameOpen).not.toHaveBeenCalled();
+    act(() => result.current.openPanel({ type: "files" }));
+    act(() => result.current.closePanel());
+    expect(result.current.currentPanel).toBe("interactive_content");
+    expect(result.current.frameOpenedFrom).toBeNull();
+  });
+
+  it("marks a Frame opened from the URL as page_url", () => {
+    hash.set({ spid: "fil_1@123", spt: "interactive_content" });
+    const { result } = renderSidePanel();
+    expect(result.current.frameOpenedFrom).toEqual({
+      source: "user",
+      uiElement: "page_url",
+    });
   });
 });

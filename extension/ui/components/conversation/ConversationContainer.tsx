@@ -49,7 +49,7 @@ export const ConversationContainer = ({
   const { t } = useLingui();
   const platform = usePlatform();
   const { currentPanel } = useConversationSidePanelContext();
-  useRegisterSidePanelConversation(conversation?.sId ?? null);
+  useRegisterSidePanelConversation(!!conversation);
   const { setSidebarOpen } = useContext(SidebarContext);
 
   const clientSideMCPServerIds = useClientSideMCPServerIds();

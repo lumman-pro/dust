@@ -56,6 +56,7 @@ describe("Img", () => {
               virtuosoMsg: null,
               data: undefined,
               wasAutoOpenDismissedForFileId: () => false,
+              frameOpenedFrom: null,
             }}
           >
             <FilePreviewProvider owner={mockOwner}>
