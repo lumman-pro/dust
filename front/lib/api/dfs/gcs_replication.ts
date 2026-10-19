@@ -8,16 +8,16 @@ import { UserResource } from "@app/lib/resources/user_resource";
 import { assertNever } from "@app/types/shared/utils/assert_never";
 import assert from "assert";
 
-// `w/<workspaceSId>/pods/<podSId>/files/<path>`, see `getPodFilesBasePath`.
+// `w/<workspaceId>/pods/<podId>/files/<path>`, see `getPodFilesBasePath`.
 const POD_FILE_OBJECT_NAME_REGEX = /^w\/([^/]+)\/pods\/([^/]+)\/files\/(.+)$/;
-// `w/<workspaceSId>/conversations/<conversationSId>/files/<path>`, see
+// `w/<workspaceId>/conversations/<conversationId>/files/<path>`, see
 // `getConversationFilesBasePath`.
 const CONVERSATION_FILE_OBJECT_NAME_REGEX =
   /^w\/([^/]+)\/conversations\/([^/]+)\/files\/(.+)$/;
-// `w/<workspaceSId>/conversations/<conversationSId>/MEMORY.md`, see `ensureConversationMemoryFile`.
+// `w/<workspaceId>/conversations/<conversationId>/MEMORY.md`, see `ensureConversationMemoryFile`.
 const CONVERSATION_MEMORY_FILE_OBJECT_NAME_REGEX =
   /^w\/([^/]+)\/conversations\/([^/]+)\/MEMORY\.md$/;
-// `w/<workspaceSId>/users/<userSId>/files/<path>`, see `GCSFileSystemBackend.toGCSPath`.
+// `w/<workspaceId>/users/<userId>/files/<path>`, see `GCSFileSystemBackend.toGCSPath`.
 const USER_FILE_OBJECT_NAME_REGEX = /^w\/([^/]+)\/users\/([^/]+)\/files\/(.+)$/;
 // Custom metadata key holding a symlink's target on the empty object gcsfuse stores for it.
 const GCSFUSE_SYMLINK_TARGET_METADATA_KEY = "gcsfuse_symlink_target";
@@ -100,10 +100,10 @@ export type DfsReplicationPlan =
 
 /**
  * @cc [owner:aubin-tchoi,label:product] replicated-gcs-object-names
- * Only object names `w/<workspaceSId>/pods/<podSId>/files/<path>`,
- * `w/<workspaceSId>/conversations/<conversationSId>/files/<path>` and
- * `w/<workspaceSId>/users/<userSId>/files/<path>` with a non-empty `<path>`, and
- * `w/<workspaceSId>/conversations/<conversationSId>/MEMORY.md`, MUST be parsed. Every other name
+ * Only object names `w/<workspaceId>/pods/<podId>/files/<path>`,
+ * `w/<workspaceId>/conversations/<conversationId>/files/<path>` and
+ * `w/<workspaceId>/users/<userId>/files/<path>` with a non-empty `<path>`, and
+ * `w/<workspaceId>/conversations/<conversationId>/MEMORY.md`, MUST be parsed. Every other name
  * MUST return `null`: it is not replicated.
  */
 export function parseReplicatedGcsObjectName(
