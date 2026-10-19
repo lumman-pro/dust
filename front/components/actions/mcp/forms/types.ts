@@ -9,9 +9,12 @@ const MCP_SERVER_OAUTH_USE_CASES = [
 ] as const;
 
 // Auth methods
+// "oauth-provider" is only set from a preset (first-party OAuth provider), never offered as a
+// choice for custom servers.
 const CREATE_MCP_SERVER_AUTH_METHODS = [
   "oauth-dynamic",
   "oauth-static",
+  "oauth-provider",
   "bearer",
 ] as const;
 
