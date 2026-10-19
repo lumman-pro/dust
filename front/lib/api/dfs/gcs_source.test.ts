@@ -1,33 +1,39 @@
 // @vitest-environment node
 import { gzipSync } from "node:zlib";
 import { readGcsReplicationSource } from "@app/lib/api/dfs/gcs_source";
+import { streamToBuffer } from "@app/lib/utils/streams";
 import { GcsNotificationFactory } from "@app/tests/utils/GcsNotificationFactory";
-import { GoogleAuth } from "google-auth-library";
-import { getGlobalDispatcher, MockAgent, setGlobalDispatcher } from "undici";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { FakeGcsStorageServer } from "@app/tests/utils/mocks/gcs_storage";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 
-const originalDispatcher = getGlobalDispatcher();
+vi.unmock("@app/lib/file_storage");
+
 const source = GcsNotificationFactory.replicationSource();
 const objectPath =
-  "/storage/v1/b/test-private-bucket/o/w%2Fworkspace%2Fpods%2Fpod%2Ffiles%2Freport.txt";
-const mediaPath = `${objectPath}?alt=media&ifGenerationMatch=9007199254740993&ifMetagenerationMatch=1`;
+  "/b/test-private-bucket/o/w%2Fworkspace%2Fpods%2Fpod%2Ffiles%2Freport.txt";
 
 describe("readGcsReplicationSource", () => {
-  let agent: MockAgent;
+  const server = new FakeGcsStorageServer();
 
-  beforeEach(() => {
-    agent = new MockAgent();
-    agent.disableNetConnect();
-    setGlobalDispatcher(agent);
-    vi.spyOn(GoogleAuth.prototype, "getAccessToken").mockResolvedValue(
-      "test-token"
-    );
+  beforeAll(async () => {
+    vi.stubEnv("STORAGE_EMULATOR_HOST", await server.start());
   });
 
-  afterEach(async () => {
-    setGlobalDispatcher(originalDispatcher);
-    await agent.close();
-    vi.restoreAllMocks();
+  beforeEach(() => {
+    server.reset();
+  });
+
+  afterAll(async () => {
+    vi.unstubAllEnvs();
+    await server.close();
   });
 
   it.each(["9007199254740993", "7"])(
@@ -36,65 +42,79 @@ describe("readGcsReplicationSource", () => {
       const metadata = GcsNotificationFactory.notification({
         metadata: { generation, metageneration: "2" },
       }).metadata;
-      const pool = agent.get("https://storage.googleapis.com");
-      pool.intercept({ path: objectPath }).reply(200, metadata);
-      pool
-        .intercept({
-          path: `${objectPath}?alt=media&ifGenerationMatch=${generation}&ifMetagenerationMatch=2`,
-          headers: { authorization: "Bearer test-token" },
-        })
-        .reply(200, "new");
+      server.responses.push(
+        { statusCode: 200, body: metadata },
+        { statusCode: 200, body: "new" }
+      );
 
       const result = await readGcsReplicationSource(source);
       expect(result.isOk() && result.value.status).toBe("live");
       if (result.isOk() && result.value.status === "live") {
         expect(result.value.metadata).toEqual(metadata);
-        expect(await result.value.stream.toArray()).toEqual([
-          Buffer.from("new"),
-        ]);
+        const contentRes = await streamToBuffer(result.value.stream);
+        expect(contentRes.isOk() && contentRes.value).toEqual(
+          Buffer.from("new")
+        );
       }
-      agent.assertNoPendingInterceptors();
+      const urls = server.requests.map(
+        (request) => new URL(request.url, "http://storage.test")
+      );
+      expect(urls.map((url) => `${url.pathname}${url.search}`)).toEqual([
+        objectPath,
+        `${objectPath}?alt=media&ifGenerationMatch=${generation}&ifMetagenerationMatch=2`,
+      ]);
     }
   );
 
   it("returns absent only for a live metadata 404", async () => {
-    agent
-      .get("https://storage.googleapis.com")
-      .intercept({ path: objectPath })
-      .reply(404);
+    server.responses.push({ statusCode: 404 });
     const result = await readGcsReplicationSource(source);
     expect(result.isOk() && result.value).toEqual({ status: "absent" });
-    agent.assertNoPendingInterceptors();
+    expect(server.requests).toHaveLength(1);
+  });
+
+  it("reads an empty object to completion", async () => {
+    server.responses.push(
+      {
+        statusCode: 200,
+        body: GcsNotificationFactory.notification({ metadata: { size: "0" } })
+          .metadata,
+      },
+      { statusCode: 200, body: "" }
+    );
+    const result = await readGcsReplicationSource(source);
+    expect(result.isOk() && result.value.status).toBe("live");
+    if (result.isOk() && result.value.status === "live") {
+      const contentRes = await streamToBuffer(result.value.stream);
+      expect(contentRes.isOk() && contentRes.value).toEqual(Buffer.alloc(0));
+    }
   });
 
   it.each([404, 412])(
     "retries a change between metadata and content reads (%s)",
-    async (code) => {
-      const pool = agent.get("https://storage.googleapis.com");
-      pool
-        .intercept({ path: objectPath })
-        .reply(200, GcsNotificationFactory.notification().metadata);
-      pool.intercept({ path: mediaPath }).reply(code);
-
+    async (statusCode) => {
+      server.responses.push(
+        {
+          statusCode: 200,
+          body: GcsNotificationFactory.notification().metadata,
+        },
+        { statusCode }
+      );
       const result = await readGcsReplicationSource(source);
       expect(result.isErr() && result.error.message).toBe(
-        `GCS content read failed (${code}).`
+        `GCS content read failed (${statusCode}).`
       );
-      agent.assertNoPendingInterceptors();
+      expect(server.requests).toHaveLength(2);
     }
   );
 
   it.each([403, 429, 500])(
-    "does not treat a GCS failure as deletion (%s)",
-    async (code) => {
-      agent
-        .get("https://storage.googleapis.com")
-        .intercept({ path: objectPath })
-        .reply(code);
+    "returns a GCS failure for Temporal to retry (%s)",
+    async (statusCode) => {
+      server.responses.push({ statusCode });
       const result = await readGcsReplicationSource(source);
-      expect(result.isErr() && result.error.message).toBe(
-        `GCS metadata read failed (${code}).`
-      );
+      expect(result.isErr()).toBe(true);
+      expect(server.requests).toHaveLength(1);
     }
   );
 
@@ -103,58 +123,57 @@ describe("readGcsReplicationSource", () => {
     const metadata = GcsNotificationFactory.notification({
       metadata: { contentEncoding: "gzip", size: String(bytes.length) },
     }).metadata;
-    const pool = agent.get("https://storage.googleapis.com");
-    pool.intercept({ path: objectPath }).reply(200, metadata);
-    pool
-      .intercept({ path: mediaPath, headers: { "accept-encoding": "gzip" } })
-      .reply(200, bytes, { headers: { "content-encoding": "gzip" } });
-
+    server.responses.push(
+      { statusCode: 200, body: metadata },
+      { statusCode: 200, body: bytes, headers: { "content-encoding": "gzip" } }
+    );
     const result = await readGcsReplicationSource(source);
     expect(result.isOk() && result.value.status).toBe("live");
     if (result.isOk() && result.value.status === "live") {
-      expect(Buffer.concat(await result.value.stream.toArray())).toEqual(bytes);
+      const contentRes = await streamToBuffer(result.value.stream);
+      expect(contentRes.isOk() && contentRes.value).toEqual(bytes);
     }
-    agent.assertNoPendingInterceptors();
+    expect(server.requests[1].headers["accept-encoding"]).toBe("gzip");
   });
 
   it("does not fetch content from mismatched live metadata", async () => {
-    agent
-      .get("https://storage.googleapis.com")
-      .intercept({ path: objectPath })
-      .reply(
-        200,
-        GcsNotificationFactory.notification({
-          metadata: { bucket: "another-bucket" },
-        }).metadata
-      );
+    server.responses.push({
+      statusCode: 200,
+      body: GcsNotificationFactory.notification({
+        metadata: { bucket: "another-bucket" },
+      }).metadata,
+    });
     const result = await readGcsReplicationSource(source);
     expect(result.isErr() && result.error.message).toBe(
       "GCS returned metadata for another object."
     );
-    agent.assertNoPendingInterceptors();
+    expect(server.requests).toHaveLength(1);
   });
 
-  it("keeps transport failures retryable", async () => {
-    agent
-      .get("https://storage.googleapis.com")
-      .intercept({ path: objectPath })
-      .replyWithError(new Error("connection reset"));
-    const result = await readGcsReplicationSource(source);
-    expect(result.isErr() && result.error.message).toBe("connection reset");
-  });
-
-  it("fails without reading GCS when credentials are unavailable", async () => {
-    vi.mocked(GoogleAuth.prototype.getAccessToken).mockResolvedValue(null);
-    const result = await readGcsReplicationSource(source);
-    expect(result.isErr() && result.error.message).toBe(
-      "GCP auth returned no access token."
-    );
-  });
-
-  it("does not read content when the importer has been cancelled", async () => {
+  it("does not read GCS when the importer has been cancelled", async () => {
     const result = await readGcsReplicationSource(source, {
       signal: AbortSignal.abort(),
     });
     expect(result.isErr() && result.error.name).toBe("AbortError");
+    expect(server.requests).toHaveLength(0);
+  });
+
+  it("cancels an active content stream", async () => {
+    server.responses.push(
+      { statusCode: 200, body: GcsNotificationFactory.notification().metadata },
+      { statusCode: 200, body: "partial", hold: true }
+    );
+    const stop = new AbortController();
+    const result = await readGcsReplicationSource(source, {
+      signal: stop.signal,
+    });
+    expect(result.isOk() && result.value.status).toBe("live");
+    if (result.isOk() && result.value.status === "live") {
+      const read = streamToBuffer(result.value.stream);
+      stop.abort();
+      const contentRes = await read;
+      expect(contentRes.isErr() && contentRes.error).toContain("aborted");
+      expect(result.value.stream.destroyed).toBe(true);
+    }
   });
 });

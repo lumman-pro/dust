@@ -1,19 +1,18 @@
-import type { Readable } from "node:stream";
+import { once } from "node:events";
+import { addAbortSignal, Readable } from "node:stream";
 import type {
   GcsReplicationMetadata,
   GcsReplicationSource,
 } from "@app/lib/api/dfs/gcs_notifications";
 import { GcsReplicationMetadataSchema } from "@app/lib/api/dfs/gcs_notifications";
-import fileStorageConfig from "@app/lib/file_storage/config";
+import { getBucketInstance } from "@app/lib/file_storage";
+import { isGCSNotFoundError } from "@app/lib/file_storage/types";
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
 import { normalizeError } from "@app/types/shared/utils/error_utils";
-import { GoogleAuth } from "google-auth-library";
-import { request } from "undici";
 import { fromError } from "zod-validation-error";
 
 const REQUEST_TIMEOUT_MS = 60_000;
-let googleAuth: GoogleAuth | undefined;
 
 type GcsSourceRead =
   | { status: "absent" }
@@ -22,61 +21,6 @@ type GcsSourceRead =
       metadata: GcsReplicationMetadata;
       stream: Readable;
     };
-
-async function getAccessToken(): Promise<Result<string, Error>> {
-  googleAuth ??= new GoogleAuth({
-    keyFilename: fileStorageConfig.getServiceAccount(),
-    scopes: ["https://www.googleapis.com/auth/devstorage.read_only"],
-  });
-  try {
-    const token = await googleAuth.getAccessToken();
-    return token
-      ? new Ok(token)
-      : new Err(new Error("GCP auth returned no access token."));
-  } catch (error) {
-    return new Err(normalizeError(error));
-  }
-}
-
-async function getObject(
-  source: Pick<GcsReplicationSource, "bucket" | "objectName">,
-  {
-    versions,
-    accessToken,
-    signal,
-  }: {
-    versions?: Pick<GcsReplicationMetadata, "generation" | "metageneration">;
-    accessToken: string;
-    signal?: AbortSignal;
-  }
-) {
-  const url = new URL(
-    `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(source.bucket)}/o/${encodeURIComponent(source.objectName)}`
-  );
-  if (versions) {
-    url.searchParams.set("alt", "media");
-    url.searchParams.set("ifGenerationMatch", versions.generation);
-    url.searchParams.set("ifMetagenerationMatch", versions.metageneration);
-  }
-  // Do not set `generation`: it selects a retained revision instead of checking the live object.
-  try {
-    return new Ok(
-      await request(url, {
-        method: "GET",
-        headers: {
-          authorization: `Bearer ${accessToken}`,
-          // Match gcsfuse's stored bytes. undici.request does not decompress the response.
-          "accept-encoding": "gzip",
-        },
-        headersTimeout: REQUEST_TIMEOUT_MS,
-        bodyTimeout: REQUEST_TIMEOUT_MS,
-        signal,
-      })
-    );
-  } catch (error) {
-    return new Err(normalizeError(error));
-  }
-}
 
 /**
  * @cc [owner:flvndvd,label:concurrency] gcs-replication-live-read
@@ -90,6 +34,11 @@ async function getObject(
  * result only opens the transfer: the caller MUST consume or destroy its stream, and MUST NOT
  * mark an import complete unless the entire stream and all DFS writes succeed.
  */
+/**
+ * @cc [owner:flvndvd,label:product] gcs-replication-stored-bytes
+ * The returned stream MUST preserve the bytes stored in GCS, including gzip compression.
+ * Content MUST NOT be decompressed during transfer to DFS.
+ */
 export async function readGcsReplicationSource(
   source: Pick<GcsReplicationSource, "bucket" | "objectName">,
   { signal }: { signal?: AbortSignal } = {}
@@ -97,28 +46,24 @@ export async function readGcsReplicationSource(
   if (signal?.aborted) {
     return new Err(normalizeError(signal.reason));
   }
-  const token = await getAccessToken();
-  if (token.isErr()) {
-    return token;
-  }
-
-  const live = await getObject(source, { accessToken: token.value, signal });
-  if (live.isErr()) {
-    return live;
-  }
-  if (live.value.statusCode !== 200) {
-    live.value.body.destroy();
-    return live.value.statusCode === 404
-      ? new Ok({ status: "absent" })
-      : new Err(
-          new Error(`GCS metadata read failed (${live.value.statusCode}).`)
-        );
-  }
+  const file = getBucketInstance(source.bucket, {
+    requestTimeoutMs: REQUEST_TIMEOUT_MS,
+    // Temporal retries the whole read from current metadata.
+    autoRetry: false,
+  }).file(source.objectName);
   let payload: unknown;
   try {
-    payload = await live.value.body.json();
+    [payload] = await file.getMetadata();
   } catch (error) {
-    return new Err(normalizeError(error));
+    if (signal?.aborted) {
+      return new Err(normalizeError(signal.reason));
+    }
+    return isGCSNotFoundError(error)
+      ? new Ok({ status: "absent" })
+      : new Err(normalizeError(error));
+  }
+  if (signal?.aborted) {
+    return new Err(normalizeError(signal.reason));
   }
   const parsed = GcsReplicationMetadataSchema.safeParse(payload);
   if (!parsed.success) {
@@ -132,18 +77,38 @@ export async function readGcsReplicationSource(
     return new Err(new Error("GCS returned metadata for another object."));
   }
 
-  const response = await getObject(source, {
-    versions: metadata,
-    accessToken: token.value,
-    signal,
+  // createReadStream does not expose both preconditions. Use the same file client's
+  // authenticated request stream, relative to the object, without selecting a retained generation.
+  const stream = file.requestStream({
+    uri: "",
+    qs: {
+      alt: "media",
+      ifGenerationMatch: metadata.generation,
+      ifMetagenerationMatch: metadata.metageneration,
+    },
+    headers: { "accept-encoding": "gzip" },
+    gzip: false,
   });
-  if (response.isErr()) {
-    return response;
+  if (signal) {
+    addAbortSignal(signal, stream);
   }
-  const { statusCode, body } = response.value;
-  if (statusCode === 200) {
-    return new Ok({ status: "live", metadata, stream: body });
+  try {
+    const [response] = await once(stream, "response");
+    if (response.statusCode !== 200) {
+      stream.destroy();
+      return new Err(
+        new Error(`GCS content read failed (${response.statusCode}).`)
+      );
+    }
+    const contentStream = new Readable({
+      destroy: (error, callback) => {
+        stream.destroy(error ?? undefined);
+        callback(error);
+      },
+    }).wrap(stream);
+    return new Ok({ status: "live", metadata, stream: contentStream });
+  } catch (error) {
+    stream.destroy();
+    return new Err(normalizeError(error));
   }
-  body.destroy();
-  return new Err(new Error(`GCS content read failed (${statusCode}).`));
 }
