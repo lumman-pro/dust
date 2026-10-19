@@ -1,5 +1,4 @@
-import { DocumentCodeHighlight } from "@app/components/editor/document/DocumentCodeHighlight";
-import { buildDocumentEditorExtensions } from "@app/components/editor/document/extensions";
+import { buildDocumentEditorExtensions } from "@app/components/editor/document/editorExtensions";
 import type { MessageDescriptor } from "@lingui/core";
 import { Editor } from "@tiptap/core";
 import { afterEach, describe, expect, it } from "vitest";
@@ -26,12 +25,9 @@ const codeBlock = (language: string | null, text: string) => ({
 
 const mount = (content: object) => {
   editor = new Editor({
-    extensions: [
-      ...buildDocumentEditorExtensions(translate, {
-        resolveImageSource: () => null,
-      }),
-      DocumentCodeHighlight,
-    ],
+    extensions: buildDocumentEditorExtensions(translate, {
+      resolveImageSource: () => null,
+    }),
     content,
   });
   return editor;

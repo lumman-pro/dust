@@ -1,4 +1,5 @@
 import { parseMarkdownBlocks } from "@app/components/editor/document/content";
+import { DocumentCodeHighlight } from "@app/components/editor/document/DocumentCodeHighlight";
 import type { DocumentImageOptions } from "@app/components/editor/document/DocumentImage";
 import { DocumentListJoin } from "@app/components/editor/document/DocumentListJoin";
 import { buildSchemaExtensions } from "@app/components/editor/document/extensions";
@@ -28,6 +29,7 @@ export const buildDocumentEditorExtensions = (
     resolveImageSource,
     parsePastedMarkdown: parseMarkdownBlocks,
   }),
+  DocumentCodeHighlight,
   DocumentListJoin,
   Placeholder.configure({
     placeholder: ({ node, pos, editor }) =>
