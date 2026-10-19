@@ -8,8 +8,8 @@ GCS remains the source of truth until a file switches to DFS. Replication is asy
 
 | GCS source | DFS destination |
 | --- | --- |
-| `w/{w}/pods/{p}/files/{path}` | The pod's DFS directory. |
-| `w/{w}/conversations/{c}/files/{path}` | The conversation's DFS directory. |
+| `w/{workspaceId}/pods/{podId}/files/{path}` | `users/{userSId}/pods/{podName}/{path}` under the tenant root. |
+| `w/{workspaceId}/conversations/{conversationId}/files/{path}` | The conversation's DFS directory. |
 
 Import every file in these folders, including original uploads, processed copies and Frame files. Acknowledge events for other paths without importing them. Canonical uploads under `files/w/...` remain in GCS; their mount copies are imported.
 
@@ -57,6 +57,16 @@ flowchart LR
 
 Use one native topic and one importer subscription. Workers filter paths and serialize each source object's imports with a distributed exclusive lock. Independent objects can be imported concurrently. No keying relay or ordered topic is needed once this locking is implemented.
 
+### Front consumer
+
+Run the pull subscription consumer in a standalone Node process in `front`. Configure the full subscription name, expected bucket and notification configuration. Use Pub/Sub for delivery and retries, without a Temporal workflow.
+
+The consumer checks the `dfs_gcs_replication` feature flag for the workspace in `w/{workspaceId}/...`. It acknowledges objects outside the supported prefixes and objects whose workspace has the flag disabled, without reading GCS or writing DFS. Flag lookup failures are retried. Enabling the flag requires a backfill for objects whose events were already skipped. Disabling it prevents new imports once the change is visible to the flag lookup; imports already running may finish.
+
+The consumer limits imports to eight at a time and acknowledges imported objects only after the importer returns success. Invalid messages and failed imports are nacked. On shutdown it stops accepting imports, allows 30 seconds to drain, then cancels remaining work. Pub/Sub client shutdown has a 60-second limit.
+
+Before activation, implement the consumer, conditional GCS reader, importer, process entrypoint and deployment configuration. The importer must acquire the source lock, resolve permissions and destination IDs, write DFS, and record completion before returning success. It must honor cancellation. DFS write fencing remains a prerequisite.
+
 ### Notifications and preconditions
 
 Configure `JSON_API_V1` payloads and subscribe to `OBJECT_FINALIZE`, `OBJECT_METADATA_UPDATE`, `OBJECT_DELETE`, and `OBJECT_ARCHIVE` (when versioning is enabled). Attributes include `bucketId`, `objectId`, and `objectGeneration`; the payload includes `metageneration`. GCS provides at-least-once publication after activation. Notifications can duplicate or arrive out of order, with no delivery-time SLA. [GCS notifications](https://docs.cloud.google.com/storage/docs/pubsub-notifications).
@@ -77,11 +87,13 @@ A `412` means the event no longer matches the live object. Skipping it is safe o
 
 All workers, backfills, repair jobs and the switch to DFS must use the same exclusive lock for `(tenant, bucket, objectName)`. Acquire it before reading GCS and hold it through file creation, writes, initial grants and the completion marker. The lock key must exist before the DFS file and survive its deletion. DFS must reject writes from a worker that has lost the lock. The lock implementation remains to be defined.
 
+The current DFS protocol has no lock or conditional-write operation. Front's Redis lock expires and does not fence DFS writes. Neither is sufficient to run the importer safely today.
+
 A GCS precondition only protects the read. Without the lock, worker A can fetch version A, stall while worker B copies version B into DFS, then overwrite B with A. Both reads passed their preconditions, and no further event need arrive. A GCS recheck before an unlocked DFS write still leaves this race.
 
 ## Import procedure
 
-1. **Filter and lock.** Validate the bucket, path, workspace, tenant and notification payload. Ignore paths outside the two folders. Take the source lock. If the file has switched to DFS, acknowledge without changing it.
+1. **Filter and lock.** Validate the bucket, path, workspace, tenant and notification payload. Ignore paths outside the two folders and workspaces without `dfs_gcs_replication`. Take the source lock. If the file has switched to DFS, acknowledge without changing it.
 2. **Read GCS.** For finalize and metadata-update events, use the conditional request above. For delete/archive events, backfill and repair jobs, read current live metadata, then fetch that generation with its metageneration precondition. If it changes or disappears between requests, restart from live metadata or retry the job.
 3. **Resolve the destination.** Reuse the stored source-to-file mapping. On first import, obtain the parent directory ID and required grants from Front. Fail if the destination or conversation owner cannot be resolved in the source workspace. A retry after file creation must recover the same file even if the worker failed before saving its mapping.
 4. **Write.** Clear the completion marker before changing the file. Copy content from offset zero when the generation differs or no complete copy exists. Set the final size and required attributes. Apply initial grants before exposing a new file, including when recovering an incomplete creation. Preserve grants on later imports. Set the marker only after every operation and the full content transfer succeeds.
@@ -119,15 +131,15 @@ DFS writes modify the destination file directly. Readers that do not take the lo
 
 ## Destination mapping
 
-The GCS path supplies the workspace, pod or conversation, and relative path. DFS creation requires a parent `ObjectId` and basename. Front must provision the directories and expose their IDs to the importer. The owner lookup alone does not supply a directory ID. The intended layout follows the [DFS URI design](URI.md):
+The GCS path supplies the workspace, pod or conversation ID, and relative path. DFS creation requires a parent `ObjectId` and basename. Front's [folder helpers](../../front/lib/api/dfs/folders.ts) create and store user, pod and conversation folder IDs using the [DFS URI layout](URI.md). The importer should reuse those helpers.
 
-```text
-<tenant-root>/users/<userId>/
-  pods/pod-<podSId>/
-  conversations/conv-<conversationSId>/
-```
+Pod directories in DFS use the pod's actual name (`SpaceResource.name`) unchanged. Resolve the pod ID from the GCS path within its workspace, then use its stored DFS folder ID. On first creation, create `pods/{podName}` under the owner's user folder with that exact name. URI percent-encoding preserves the name; it does not change the stored basename. DFS basename limits still apply.
 
-Store one mapping from the source object to its DFS file ID and reuse it for later imports. Directory provisioning, mapping storage and recovery after interrupted creation remain to be defined. Preserving a DFS ID across a GCS rename also needs an explicit mapping update; separate copy and delete notifications do not establish that relationship.
+GCS paths, source locks and completion markers continue to use the pod ID. Later imports use the stored DFS folder ID, so a directory rename or move preserves the mapping. Front must handle pod renames by updating the existing directory's name and `dust.display_name`; a pod rename does not produce a GCS object event.
+
+The current [`podFolderName()` helper](../../front/lib/dfs/folders.ts) rewrites names and falls back to a pod ID. It needs to be updated to preserve the actual name. The folder helpers also do not handle pod renames or name collisions. Folder creation must distinguish recovery for the same pod from another pod with the same name before imports are enabled. Pod grant propagation remains unfinished, and interrupted folder creation needs to recover its initial grants before files are exposed.
+
+Store one mapping from the source object to its DFS file ID and reuse it for later imports. Mapping storage and recovery after interrupted creation remain to be defined. Preserving a DFS ID across a GCS rename also needs an explicit mapping update; separate copy and delete notifications do not establish that relationship.
 
 ## Permissions
 
@@ -153,7 +165,7 @@ A standalone conversation directory inherits the owner's user grant:
 
 ```text
 /users/user-U/                            ALLOW u:user-U rw
-  conversations/                         no local grants
+  .conversations/                        no local grants
     conv-C/                              no local grants
 ```
 
@@ -194,6 +206,7 @@ Check these cases before enabling replication:
 - Finalize `(g,1)` is skipped after metadata reaches `(g,2)`; the metadata event creates the missing file and copies its bytes.
 - A worker stalls after a successful GCS read. Another worker or backfill cannot mutate the same DFS file concurrently. A worker that loses its lock cannot resume writing.
 - Concurrent first imports and retries after creation reuse one file. Deletion/recreation uses the same source lock.
+- Pod files land in a directory with the pod's exact name. Renames preserve its DFS folder ID and source mappings. Different pods with the same name cannot share a directory.
 - An old delete/archive event leaves a newer live object intact. A missing historical revision does not delete its live replica.
 - Interrupted content, attribute and initial-grant writes leave no completion marker. Retries complete the import without resetting later Front grants.
 - Failed mount copies, dead-lettered imports and missed deletes are recovered. Mount-copy repair preserves live edits.

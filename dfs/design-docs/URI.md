@@ -143,12 +143,12 @@ create dfs://<userSId>--<user-folder-id>/.conversations/conv-<conversationSId>
 - **MIME types:** pod folders have the MIME type `application/vnd.dust.pod` and conversation folders
   `application/vnd.dust.conversation`, so clients can recognize them wherever they are moved. Other
   folders keep the default `inode/directory`.
-- **Pod names:** pod folders are named after the pod, made a valid basename: `/` and control
-  characters become `-`, surrounding whitespace and leading dots are removed, and the name is cut to
-  255 bytes. A name with nothing left falls back to `pod-<podSId>`. The pod's actual name is stored
-  in the `dust.display_name` xattr. Renaming a pod does not rename its folder yet, and two pods can
-  get the same folder name (a deleted pod's name reused, or names equal once sanitized): the second
-  one then reuses the first one's folder. Both are not handled yet.
+- **Pod names:** pod folders use the pod's actual name (`SpaceResource.name`) unchanged, also
+  stored in `dust.display_name`. URI percent-encoding preserves that name. DFS basename limits
+  still apply. The current `podFolderName()` helper rewrites names and falls back to a pod ID;
+  it needs to be updated to match this design. Pod renames and collisions between pods with the
+  same name also remain unimplemented. A rename must preserve the folder ID, and a collision
+  must not make distinct pods share a folder.
 - **Stored reference:** front stores the returned folder ID on the user, the pod, or the
   conversation. All later access to that context's content uses this ID as the anchor, never a path
   from the root or from the user folder.
@@ -184,7 +184,7 @@ mount, with one session, whose root lists symlinks to the folders the sandbox wo
 ```text
 /mnt/dfs/
   conversation -> conv-<conversationSId>--<conversation-folder-id>
-  pod          -> pod-<podSId>--<pod-folder-id>
+  pod          -> <podName>--<pod-folder-id>
 ```
 
 - Front builds the symlinks from the IDs it stores. The FUSE client resolves a
