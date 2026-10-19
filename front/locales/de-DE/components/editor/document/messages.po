@@ -223,14 +223,6 @@ msgid "This document can't be edited here yet because it has a task list."
 msgstr "Dieses Dokument kann hier noch nicht bearbeitet werden, da es eine Aufgabenliste enthält."
 
 #: front/components/editor/document/DocumentMarkdownPreview.tsx
-msgid "This document can't be edited here yet because it has a code block fenced with ~~~."
-msgstr "Dieses Dokument kann hier noch nicht bearbeitet werden, da es einen mit ~~~ abgegrenzten Codeblock enthält."
-
-#: front/components/editor/document/DocumentMarkdownPreview.tsx
-msgid "This document can't be edited here yet because it has an indented code fence."
-msgstr "Dieses Dokument kann hier noch nicht bearbeitet werden, da es eine eingerückte Codeblock-Begrenzung enthält."
-
-#: front/components/editor/document/DocumentMarkdownPreview.tsx
 msgid "This document can't be edited here yet because it has a reference link definition."
 msgstr "Dieses Dokument kann hier noch nicht bearbeitet werden, da es eine Referenzlink-Definition enthält."
 
