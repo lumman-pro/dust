@@ -214,6 +214,7 @@ export function FrameRenderer({
     canEditV2 && hasFeature("frames_v2_drafts") && !draftMode;
   const isDraftMode = canEditV2 && draftMode;
   const enterDraftMode = useEnterFrameDraftMode({ owner, frameId: fileId });
+  const [isEnteringDraftMode, setIsEnteringDraftMode] = useState(false);
   const handleEnterDraftMode = async () => {
     trackEvent({
       area: TRACKING_AREAS.FRAMES,
@@ -221,8 +222,13 @@ export function FrameRenderer({
       action: TRACKING_ACTIONS.CLICK,
       extra: { frame_id: fileId },
     });
-    if (await enterDraftMode()) {
-      await mutateFramePermissions();
+    setIsEnteringDraftMode(true);
+    try {
+      if (await enterDraftMode()) {
+        await mutateFramePermissions();
+      }
+    } finally {
+      setIsEnteringDraftMode(false);
     }
   };
   const editSession = useFrameEditSession({
@@ -395,12 +401,14 @@ export function FrameRenderer({
             canEnterDraftMode ? (
               <DropdownMenuItem
                 label={t`Activate draft mode`}
+                disabled={isEnteringDraftMode}
                 onClick={() => {
                   void handleEnterDraftMode();
                 }}
               />
             ) : undefined
           }
+          isMenuLoading={isEnteringDraftMode}
           podActions={
             isFrameInPod
               ? {

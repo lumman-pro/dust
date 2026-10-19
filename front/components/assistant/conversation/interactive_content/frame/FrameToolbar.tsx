@@ -60,6 +60,8 @@ interface FrameToolbarProps {
   status?: ReactNode;
   /** Items of the trailing "more" menu, shown only when set. */
   menuItems?: ReactNode;
+  /** Shows the "more" menu trigger as busy while one of its actions runs. */
+  isMenuLoading?: boolean;
 }
 
 /**
@@ -85,6 +87,7 @@ export function FrameToolbar({
   trailing,
   status,
   menuItems,
+  isMenuLoading = false,
 }: FrameToolbarProps) {
   const { t } = useLingui();
 
@@ -157,6 +160,7 @@ export function FrameToolbar({
             <Button
               icon={DotsHorizontal}
               variant="ghost"
+              isLoading={isMenuLoading}
               aria-label={t`More actions`}
               tooltip={t`More actions`}
             />

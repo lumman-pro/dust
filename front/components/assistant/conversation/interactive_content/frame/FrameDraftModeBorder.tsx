@@ -2,14 +2,16 @@ import { cn, Tooltip } from "@dust-tt/sparkle";
 import { useLingui } from "@lingui/react/macro";
 import type { ReactNode } from "react";
 
+interface FrameDraftModeBorderProps {
+  children: ReactNode;
+  isDraftMode: boolean;
+}
+
 /** Marks the panel content as the Frame's draft while draft mode is on. */
 export function FrameDraftModeBorder({
-  isDraftMode,
   children,
-}: {
-  isDraftMode: boolean;
-  children: ReactNode;
-}) {
+  isDraftMode,
+}: FrameDraftModeBorderProps) {
   const { t } = useLingui();
 
   return (

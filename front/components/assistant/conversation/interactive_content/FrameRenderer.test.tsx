@@ -424,7 +424,10 @@ describe("FrameRenderer", () => {
 
       renderV2();
 
-      expect(screen.getByText("Draft")).toBeInTheDocument();
+      // The Draft tab sits on the border that frames the panel content.
+      expect(screen.getByText("Draft").closest("div")).toHaveClass(
+        "border-golden-500"
+      );
       expect(
         screen.getByRole("button", { name: "Validate draft" })
       ).toBeInTheDocument();
@@ -436,6 +439,13 @@ describe("FrameRenderer", () => {
     it("turns draft mode on from the more menu, then refreshes permissions", async () => {
       const user = userEvent.setup();
       mocks.draftsEnabled = true;
+      let finishEntering: (entered: boolean) => void = () => {};
+      mocks.enterDraftMode.mockImplementationOnce(
+        () =>
+          new Promise<boolean>((resolve) => {
+            finishEntering = resolve;
+          })
+      );
 
       renderV2();
       expect(screen.queryByText("Draft")).not.toBeInTheDocument();
@@ -447,10 +457,14 @@ describe("FrameRenderer", () => {
         await screen.findByRole("menuitem", { name: "Activate draft mode" })
       );
 
+      expect(mocks.enterDraftMode).toHaveBeenCalledTimes(1);
+      expect(mocks.mutateFramePermissions).not.toHaveBeenCalled();
+      await act(async () => {
+        finishEntering(true);
+      });
       await waitFor(() =>
         expect(mocks.mutateFramePermissions).toHaveBeenCalledTimes(1)
       );
-      expect(mocks.enterDraftMode).toHaveBeenCalledTimes(1);
     });
 
     it("offers no draft mode without the drafts feature", () => {
