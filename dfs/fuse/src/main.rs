@@ -6,7 +6,7 @@ mod adapter;
 use adapter::Adapter;
 use anyhow::{Context, Result, bail};
 use clap::Parser;
-use dfs_mount::{Folder, Fs, Remote};
+use dfs_mount::{Budget, DEFAULT_MAX_DELAY, Folder, Fs, Remote};
 use std::{
     fs::OpenOptions,
     io::{IsTerminal, Read},
@@ -21,6 +21,8 @@ use tokio::{
 };
 use tonic::transport::{Channel, ClientTlsConfig, Endpoint};
 
+/// `DEFAULT_MAX_DELAY` as the `--max-delay-ms` default.
+const DEFAULT_MAX_DELAY_MS: u64 = DEFAULT_MAX_DELAY.as_millis() as u64;
 /// How long to wait for the connection to the dfs server.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 /// How long a request to the dfs server may take before it fails, and the kernel request with it.
@@ -52,6 +54,10 @@ struct Cli {
     /// A folder to show at the mount root, as `NAME=OBJECT_ID`. Repeat for each folder.
     #[arg(long = "folder", value_parser = parse_folder)]
     folders: Vec<Folder>,
+    /// The longest the mount may take to show another mount's changes, and to send its own,
+    /// server and network time aside, in milliseconds.
+    #[arg(long, env = "DFS_MAX_DELAY_MS", default_value_t = DEFAULT_MAX_DELAY_MS)]
+    max_delay_ms: u64,
     /// The existing directory to mount on.
     mountpoint: PathBuf,
 }
@@ -83,7 +89,8 @@ fn main() -> Result<()> {
     runtime
         .block_on(refresh_session(&remote))
         .context("refresh the session")?;
-    let fs = Arc::new(Fs::new(remote.clone(), cli.folders).context("invalid folders")?);
+    let budget = Budget::new(Duration::from_millis(cli.max_delay_ms));
+    let fs = Arc::new(Fs::new(remote.clone(), cli.folders, budget).context("invalid folders")?);
     let adapter = Adapter::new(fs.clone(), runtime.handle().clone());
     let session = fuser::Session::new(adapter, &cli.mountpoint, &adapter::config())
         .with_context(|| format!("mount {}", cli.mountpoint.display()))?

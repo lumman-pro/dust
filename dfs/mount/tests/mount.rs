@@ -22,7 +22,7 @@ use dfs_api::{
         },
     },
 };
-use dfs_mount::{DirEntry, Errno, Folder, Fs, Kind, ROOT_INO, Remote};
+use dfs_mount::{Budget, DirEntry, Errno, Folder, Fs, Kind, ROOT_INO, Remote};
 use dfs_protocol::{
     LIST_MAX_ENTRIES, LOOKUP_MAX_TARGETS, ObjectId, ObjectRef, READ_FILES_MAX_OBJECTS,
     READ_MAX_BYTES, STAT_MAX_REFERENCES,
@@ -32,7 +32,10 @@ use dfs_protocol::{
         dfs_client::DfsClient, grant, operation::Operation,
     },
 };
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    time::Duration,
+};
 use tokio::net::TcpListener;
 use tonic::{Request, transport::Channel};
 
@@ -73,7 +76,8 @@ fn mount() -> Result<()> {
         folders_look_up_readable_children(&channel, &tenant).await?;
         list_returns_every_page(&channel, &tenant).await?;
         apply_returns_one_ordered_result_per_operation(&channel, &tenant).await?;
-        read_files_returns_one_ordered_result_per_object(&channel, &tenant).await
+        read_files_returns_one_ordered_result_per_object(&channel, &tenant).await?;
+        replies_are_served_until_the_cache_ttl(&channel, &tenant).await
     })
 }
 
@@ -303,7 +307,11 @@ async fn root_lists_readable_folders(channel: &Channel, tenant: &Tenant) -> Resu
         folder("missing", ObjectId::new_v7()),
     ];
 
-    let fs = Fs::new(tenant.remote(channel).await?, folders.clone())?;
+    let fs = Fs::new(
+        tenant.remote(channel).await?,
+        folders.clone(),
+        Budget::default(),
+    )?;
     let entries = fs.readdir(ROOT_INO).await?;
     assert_eq!(
         entries
@@ -319,7 +327,9 @@ async fn root_lists_readable_folders(channel: &Channel, tenant: &Tenant) -> Resu
     assert_eq!(fs.readdir(ROOT_INO).await?, entries);
 
     let remote = Remote::new(channel.clone(), &"fedcba9876543210".repeat(4))?;
-    let result = Fs::new(remote, folders)?.readdir(ROOT_INO).await;
+    let result = Fs::new(remote, folders, Budget::default())?
+        .readdir(ROOT_INO)
+        .await;
     assert_eq!(result, Err::<Vec<DirEntry>, _>(Errno::EACCES));
     Ok(())
 }
@@ -333,6 +343,7 @@ async fn root_looks_up_readable_folders(channel: &Channel, tenant: &Tenant) -> R
             folder("secret", tenant.unreadable_id),
             folder("missing", ObjectId::new_v7()),
         ],
+        Budget::default(),
     )?;
 
     let workspace = fs.lookup(ROOT_INO, "workspace").await?;
@@ -358,6 +369,7 @@ async fn folders_look_up_readable_children(channel: &Channel, tenant: &Tenant) -
     let fs = Fs::new(
         tenant.remote(channel).await?,
         vec![folder("workspace", tenant.root_id)],
+        Budget::default(),
     )?;
     let workspace = fs.lookup(ROOT_INO, "workspace").await?;
 
@@ -608,5 +620,51 @@ async fn read_files_returns_one_ordered_result_per_object(
     assert!(remote.read_files(&[]).await?.is_empty());
     let too_many = vec![tenant.file_id; READ_FILES_MAX_OBJECTS + 1];
     assert_eq!(remote.read_files(&too_many).await, Err(Errno::EINVAL));
+    Ok(())
+}
+
+async fn replies_are_served_until_the_cache_ttl(channel: &Channel, tenant: &Tenant) -> Result<()> {
+    let remote = tenant.remote(channel).await?;
+    let tenant_id = remote.current_session().await?.tenant_id;
+    let mount = |budget| {
+        Fs::new(
+            remote.clone(),
+            vec![folder("workspace", tenant.root_id)],
+            budget,
+        )
+    };
+    // Long enough that nothing expires during the check, short enough to wait for, and no cache.
+    let cached = mount(Budget::new(Duration::from_secs(60)))?;
+    let short = Budget::new(Duration::from_millis(400));
+    let expiring = mount(short)?;
+    let uncached = mount(Budget::new(Duration::ZERO))?;
+    let mut workspaces = Vec::new();
+    for fs in [&cached, &expiring, &uncached] {
+        let workspace = fs.lookup(ROOT_INO, "workspace").await?.ino;
+        assert_eq!(fs.lookup(workspace, "later.txt").await, Err(Errno::ENOENT));
+        workspaces.push(workspace);
+    }
+
+    create_children(
+        &tenant_id,
+        tenant.root_id,
+        ObjectKind::File,
+        &["later.txt".to_owned()],
+    )
+    .await?;
+    assert_eq!(
+        uncached.lookup(workspaces[2], "later.txt").await?.kind,
+        Kind::File
+    );
+    // The missing name is served from the cache until it expires.
+    assert_eq!(
+        cached.lookup(workspaces[0], "later.txt").await,
+        Err(Errno::ENOENT)
+    );
+    tokio::time::sleep(short.cache_ttl()).await;
+    assert_eq!(
+        expiring.lookup(workspaces[1], "later.txt").await?.kind,
+        Kind::File
+    );
     Ok(())
 }
