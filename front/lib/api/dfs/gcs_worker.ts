@@ -82,7 +82,7 @@ export async function runGcsReplicationWorker({
   let failure: Error | undefined;
 
   return new Promise<Result<void, Error>>((resolve) => {
-    async function close(error?: Error): Promise<void> {
+    const close = async (error?: Error): Promise<void> => {
       failure ??= error;
       if (closing) {
         return;
@@ -115,9 +115,9 @@ export async function runGcsReplicationWorker({
         "GCS replication worker stopped."
       );
       resolve(failure ? new Err(failure) : new Ok(undefined));
-    }
+    };
 
-    async function handleMessage(message: Message): Promise<void> {
+    const handleMessage = async (message: Message): Promise<void> => {
       activeHandoffs++;
       try {
         const parsed = parseGcsReplicationNotification(message, source);
@@ -135,7 +135,7 @@ export async function runGcsReplicationWorker({
           );
           const enabled = await auth.hasFeatureFlag("dfs_gcs_replication");
           if (enabled && !processing.signal.aborted) {
-            const handedOff = await launchGcsReplicationWorkflow(
+            const handedOffRes = await launchGcsReplicationWorkflow(
               {
                 workspaceId: parsed.value.destination.workspaceId,
                 bucket: parsed.value.metadata.bucket,
@@ -143,9 +143,9 @@ export async function runGcsReplicationWorker({
               },
               processing.signal
             );
-            if (handedOff.isErr()) {
+            if (handedOffRes.isErr()) {
               logger.warn(
-                { error: handedOff.error, messageId: message.id },
+                { error: handedOffRes.error, messageId: message.id },
                 "GCS notification handoff failed."
               );
               message.nack();
@@ -167,36 +167,36 @@ export async function runGcsReplicationWorker({
       } finally {
         activeHandoffs--;
       }
-    }
+    };
 
-    function onMessage(message: Message): void {
+    const onMessage = (message: Message): void => {
       // Keep the bound even if the SDK expires a message lease while its handoff still runs.
       if (closing || activeHandoffs >= MAX_CONCURRENT_HANDOFFS) {
         message.nack();
         return;
       }
       void handleMessage(message);
-    }
+    };
 
-    function onError(error: Error): void {
+    const onError = (error: Error): void => {
       logger.error(
         { error, subscriptionName },
         "GCS replication subscription failed."
       );
       void close(error);
-    }
+    };
 
-    function onAbort(): void {
+    const onAbort = (): void => {
       void close();
-    }
+    };
 
-    function onClose(): void {
+    const onClose = (): void => {
       if (!closing) {
         void close(
           new Error("GCS replication subscription closed unexpectedly.")
         );
       }
-    }
+    };
 
     subscription.on("error", onError);
     subscription.on("close", onClose);
