@@ -25,6 +25,7 @@ import { CodeBlock } from "@tiptap/extension-code-block";
 import { Markdown } from "@tiptap/markdown";
 import type { StarterKitOptions } from "@tiptap/starter-kit";
 import { StarterKit } from "@tiptap/starter-kit";
+import { longestStreak } from "longest-streak";
 
 /**
  * @cc [owner:tdraier,label:product] document-link-click
@@ -76,24 +77,18 @@ const starterKitOptions: Partial<StarterKitOptions> = {
 const DocumentCode = Code.extend({ excludes: COMMENT_MARK_NAME });
 
 /**
- * The shortest fence that the code it wraps cannot close: a line of at least as many of its
- * characters, indented by up to three spaces, would. Backticks, unless the info string holds one,
- * which only a tilde fence allows.
+ * The shortest fence that no run of its character in the code can close. Backticks, unless the
+ * info string holds one, which only a tilde fence allows.
  */
 const fenceFor = (code: string, language: string) => {
   const char = language.includes("`") ? "~" : "`";
-  const closingFenceCandidate = new RegExp(`^ {0,3}(${char}{3,})`, "gm");
-  const longestRun = Math.max(
-    2,
-    ...Array.from(code.matchAll(closingFenceCandidate), ([, run]) => run.length)
-  );
-  return char.repeat(longestRun + 1);
+  return char.repeat(Math.max(longestStreak(code, char) + 1, 3));
 };
 
 /**
  * @cc [owner:avervaet,label:product] document-code-block-fences
  * Every code block marked reads MUST open with its code, whatever its fence. A save MUST fence it
- * with backticks, or tildes when its info string holds a backtick, longer than any line of that
+ * with backticks, or tildes when its info string holds a backtick, longer than any run of that
  * character in the code, so it reads back the same.
  */
 const DocumentCodeBlock = CodeBlock.extend({

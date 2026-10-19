@@ -351,6 +351,11 @@ describe("loadDfm", () => {
       "````\n   ```\n````\n",
     ],
     [
+      "a backtick fence holding backticks mid-line",
+      "```\na ``` b\n```\n",
+      "````\na ``` b\n````\n",
+    ],
+    [
       "a tilde fence whose info string holds a backtick",
       "~~~js title=`demo`\ncode\n~~~\n",
       "~~~js title=`demo`\ncode\n~~~\n",
