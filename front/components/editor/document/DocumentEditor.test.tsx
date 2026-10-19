@@ -1860,16 +1860,16 @@ describe("Document Frame embeds", () => {
     const { dom } = await renderDocument(source, { renderFrame });
     expect(await within(dom).findByTitle(title)).toBeDefined();
 
-    render(
+    const preview = render(
       <DocumentEditor
-        initialContent={`${source}\n~~~\ncode\n~~~\n`}
+        initialContent={`${source}\n- [ ] todo\n`}
         renderCommentAuthorAvatar={() => null}
         renderCommentBody={(body) => <p>{body}</p>}
         resolveImageSource={NO_IMAGE_SOURCE}
         renderFrame={renderFrame}
       />
     );
-    expect(await screen.findAllByTitle(title)).toHaveLength(2);
+    expect(await within(preview.container).findByTitle(title)).toBeDefined();
   });
 
   it("keeps a Frame's props when its HTML is pasted back", async () => {
