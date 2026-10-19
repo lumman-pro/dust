@@ -9,6 +9,24 @@ It builds on the grant model of [API.md](API.md), the folder layout of [URI.md](
 authorization contract of [DOUBLE_WRITE.md](DOUBLE_WRITE.md). Decisions still open are listed at
 the end; the rest of the document assumes the recommended option for each.
 
+## Motivation
+
+**One source of truth for content access.** Access rules are spread across front today: space
+checks (`requestedSpaceIds`), the private URL setting and participant rows for conversations,
+`shareable_files` and `sharing_grants` for Frames, and pod membership. Dfs already enforces grants
+on every file operation, including from sandboxes. A second set of rules in front can disagree
+with dfs, and every new surface has to reimplement it. With dfs as the authority, front,
+sandboxes, search and browsing answer "who can see this" the same way.
+
+**Search and browsing make conversations discoverable.** Dfs will provide search
+([SEARCH.md](SEARCH.md)) and browsing (`List`, `/shared`) over everything a user can read. Today, a
+standalone conversation can be opened by any workspace member who has its link. This is
+acceptable only because nothing lets a user find a conversation they were not given: the URL acts
+as the access control. With search and browsing, everything a user can read becomes discoverable,
+so "readable by the whole workspace" would mean "searchable by the whole workspace". Users must
+not be able to discover other people's conversations, so access has to be explicit: private by
+default, and opened by a grant.
+
 ## Goals
 
 - Dfs grants on a conversation's folder decide who can view it and who can participate in it.
@@ -104,8 +122,8 @@ preferences only require View.
   to. "Workspace can view" is `r` and "workspace can participate" is `rw`.
 - **Changing a level** detaches the old grant and attaches the new one in the same
   `UpdateGrants` request, as the API requires.
-- **`/shared`.** Every conversation shared with a user through an ALLOW appears in the `/shared`
-  listing of their sandbox sessions. A workspace-wide grant makes the conversation appear for
+- **Discovery.** Every conversation shared with a user through an ALLOW appears in their `/shared`
+  listing and their search results. A workspace-wide grant makes the conversation discoverable by
   every member.
 
 ### Pod conversations
@@ -319,8 +337,8 @@ conversation exists, which the link already implies, but not its title, owner or
 Step 2 narrows access: workspace members who could open a conversation through its link without
 being participants lose access and go through the request flow. This follows the rule of
 [DOUBLE_WRITE.md](DOUBLE_WRITE.md#authorization-contract): preserve or narrow, never enlarge.
-Preserving link access would require a workspace grant on every conversation, which would list
-every conversation in every member's `/shared`.
+Preserving link access would require a workspace grant on every conversation, which would make
+every conversation searchable and browsable by every member (see [Motivation](#motivation)).
 
 ## Frames
 
@@ -352,7 +370,7 @@ The document assumes the recommended option of each decision.
    through dfs.
 4. **Migration.** Recommended: narrow link access to participants and explicit
    `workspace_members` conversations. Alternative: a workspace grant on every conversation whose
-   ceiling allows it.
+   ceiling allows it, which makes all of them discoverable.
 5. **Frames.** Recommended: after conversations, with the subjects above reserved now.
 6. **Workspace sharing with a single restricted space.** Recommended: unavailable. Alternative:
    grant that space's groups instead of the global group, which is exactly "workspace members who
