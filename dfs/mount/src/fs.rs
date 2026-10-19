@@ -1,6 +1,6 @@
 use crate::{errno::Errno, inodes::Inodes, remote::Remote};
 use dfs_protocol::{
-    ObjectId, ObjectRef, is_valid_name,
+    ObjectId, ObjectRef, READ_MAX_BYTES, is_valid_name,
     rpc::{Attr, ObjectKind},
 };
 use std::{
@@ -180,6 +180,40 @@ impl Fs {
         Ok(entries)
     }
 
+    /// Reads up to `size` bytes of the file `ino` from `offset`, fewer only at the end of the file.
+    /**
+     * @cc [owner:fontanierh,label:api] read-within-server-limit
+     * Each `Read` request `read` sends MUST ask for at most `READ_MAX_BYTES`, however large `size`
+     * is.
+     */
+    /**
+     * @cc [owner:fontanierh,label:product] read-exact-range
+     * On success, `read` MUST return the file's bytes from `offset`: `size` of them, or fewer only
+     * when the file ends first.
+     */
+    pub async fn read(&self, ino: Ino, offset: u64, size: u32) -> Result<Vec<u8>, Errno> {
+        let object = self.inodes().object(ino).ok_or(Errno::ENOENT)?;
+        let mut data = Vec::new();
+        let mut remaining = size;
+        while remaining > 0 {
+            let length = remaining.min(READ_MAX_BYTES);
+            let at = offset
+                .checked_add(data.len() as u64)
+                .ok_or(Errno::EINVAL)?;
+            let chunk = self.remote.read(object, at, length).await?.data;
+            if chunk.len() > length as usize {
+                return Err(Errno::EIO);
+            }
+            let ended = chunk.len() < length as usize;
+            data.extend_from_slice(&chunk);
+            if ended {
+                break;
+            }
+            remaining -= length;
+        }
+        Ok(data)
+    }
+
     /**
      * @cc [owner:fontanierh,label:coding] forget-counts
      * The mount MUST keep an object until the kernel has forgotten every lookup of it, and MUST
@@ -253,6 +287,7 @@ mod tests {
         assert_eq!(fs.getattr(ROOT_INO + 1).await, Err(Errno::ENOENT));
         assert_eq!(fs.lookup(ROOT_INO + 1, "a").await, Err(Errno::ENOENT));
         assert_eq!(fs.readdir(ROOT_INO + 1).await, Err(Errno::ENOENT));
+        assert_eq!(fs.read(ROOT_INO + 1, 0, 1).await, Err(Errno::ENOENT));
         assert_eq!(fs.lookup(ROOT_INO, "a").await, Err(Errno::ENOENT));
         Ok(())
     }

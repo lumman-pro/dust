@@ -2,9 +2,11 @@
 
 use dfs_mount::{Attributes, DirEntry, Errno, Fs, Ino, Kind};
 use dfs_protocol::READ_MAX_BYTES;
+use nix::fcntl::OFlag;
 use fuser::{
     AccessFlags, BsdFileFlags, Config, FileAttr, FileHandle, FileType, Filesystem, FopenFlags,
-    Generation, INodeNo, InitFlags, IoctlFlags, KernelConfig, LockOwner, MountOption, OpenFlags,
+    Generation, INodeNo, InitFlags, IoctlFlags, KernelConfig, LockOwner, MountOption, OpenAccMode,
+    OpenFlags,
     RenameFlags, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry,
     ReplyIoctl, ReplyOpen, ReplyStatfs, ReplyWrite, Request, SessionACL, TimeOrNow, WriteFlags,
 };
@@ -81,7 +83,7 @@ pub(crate) struct Adapter {
     owner: Owner,
     /// The listings `opendir` took, by file handle.
     dirs: Arc<Mutex<HashMap<u64, OpenDir>>>,
-    /// The handle number the next `opendir` hands out. Numbers are never reused.
+    /// The handle number the next `open` or `opendir` hands out. Numbers are never reused.
     next_fh: AtomicU64,
 }
 
@@ -385,24 +387,56 @@ impl Filesystem for Adapter {
     }
 
     /// Opens a file and returns a handle, which the `read`, `write`, `flush` and `release` calls on
-    /// that open file carry. Opens with direct I/O, and truncates for `O_TRUNC`.
-    fn open(&self, _req: &Request, _ino: INodeNo, _flags: OpenFlags, _reply: ReplyOpen) {
-        todo!()
+    /// that open file carry. Opens with direct I/O. Opens for reading only: writes are not supported
+    /// yet.
+    /**
+     * @cc [owner:fontanierh,label:product] read-only-opens
+     * Until writes are supported, `open` MUST fail with `EOPNOTSUPP` when it asks for write access or
+     * `O_TRUNC`, and only after the mode check, so an unreadable file stays `ENOENT`.
+     */
+    fn open(&self, _req: &Request, ino: INodeNo, flags: OpenFlags, reply: ReplyOpen) {
+        let mask = match flags.acc_mode() {
+            OpenAccMode::O_RDONLY => AccessFlags::R_OK,
+            OpenAccMode::O_WRONLY => AccessFlags::W_OK,
+            OpenAccMode::O_RDWR => AccessFlags::R_OK | AccessFlags::W_OK,
+        };
+        let writes = mask.contains(AccessFlags::W_OK) || flags.0 & OFlag::O_TRUNC.bits() != 0;
+        let fh = self.next_fh.fetch_add(1, Ordering::Relaxed);
+        let fs = self.fs.clone();
+        self.runtime.spawn(async move {
+            let opened = async {
+                check(&fs, ino.0, mask).await?;
+                if writes {
+                    return Err(Errno::EOPNOTSUPP);
+                }
+                Ok(())
+            };
+            match opened.await {
+                Ok(()) => reply.opened(FileHandle(fh), FopenFlags::FOPEN_DIRECT_IO),
+                Err(e) => reply.error(errno(e)),
+            }
+        });
     }
 
     /// Returns the bytes of a file from `offset`: `size` of them, or fewer at the end of the file.
     fn read(
         &self,
         _req: &Request,
-        _ino: INodeNo,
+        ino: INodeNo,
         _fh: FileHandle,
-        _offset: u64,
-        _size: u32,
+        offset: u64,
+        size: u32,
         _flags: OpenFlags,
         _lock_owner: Option<LockOwner>,
-        _reply: ReplyData,
+        reply: ReplyData,
     ) {
-        todo!()
+        let fs = self.fs.clone();
+        self.runtime.spawn(async move {
+            match fs.read(ino.0, offset, size).await {
+                Ok(data) => reply.data(&data),
+                Err(e) => reply.error(errno(e)),
+            }
+        });
     }
 
     /// Writes `data` into a file at `offset`, and returns how many bytes it wrote.
@@ -424,19 +458,27 @@ impl Filesystem for Adapter {
     /// Runs on each `close` of a file descriptor. Several descriptors can share an open file (after
     /// `dup` or `fork`), so this does not end it. Succeeds without waiting for the server: `fsync`
     /// is the durability barrier.
+    /**
+     * @cc [owner:fontanierh,label:performance] flush-never-waits
+     * `flush` MUST reply without waiting for the server.
+     */
     fn flush(
         &self,
         _req: &Request,
         _ino: INodeNo,
         _fh: FileHandle,
         _lock_owner: LockOwner,
-        _reply: ReplyEmpty,
+        reply: ReplyEmpty,
     ) {
-        todo!()
+        reply.ok();
     }
 
     /// Ends an open file once its last descriptor is closed, freeing the handle `open` returned.
     /// Hands the file's buffered writes to the write log, without waiting for the server.
+    /**
+     * @cc [owner:fontanierh,label:performance] release-never-waits
+     * `release` MUST reply without waiting for the server.
+     */
     fn release(
         &self,
         _req: &Request,
@@ -445,9 +487,9 @@ impl Filesystem for Adapter {
         _flags: OpenFlags,
         _lock_owner: Option<LockOwner>,
         _flush: bool,
-        _reply: ReplyEmpty,
+        reply: ReplyEmpty,
     ) {
-        todo!()
+        reply.ok();
     }
 
     /// Makes changes durable, for `fsync` and `fdatasync`. Waits until every change acknowledged
@@ -459,9 +501,10 @@ impl Filesystem for Adapter {
         _ino: INodeNo,
         _fh: FileHandle,
         _datasync: bool,
-        _reply: ReplyEmpty,
+        reply: ReplyEmpty,
     ) {
-        todo!()
+        // Nothing is written yet, so there is nothing to wait for.
+        reply.ok();
     }
 
     /// Opens a directory and returns a handle, which the `readdir` and `releasedir` calls on that
@@ -548,9 +591,10 @@ impl Filesystem for Adapter {
         _ino: INodeNo,
         _fh: FileHandle,
         _datasync: bool,
-        _reply: ReplyEmpty,
+        reply: ReplyEmpty,
     ) {
-        todo!()
+        // Nothing is written yet, so there is nothing to wait for.
+        reply.ok();
     }
 
     /// Returns the filesystem's size and free space, for `statfs` and `df`. Reports plenty of free

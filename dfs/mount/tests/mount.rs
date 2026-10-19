@@ -72,7 +72,8 @@ fn mount() -> Result<()> {
         root_looks_up_readable_folders(&channel, &tenant).await?;
         list_returns_every_page(&channel, &tenant).await?;
         apply_returns_one_ordered_result_per_operation(&channel, &tenant).await?;
-        read_files_returns_one_ordered_result_per_object(&channel, &tenant).await
+        read_files_returns_one_ordered_result_per_object(&channel, &tenant).await?;
+        files_read_in_ranges(&channel, &tenant).await
     })
 }
 
@@ -574,5 +575,55 @@ async fn read_files_returns_one_ordered_result_per_object(
     assert!(remote.read_files(&[]).await?.is_empty());
     let too_many = vec![tenant.file_id; READ_FILES_MAX_OBJECTS + 1];
     assert_eq!(remote.read_files(&too_many).await, Err(Errno::EINVAL));
+    Ok(())
+}
+
+async fn files_read_in_ranges(channel: &Channel, tenant: &Tenant) -> Result<()> {
+    let remote = tenant.remote(channel).await?;
+    // A file one `Read` request cannot hold. Never written, so it reads as zeros.
+    let tenant_id = remote.current_session().await?.tenant_id;
+    let tx = fdb::database()?.create_trx()?;
+    let resource = TenantResource::fetch(&tx, &tenant_id)
+        .await?
+        .context("missing tenant")?;
+    let mut sparse = ObjectResource::new_root(&resource)?;
+    sparse.object_id = ObjectId::new_v7();
+    sparse.parent_id = Some(tenant.root_id);
+    sparse.name = "sparse.bin".to_owned();
+    sparse.kind = ObjectKind::File;
+    sparse.size = u64::from(READ_MAX_BYTES) + 2;
+    sparse.create(&tx, &[]).await?;
+    tx.commit().await?;
+
+    // The mount does not look up names in dfs directories yet, so files get inode numbers as
+    // folders: in order, after the root.
+    let fs = Fs::new(
+        remote,
+        vec![
+            folder("report", tenant.file_id),
+            folder("sparse", sparse.object_id),
+            folder("secret", tenant.unreadable_id),
+            folder("workspace", tenant.root_id),
+        ],
+    )?;
+    let [report, sparse, secret, workspace] = [1, 2, 3, 4].map(|index| ROOT_INO + index);
+    assert_eq!(fs.getattr(report).await?.kind, Kind::File);
+
+    assert_eq!(fs.read(report, 1, 3).await?, &FILE_CONTENT[1..4]);
+    // Reads stop at the end of the file.
+    assert_eq!(fs.read(report, 2, 10).await?, &FILE_CONTENT[2..]);
+    let end = FILE_CONTENT.len() as u64;
+    assert!(fs.read(report, end, 10).await?.is_empty());
+
+    // Larger than one `Read` request: the rest of the file, all of it.
+    let rest = READ_MAX_BYTES as usize + 1;
+    let data = fs.read(sparse, 1, READ_MAX_BYTES + 1).await?;
+    assert_eq!(data.len(), rest);
+    assert!(data.iter().all(|byte| *byte == 0));
+    assert_eq!(fs.read(sparse, 1, READ_MAX_BYTES + 5).await?.len(), rest);
+
+    // An object the session cannot read looks missing.
+    assert_eq!(fs.read(secret, 0, 1).await, Err(Errno::ENOENT));
+    assert_eq!(fs.read(workspace, 0, 1).await, Err(Errno(libc::EISDIR)));
     Ok(())
 }
