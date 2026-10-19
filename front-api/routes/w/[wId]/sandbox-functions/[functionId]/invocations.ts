@@ -53,6 +53,9 @@ const PostSandboxFunctionInvocationBodySchema = z
   .strict();
 
 // Mounted at /api/w/:wId/sandbox-functions/:functionIdOrSlug/invocations.
+// Deprecated 2026-10-19: Frame clients moved to /api/w/:wId/frames/:frameId/functions/:name/invocations
+// and /api/w/:wId/frames/:frameId/invocations/:invocationId/{events,actions}. Kept until browser
+// tabs running the previous front-spa bundle have cycled out, then deleted with the SSE route.
 const app = workspaceApp();
 
 /**

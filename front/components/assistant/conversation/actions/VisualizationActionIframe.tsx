@@ -12,7 +12,10 @@ import { getLocalTimeZone } from "@app/lib/i18n/format";
 import { useFrameFiles } from "@app/lib/swr/frame_files";
 import { getErrorFromResponse } from "@app/lib/swr/swr";
 import datadogLogger from "@app/logger/datadogLogger";
-import type { FrameFunctionReferenceScope } from "@app/types/api/frame_function_reference";
+import type {
+  FrameFunctionReference,
+  FrameFunctionReferenceScope,
+} from "@app/types/api/frame_function_reference";
 import { resolveFrameFunctionReference } from "@app/types/api/frame_function_reference";
 import type { GetFramePermissionsResponseBody } from "@app/types/api/frame_permissions";
 import type { FramePublicationTarget } from "@app/types/api/frame_publication";
@@ -260,9 +263,9 @@ export interface FrameViewer {
 
 interface SandboxFunctionInvocationProps {
   workspaceId: string;
-  functionId: string;
+  frameId: string;
   invocationId: string;
-  onBlocked: (eventId: string, event: SandboxFunctionBlockingEvent) => void;
+  onBlocked: (blockedAction: QueuedBlockingEvent) => void;
   onSettle: (
     invocationId: string,
     result: Result<unknown, SandboxFunctionCallError>
@@ -279,6 +282,7 @@ type QueuedBlockingEvent = {
   // before the resolve response returns, and that newer entry must survive the removal.
   eventId: string;
   event: SandboxFunctionBlockingEvent;
+  frameId: string;
 };
 
 // Consumes one invocation's event stream: reports the tool executions it blocks on and settles the
@@ -286,14 +290,14 @@ type QueuedBlockingEvent = {
 // every in-flight invocation.
 function SandboxFunctionInvocation({
   workspaceId,
-  functionId,
+  frameId,
   invocationId,
   onBlocked,
   onSettle,
 }: SandboxFunctionInvocationProps) {
   const buildEventSourceURL = useCallback(
     (lastEvent: string | null, polling = false) => {
-      const esURL = `/api/sse/w/${workspaceId}/sandbox-functions/${functionId}/invocations/${invocationId}/events`;
+      const esURL = `/api/sse/w/${workspaceId}/frames/${frameId}/invocations/${invocationId}/events`;
       let lastEventId = "";
       if (lastEvent) {
         const eventPayload: { eventId: string } = JSON.parse(lastEvent);
@@ -301,7 +305,7 @@ function SandboxFunctionInvocation({
       }
       return `${esURL}?lastEventId=${encodeURIComponent(lastEventId)}${polling ? "&transport=poll" : ""}`;
     },
-    [workspaceId, functionId, invocationId]
+    [workspaceId, frameId, invocationId]
   );
 
   const buildLongPollURL = useCallback(
@@ -347,7 +351,11 @@ function SandboxFunctionInvocation({
             break;
           case "tool_approve_execution":
           case "tool_personal_auth_required":
-            onBlocked(eventPayload.eventId, eventPayload.data);
+            onBlocked({
+              eventId: eventPayload.eventId,
+              event: eventPayload.data,
+              frameId,
+            });
             break;
           default:
             assertNeverAndIgnore(eventPayload.data);
@@ -364,7 +372,7 @@ function SandboxFunctionInvocation({
         );
       }
     },
-    [invocationId, onSettle, onBlocked]
+    [frameId, invocationId, onSettle, onBlocked]
   );
 
   const onTerminalError = useCallback(() => {
@@ -402,7 +410,7 @@ function SandboxFunctionBlockedAction({
   viewer,
   onResolved,
 }: SandboxFunctionBlockedActionProps) {
-  const [{ eventId, event }] = blockedActions;
+  const [{ eventId, event, frameId }] = blockedActions;
 
   let blockedActionCard: React.ReactNode;
   switch (event.type) {
@@ -411,6 +419,7 @@ function SandboxFunctionBlockedAction({
         <SandboxFunctionToolApprovalCard
           key={eventId}
           event={event}
+          frameId={frameId}
           viewer={viewer}
           onResolved={onResolved}
         />
@@ -426,6 +435,7 @@ function SandboxFunctionBlockedAction({
               (e): e is SandboxFunctionToolPersonalAuthRequiredEvent =>
                 e.type === "tool_personal_auth_required"
             )}
+          frameId={frameId}
           viewer={viewer}
           onResolved={onResolved}
         />
@@ -497,7 +507,7 @@ function useVisualizationDataHandler({
 }: {
   conversationId: string | null;
   createSandboxFunctionInvocation: (
-    functionIdOrSlug: string,
+    reference: FrameFunctionReference,
     input?: unknown
   ) => Promise<
     Result<PostSandboxFunctionInvocationResponseBody, SandboxFunctionCallError>
@@ -513,7 +523,7 @@ function useVisualizationDataHandler({
   vizIframeRef: React.MutableRefObject<HTMLIFrameElement | null>;
   resolveUserIdentity: () => Promise<UserIdentityState>;
   waitForSandboxFunctionInvocationResult: (params: {
-    functionId: string;
+    frameId: string;
     invocationId: string;
   }) => Promise<Result<unknown, SandboxFunctionCallError>>;
   workspaceId: string;
@@ -649,7 +659,7 @@ function useVisualizationDataHandler({
           const result = outcome
             ? resultFromInvocationOutcome(outcome)
             : await waitForSandboxFunctionInvocationResult({
-                functionId: invocation.functionId,
+                frameId: referenceRes.value.frameId,
                 invocationId: invocation.sId,
               });
 
@@ -868,7 +878,7 @@ export const VisualizationActionIframe = forwardRef<
   // SandboxFunctionInvocation; the resolver of the pending `callFunction` promise is kept
   // in a ref so settling stays a pure state update.
   const [activeInvocations, setActiveInvocations] = useState<
-    { functionId: string; invocationId: string }[]
+    { frameId: string; invocationId: string }[]
   >([]);
   const invocationResolversRef = useRef<Map<
     string,
@@ -884,22 +894,18 @@ export const VisualizationActionIframe = forwardRef<
     []
   );
 
-  const enqueueBlockedAction = useCallback(
-    (eventId: string, event: SandboxFunctionBlockingEvent) => {
-      setBlockedActions((prev) => {
-        // The stream can re-deliver or supersede an event after a reconnect or a resolution:
-        // replace by actionId, keeping the newest delivery.
-        const existingIndex = prev.findIndex(
-          (a) => a.event.actionId === event.actionId
-        );
-        const entry = { eventId, event };
-        return existingIndex === -1
-          ? [...prev, entry]
-          : prev.map((a, index) => (index === existingIndex ? entry : a));
-      });
-    },
-    []
-  );
+  const enqueueBlockedAction = useCallback((entry: QueuedBlockingEvent) => {
+    setBlockedActions((prev) => {
+      // The stream can re-deliver or supersede an event after a reconnect or a resolution:
+      // replace by actionId, keeping the newest delivery.
+      const existingIndex = prev.findIndex(
+        (a) => a.event.actionId === entry.event.actionId
+      );
+      return existingIndex === -1
+        ? [...prev, entry]
+        : prev.map((a, index) => (index === existingIndex ? entry : a));
+    });
+  }, []);
 
   const removeBlockedActions = useCallback(
     (resolved: QueuedBlockingEvent[]) => {
@@ -912,16 +918,10 @@ export const VisualizationActionIframe = forwardRef<
   );
 
   const waitForSandboxFunctionInvocationResult = useCallback(
-    ({
-      functionId,
-      invocationId,
-    }: {
-      functionId: string;
-      invocationId: string;
-    }) =>
+    ({ frameId, invocationId }: { frameId: string; invocationId: string }) =>
       new Promise<Result<unknown, SandboxFunctionCallError>>((resolve) => {
         invocationResolvers.set(invocationId, resolve);
-        setActiveInvocations((prev) => [...prev, { functionId, invocationId }]);
+        setActiveInvocations((prev) => [...prev, { frameId, invocationId }]);
       }),
     [invocationResolvers]
   );
@@ -1013,7 +1013,7 @@ export const VisualizationActionIframe = forwardRef<
 
   const createSandboxFunctionInvocation = useCallback(
     async (
-      functionIdOrSlug: string,
+      { frameId, functionName }: FrameFunctionReference,
       input?: unknown
     ): Promise<
       Result<
@@ -1039,9 +1039,8 @@ export const VisualizationActionIframe = forwardRef<
           target: props.functionTarget,
         };
 
-        const encodedFunctionIdOrSlug = encodeURIComponent(functionIdOrSlug);
         const response = await clientFetch(
-          `/api/w/${workspaceId}/sandbox-functions/${encodedFunctionIdOrSlug}/invocations`,
+          `/api/w/${workspaceId}/frames/${frameId}/functions/${functionName}/invocations`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1193,7 +1192,7 @@ export const VisualizationActionIframe = forwardRef<
         <SandboxFunctionInvocation
           key={invocation.invocationId}
           workspaceId={workspaceId}
-          functionId={invocation.functionId}
+          frameId={invocation.frameId}
           invocationId={invocation.invocationId}
           onBlocked={enqueueBlockedAction}
           onSettle={settleSandboxFunctionInvocation}

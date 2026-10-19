@@ -45,7 +45,7 @@ type ToolActionContext =
     }
   | {
       contextType: "sandbox_function";
-      sandboxFunctionId: string;
+      frameId: string;
       invocationId: string;
     };
 
@@ -60,7 +60,7 @@ type ResolveAuthenticationRequest =
     }
   | {
       contextType: "sandbox_function";
-      sandboxFunctionId: string;
+      frameId: string;
       invocationId: string;
       actionId: string;
       outcome: ResolveAuthenticationOutcome;
@@ -91,7 +91,7 @@ function getResolveAuthenticationRequest(
       };
     case "sandbox_function":
       return {
-        url: `/api/w/${workspaceId}/sandbox-functions/${request.sandboxFunctionId}/invocations/${request.invocationId}/actions/${request.actionId}/resolve-authentication`,
+        url: `/api/w/${workspaceId}/frames/${request.frameId}/invocations/${request.invocationId}/actions/${request.actionId}/resolve-authentication`,
         body: { outcome: request.outcome },
       };
     default:
@@ -129,7 +129,7 @@ function getValidateActionRequest(
       };
     case "sandbox_function":
       return {
-        url: `/api/w/${workspaceId}/sandbox-functions/${request.sandboxFunctionId}/invocations/${request.invocationId}/actions/${request.actionId}/validate-action`,
+        url: `/api/w/${workspaceId}/frames/${request.frameId}/invocations/${request.invocationId}/actions/${request.actionId}/validate-action`,
         body: { approved: request.approved },
       };
     default:

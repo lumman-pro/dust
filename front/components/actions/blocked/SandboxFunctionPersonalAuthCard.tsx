@@ -8,6 +8,8 @@ interface SandboxFunctionPersonalAuthCardProps {
   // Every invocation blocked on this MCP server: one trip through the authentication flow resolves
   // them all, so they must not be presented (and resolved) one card at a time.
   events: SandboxFunctionToolPersonalAuthRequiredEvent[];
+  // The Frame whose function invocations the events belong to.
+  frameId: string;
   // Viewer context is passed in: shared frames render this card outside of any AuthProvider.
   viewer: FrameViewer;
   onResolved: () => void;
@@ -15,6 +17,7 @@ interface SandboxFunctionPersonalAuthCardProps {
 
 export function SandboxFunctionPersonalAuthCard({
   events,
+  frameId,
   viewer,
   onResolved,
 }: SandboxFunctionPersonalAuthCardProps) {
@@ -30,7 +33,7 @@ export function SandboxFunctionPersonalAuthCard({
     for (const event of events) {
       const result = await resolveAuthentication({
         contextType: "sandbox_function",
-        sandboxFunctionId: event.sandboxFunctionId,
+        frameId,
         invocationId: event.invocationId,
         actionId: event.actionId,
         outcome,

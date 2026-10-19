@@ -109,6 +109,7 @@ describe("SandboxFunctionPersonalAuthCard", () => {
     render(
       <SandboxFunctionPersonalAuthCard
         events={[makeEvent("sfi_1", "sfa_1")]}
+        frameId="fil_1"
         viewer={viewer}
         onResolved={vi.fn()}
       />
@@ -135,6 +136,7 @@ describe("SandboxFunctionPersonalAuthCard", () => {
     render(
       <SandboxFunctionPersonalAuthCard
         events={[makeEvent("sfi_1", "sfa_1"), makeEvent("sfi_2", "sfa_2")]}
+        frameId="fil_1"
         viewer={viewer}
         onResolved={onResolved}
       />
@@ -145,7 +147,11 @@ describe("SandboxFunctionPersonalAuthCard", () => {
     expect(createPersonalConnectionMock).toHaveBeenCalledTimes(1);
     expect(resolveAuthenticationMock).toHaveBeenCalledTimes(2);
     expect(resolveAuthenticationMock).toHaveBeenCalledWith(
-      expect.objectContaining({ invocationId: "sfi_1", actionId: "sfa_1" })
+      expect.objectContaining({
+        frameId: "fil_1",
+        invocationId: "sfi_1",
+        actionId: "sfa_1",
+      })
     );
     expect(resolveAuthenticationMock).toHaveBeenCalledWith(
       expect.objectContaining({ invocationId: "sfi_2", actionId: "sfa_2" })

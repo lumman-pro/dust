@@ -469,7 +469,7 @@ describe("VisualizationActionIframe", () => {
 
     await waitFor(() => {
       expect(mocks.clientFetch).toHaveBeenCalledWith(
-        "/api/w/w_current/sandbox-functions/fil_frame%2Flist-comments/invocations",
+        "/api/w/w_current/frames/fil_frame/functions/list-comments/invocations",
         expect.objectContaining({ method: "POST" })
       );
     });

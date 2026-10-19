@@ -2,9 +2,8 @@ import {
   getSandboxFunctionInvocationEvents,
   getSandboxFunctionInvocationEventsBatch,
 } from "@app/lib/api/sandbox_functions/events";
+import { resolveFrameFunctionInvocationForUse } from "@app/lib/api/sandbox_functions/frame_share_capability";
 import type { Authenticator } from "@app/lib/auth";
-import { FileResource } from "@app/lib/resources/file_resource";
-import { SandboxFunctionResource } from "@app/lib/resources/sandbox_function_resource";
 import { pollEvents } from "@front-api/lib/api/sse/poll_events";
 import { streamEvents } from "@front-api/lib/api/sse/stream_events";
 import type { Context } from "hono";
@@ -29,15 +28,10 @@ export async function streamFrameFunctionInvocationEventsForRoute(
   },
   transport: "sse" | "poll" = "sse"
 ) {
-  const frame = await FileResource.fetchById(auth, frameId);
-  if (!frame?.isFrameV2 || !(await frame.canCurrentUserUseFrame(auth))) {
-    return ctx.notFound();
-  }
-
-  const invocation = await SandboxFunctionResource.fetchInvocationByFrameAndId(
-    auth,
-    { frame, invocationId }
-  );
+  const invocation = await resolveFrameFunctionInvocationForUse(auth, {
+    frameId,
+    invocationId,
+  });
   if (!invocation) {
     return ctx.notFound();
   }

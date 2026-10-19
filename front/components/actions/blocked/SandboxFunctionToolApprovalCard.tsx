@@ -8,6 +8,8 @@ import { useState } from "react";
 
 interface SandboxFunctionToolApprovalCardProps {
   event: SandboxFunctionMCPApproveExecutionEvent;
+  // The Frame whose function invocation the action belongs to.
+  frameId: string;
   // Viewer context is passed in: shared frames render this card outside of any AuthProvider.
   viewer: FrameViewer;
   onResolved: () => void;
@@ -15,6 +17,7 @@ interface SandboxFunctionToolApprovalCardProps {
 
 export function SandboxFunctionToolApprovalCard({
   event,
+  frameId,
   viewer,
   onResolved,
 }: SandboxFunctionToolApprovalCardProps) {
@@ -32,7 +35,7 @@ export function SandboxFunctionToolApprovalCard({
 
     const result = await validateAction({
       contextType: "sandbox_function",
-      sandboxFunctionId: event.sandboxFunctionId,
+      frameId,
       invocationId: event.invocationId,
       actionId: event.actionId,
       approved,

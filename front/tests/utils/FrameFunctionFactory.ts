@@ -1,9 +1,10 @@
 import { createFrameSession } from "@app/lib/api/share/frame_session";
 import type { Authenticator } from "@app/lib/auth";
 import type { FileResource } from "@app/lib/resources/file_resource";
+import { InternalMCPServerInMemoryResource } from "@app/lib/resources/internal_mcp_server_in_memory_resource";
 import { SandboxFunctionInvocationResource } from "@app/lib/resources/sandbox_function_invocation_resource";
 import { SandboxFunctionResource } from "@app/lib/resources/sandbox_function_resource";
-import type { SpaceResource } from "@app/lib/resources/space_resource";
+import { SpaceResource } from "@app/lib/resources/space_resource";
 import { withTransaction } from "@app/lib/utils/sql_utils";
 import { ConversationFactory } from "@app/tests/utils/ConversationFactory";
 import { FeatureFlagFactory } from "@app/tests/utils/FeatureFlagFactory";
@@ -11,6 +12,9 @@ import { FileFactory } from "@app/tests/utils/FileFactory";
 import { createPokeApiMockRequest } from "@app/tests/utils/generic_poke_api_tests";
 import { createPrivateApiMockRequest } from "@app/tests/utils/generic_private_api_tests";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
+import { GroupFactory } from "@app/tests/utils/GroupFactory";
+import { MCPServerViewFactory } from "@app/tests/utils/MCPServerViewFactory";
+import { SandboxFunctionMCPActionFactory } from "@app/tests/utils/SandboxFunctionMCPActionFactory";
 import { SpaceFactory } from "@app/tests/utils/SpaceFactory";
 import { FRAME_MANIFEST_FILE } from "@app/types/api/frame_manifest";
 import type {
@@ -421,4 +425,41 @@ export async function makeTestFrameInvocation({
   );
 
   return { ...setup, invocation };
+}
+
+// An invocation of the caller's own, with one tool action blocked on user input.
+export async function makeTestFrameBlockedAction({
+  blockedStatus = "blocked_validation_required",
+}: {
+  blockedStatus?:
+    | "blocked_validation_required"
+    | "blocked_authentication_required";
+} = {}) {
+  const setup = await makeTestFrameInvocation();
+  const { adminAuth, invocation, space, workspace } = setup;
+
+  const { globalGroup, systemGroup } = await GroupFactory.defaults(workspace);
+  await SpaceResource.makeDefaultsForWorkspace(adminAuth, {
+    globalGroup,
+    systemGroup,
+  });
+  const server = await InternalMCPServerInMemoryResource.makeNew(adminAuth, {
+    name: "common_utilities",
+    useCase: null,
+  });
+  const view = await MCPServerViewFactory.create(workspace, server.id, space);
+  const action = await SandboxFunctionMCPActionFactory.create(adminAuth, {
+    invocation,
+    mcpServerView: view,
+    permission: "high",
+  });
+  const [blockedCount] = await action.updateStatusFromExpected(adminAuth, {
+    status: blockedStatus,
+    expectedStatus: "running",
+  });
+  if (blockedCount !== 1) {
+    throw new Error("Expected the action to be blocked.");
+  }
+
+  return { ...setup, action };
 }

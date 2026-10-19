@@ -2,6 +2,7 @@ import { canWriteFrameV2Source } from "@app/lib/api/frames/permissions";
 import type { Authenticator } from "@app/lib/auth";
 import { getFeatureFlags } from "@app/lib/auth";
 import { FileResource } from "@app/lib/resources/file_resource";
+import type { SandboxFunctionInvocationResource } from "@app/lib/resources/sandbox_function_invocation_resource";
 import { SandboxFunctionResource } from "@app/lib/resources/sandbox_function_resource";
 import { isResourceSId } from "@app/lib/resources/string_ids";
 import type { FramePublicationTarget } from "@app/types/api/frame_publication";
@@ -23,9 +24,9 @@ import { isFramesV2FunctionsEnabled } from "@app/types/shared/feature_flags";
  * A draft publication's functions MUST resolve only when the caller asks for `target: "latest"`
  * and can write the Frame's source (`canWriteFrameV2Source`). A caller who cannot write the Frame
  * and asks for `latest` MUST be served the live publication, as must every `live` caller. The one
- * exception is `allowInactiveFramePublication` resolution, used only to act on an existing
- * invocation: it may resolve any publication because invocation reads are scoped to the caller's
- * own invocations.
+ * exception is acting on an existing invocation (`allowInactiveFramePublication` here, or
+ * `resolveFrameFunctionInvocationForUse`): it may resolve any publication because invocation reads
+ * are scoped to the caller's own invocations.
  */
 export async function resolveSandboxFunctionWithCapability(
   auth: Authenticator,
@@ -132,6 +133,42 @@ export async function resolveActiveFrameFunctionForUse(
     });
   return resolveFrameV2FunctionAccess(auth, sandboxFunction, {
     publication: servedTarget,
+  });
+}
+
+/**
+ * @cc [owner:davidebbo,label:product;security] frame-functions-require-feature
+ * Frame function resolution MUST return null unless Frame functions are enabled for the workspace
+ * (see isFramesV2FunctionsEnabled), whatever publication or sharing state the Frame is in.
+ */
+/**
+ * @cc [owner:davidebbo,label:security] frame-invocation-requires-frame-use
+ * MUST return null unless the caller can use the Frame (`canCurrentUserUseFrame`) and the
+ * invocation ran a function of that Frame and is visible to the caller under the default viewer
+ * access of `SandboxFunctionInvocationResource`. Any publication of the Frame may match: the
+ * invocation already exists, so draft or superseded publications are not a reason to refuse it.
+ */
+/** Resolve an existing invocation of one of a Frame's functions, for its events and actions. */
+export async function resolveFrameFunctionInvocationForUse(
+  auth: Authenticator,
+  { frameId, invocationId }: { frameId: string; invocationId: string }
+): Promise<SandboxFunctionInvocationResource | null> {
+  const featureFlags = await getFeatureFlags(auth);
+  if (
+    !isFramesV2FunctionsEnabled(featureFlags) ||
+    !isResourceSId("file", frameId)
+  ) {
+    return null;
+  }
+
+  const frame = await FileResource.fetchById(auth, frameId);
+  if (!frame?.isFrameV2 || !(await frame.canCurrentUserUseFrame(auth))) {
+    return null;
+  }
+
+  return SandboxFunctionResource.fetchInvocationByFrameAndId(auth, {
+    frame,
+    invocationId,
   });
 }
 
