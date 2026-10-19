@@ -102,7 +102,9 @@ const DocumentCodeBlock = CodeBlock.extend({
     const language = node.attrs?.language || "";
     const code = node.content ? helpers.renderChildren(node.content) : "";
     const fence = fenceFor(code, language);
-    return `${fence}${language}\n${code}\n${fence}`;
+    // An info string starting with the fence character would lengthen the fence instead.
+    const info = language.startsWith(fence[0]) ? ` ${language}` : language;
+    return `${fence}${info}\n${code}\n${fence}`;
   },
 });
 

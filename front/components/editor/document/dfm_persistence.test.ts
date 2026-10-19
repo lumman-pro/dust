@@ -365,6 +365,11 @@ describe("loadDfm", () => {
       "~~~~js title=`demo`\n~~~\n~~~~\n",
       "~~~~js title=`demo`\n~~~\n~~~~\n",
     ],
+    [
+      "a tilde fence whose info string starts with a tilde",
+      "~~~ ~js`demo`\ncode\n~~~\n",
+      "~~~ ~js`demo`\ncode\n~~~\n",
+    ],
   ])("opens %s and saves it with a longer fence", (_, source, saved) => {
     expect(roundTrip(source)).toBe(saved);
   });
