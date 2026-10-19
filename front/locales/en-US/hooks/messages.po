@@ -133,6 +133,22 @@ msgstr "The feedback has been marked as seen."
 msgid "The feedback has been marked as unseen."
 msgstr "The feedback has been marked as unseen."
 
+#: front/hooks/useDocumentHistory.ts
+msgid "Failed to take a snapshot"
+msgstr "Failed to take a snapshot"
+
+#: front/hooks/useDocumentHistory.ts
+msgid "Snapshot taken"
+msgstr "Snapshot taken"
+
+#: front/hooks/useDocumentHistory.ts
+msgid "Failed to read the snapshot"
+msgstr "Failed to read the snapshot"
+
+#: front/hooks/useDocumentHistory.ts
+msgid "Snapshot restored"
+msgstr "Snapshot restored"
+
 #: front/hooks/useDustMcpServerSettings.ts
 msgid "Failed to update the Dust MCP server settings"
 msgstr "Failed to update the Dust MCP server settings"

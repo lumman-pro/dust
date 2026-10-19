@@ -11,6 +11,7 @@ import { CollabParticipantsAvatars } from "@app/components/file_explorer/CollabP
 import { CommentAuthorAvatar } from "@app/components/file_explorer/CommentAuthorAvatar";
 import { CommentBodyMarkdown } from "@app/components/file_explorer/CommentBodyMarkdown";
 import { DocumentFrameEmbed } from "@app/components/file_explorer/DocumentFrameEmbed";
+import { DocumentHistoryControls } from "@app/components/file_explorer/DocumentHistoryControls";
 import type { MarkdownFilePreviewViewMode } from "@app/components/file_explorer/MarkdownFilePreview";
 import { MarkdownFilePreview } from "@app/components/file_explorer/MarkdownFilePreview";
 import { PDFViewer } from "@app/components/file_explorer/PDFViewer";
@@ -450,6 +451,7 @@ function RichMarkdownDocument({
 
   return (
     <FilePreviewProvider owner={owner} keepCurrentPanel>
+      <DocumentHistoryControls owner={owner} canonicalPath={editor.path} />
       <DocumentEditor
         initialContent={editor.initialContent}
         headerControlsContainer={headerControlsContainer}

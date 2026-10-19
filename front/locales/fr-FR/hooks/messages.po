@@ -133,6 +133,22 @@ msgstr "Le retour a été marqué comme vu."
 msgid "The feedback has been marked as unseen."
 msgstr "Le retour a été marqué comme non vu."
 
+#: front/hooks/useDocumentHistory.ts
+msgid "Failed to take a snapshot"
+msgstr "Impossible de prendre un instantané"
+
+#: front/hooks/useDocumentHistory.ts
+msgid "Snapshot taken"
+msgstr "Instantané pris"
+
+#: front/hooks/useDocumentHistory.ts
+msgid "Failed to read the snapshot"
+msgstr "Impossible de lire l’instantané"
+
+#: front/hooks/useDocumentHistory.ts
+msgid "Snapshot restored"
+msgstr "Instantané restauré"
+
 #: front/hooks/useDustMcpServerSettings.ts
 msgid "Failed to update the Dust MCP server settings"
 msgstr "Impossible de mettre à jour les paramètres du serveur MCP Dust"

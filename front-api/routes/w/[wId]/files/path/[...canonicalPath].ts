@@ -8,6 +8,10 @@ import {
   validateMarkdownCommentsForWrite,
 } from "@app/lib/api/documents/comment_signatures";
 import { writeFileContentThroughCollabSession } from "@app/lib/api/documents/file_api_write";
+import {
+  listDocumentSnapshots,
+  snapshotDocument,
+} from "@app/lib/api/documents/history";
 import { DustFileSystem } from "@app/lib/api/file_system/dust_file_system";
 import {
   convertCanonicalFileToPdf,
@@ -34,7 +38,12 @@ import {
   MAX_ARCHIVE_UPLOAD_SIZE_BYTES,
 } from "@app/lib/api/files/folder_extract";
 import { requestDustProjectIncrementalSyncForScopedPath } from "@app/lib/api/projects/request_incremental_sync";
-import type { PostExtractArchiveResponseBody } from "@app/types/api/file_system/types";
+import { hasFeatureFlag } from "@app/lib/auth";
+import type {
+  GetDocumentSnapshotsResponseBody,
+  PostDocumentSnapshotResponseBody,
+  PostExtractArchiveResponseBody,
+} from "@app/types/api/file_system/types";
 import type { APIErrorWithContentfulStatusCode } from "@app/types/error";
 import type { DustFileSystemError } from "@app/types/file_system";
 import {
@@ -130,6 +139,20 @@ const putBodyLimit = honoBodyLimit({
   maxSize: WRITE_CANONICAL_FILE_CONTENT_MAX_BYTES,
   onError: putContentTooLargeError,
 });
+
+// Document history is part of co-edition, behind its flag.
+async function coEditionDisabledError(ctx: Context<WorkspaceAwareCtx>) {
+  if (await hasFeatureFlag(ctx.get("auth"), "co_edition")) {
+    return null;
+  }
+  return apiError(ctx, {
+    status_code: 403,
+    api_error: {
+      type: "workspace_auth_error",
+      message: "The co_edition feature is not enabled.",
+    },
+  });
+}
 
 /** Resolve and validate the canonical path from the URL, returning an error response if invalid. */
 async function resolveFs(
@@ -304,6 +327,19 @@ app.get("/:canonicalPath{.+}", validate("param", ParamsSchema), async (ctx) => {
   const { fs: dustFs, err } = await resolveFs(ctx, canonicalPath);
   if (err) {
     return err;
+  }
+
+  if (ctx.req.query("history") === "list") {
+    const disabled = await coEditionDisabledError(ctx);
+    if (disabled) {
+      return disabled;
+    }
+    const listed = await listDocumentSnapshots(dustFs, canonicalPath);
+    if (listed.isErr()) {
+      return apiError(ctx, mapDustFsError(listed.error));
+    }
+    const body: GetDocumentSnapshotsResponseBody = { snapshots: listed.value };
+    return ctx.json(body);
   }
 
   const thumbnail = ctx.req.query("thumbnail");
@@ -683,12 +719,32 @@ app.post(
     const auth = ctx.get("auth");
     const { canonicalPath } = ctx.req.valid("param");
 
+    if (ctx.req.query("action") === "snapshot") {
+      const disabled = await coEditionDisabledError(ctx);
+      if (disabled) {
+        return disabled;
+      }
+      const { fs: dustFs, err } = await resolveFs(ctx, canonicalPath);
+      if (err) {
+        return err;
+      }
+      const snapshot = await snapshotDocument(dustFs, canonicalPath);
+      if (snapshot.isErr()) {
+        return apiError(ctx, mapDustFsError(snapshot.error));
+      }
+      const body: PostDocumentSnapshotResponseBody = {
+        snapshot: snapshot.value,
+      };
+      return ctx.json(body);
+    }
+
     if (ctx.req.query("action") !== "extract") {
       return apiError(ctx, {
         status_code: 400,
         api_error: {
           type: "invalid_request_error",
-          message: "Unsupported action: expected `?action=extract`.",
+          message:
+            "Unsupported action: expected `?action=extract` or `?action=snapshot`.",
         },
       });
     }

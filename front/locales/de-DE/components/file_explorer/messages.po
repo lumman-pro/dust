@@ -21,6 +21,30 @@ msgstr "Dieser Editor für Markdown-Dateien ist eine instabile Alpha-Version der
 msgid "Co-edition · Unstable alpha"
 msgstr "Co-edition · Instabile Alpha"
 
+#: front/components/file_explorer/DocumentHistoryControls.tsx
+msgid "Take snapshot"
+msgstr "Snapshot erstellen"
+
+#: front/components/file_explorer/DocumentHistoryControls.tsx
+msgid "Hide snapshots"
+msgstr "Snapshots ausblenden"
+
+#: front/components/file_explorer/DocumentHistoryControls.tsx
+msgid "Show snapshots"
+msgstr "Snapshots anzeigen"
+
+#: front/components/file_explorer/DocumentHistoryControls.tsx
+msgid "Loading…"
+msgstr "Wird geladen…"
+
+#: front/components/file_explorer/DocumentHistoryControls.tsx
+msgid "No snapshots yet."
+msgstr "Noch keine Snapshots."
+
+#: front/components/file_explorer/DocumentHistoryControls.tsx
+msgid "Restore"
+msgstr "Wiederherstellen"
+
 #: front/components/file_explorer/FileExplorer.tsx
 msgid "View source"
 msgstr "Quelle anzeigen"

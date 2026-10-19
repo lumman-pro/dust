@@ -21,6 +21,30 @@ msgstr ""
 msgid "Co-edition · Unstable alpha"
 msgstr ""
 
+#: front/components/file_explorer/DocumentHistoryControls.tsx
+msgid "Take snapshot"
+msgstr ""
+
+#: front/components/file_explorer/DocumentHistoryControls.tsx
+msgid "Hide snapshots"
+msgstr ""
+
+#: front/components/file_explorer/DocumentHistoryControls.tsx
+msgid "Show snapshots"
+msgstr ""
+
+#: front/components/file_explorer/DocumentHistoryControls.tsx
+msgid "Loading…"
+msgstr ""
+
+#: front/components/file_explorer/DocumentHistoryControls.tsx
+msgid "No snapshots yet."
+msgstr ""
+
+#: front/components/file_explorer/DocumentHistoryControls.tsx
+msgid "Restore"
+msgstr ""
+
 #: front/components/file_explorer/FileExplorer.tsx
 msgid "View source"
 msgstr ""

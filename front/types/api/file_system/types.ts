@@ -50,6 +50,15 @@ export type GetDfmCommentSigningKeyResponseBody = {
   publicKey: string | null;
 };
 
+/** Scoped paths of a doc's snapshots, newest first. */
+export type GetDocumentSnapshotsResponseBody = {
+  snapshots: string[];
+};
+
+export type PostDocumentSnapshotResponseBody = {
+  snapshot: string;
+};
+
 export type PostCollabTicketRequestBody = {
   /** Scoped path of the file opened live. */
   filePath: string;

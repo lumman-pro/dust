@@ -1574,3 +1574,91 @@ describe("PUT of a Markdown file held by a live session", () => {
     expect(readCollabSource).not.toHaveBeenCalled();
   });
 });
+
+describe("document history through Files paths", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function historyRequest(
+    workspace: { sId: string },
+    canonicalPath: string,
+    query: string,
+    init?: RequestInit
+  ) {
+    const segments = canonicalPath.split("/").map(encodeURIComponent).join("/");
+    return honoApp.request(
+      `/api/w/${workspace.sId}/files/path/${segments}${query}`,
+      init
+    );
+  }
+
+  it("refuses history without the co_edition flag", async () => {
+    const { workspace, conversation } = await setup();
+
+    const response = await historyRequest(
+      workspace,
+      `conversation-${conversation.sId}/poem.md`,
+      "?action=snapshot",
+      { method: "POST" }
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it("copies the doc into its history folder", async () => {
+    const { workspace, auth, conversation } = await setup();
+    await FeatureFlagFactory.basic(auth, "co_edition");
+    const docStoragePath = `w/${workspace.sId}/conversations/${conversation.sId}/files/poem.md`;
+    fileStorageMock.setObject(docStoragePath, "# Poem\n");
+    setExistingFiles(["/files/poem.md"]);
+
+    const response = await historyRequest(
+      workspace,
+      `conversation-${conversation.sId}/poem.md`,
+      "?action=snapshot",
+      { method: "POST" }
+    );
+
+    expect(response.status).toBe(200);
+    const { snapshot } = await response.json();
+    expect(snapshot).toMatch(
+      new RegExp(
+        `^conversation-${conversation.sId}/\\.history/poem\\.md/.+\\.md$`
+      )
+    );
+    const snapshotStoragePath = `w/${workspace.sId}/conversations/${conversation.sId}/files/${snapshot.slice(snapshot.indexOf("/") + 1)}`;
+    expect(fileStorageMock.getObject(snapshotStoragePath)).toBe("# Poem\n");
+  });
+
+  it("lists the doc's snapshots, newest first", async () => {
+    const { workspace, auth, conversation } = await setup();
+    await FeatureFlagFactory.basic(auth, "co_edition");
+    const historyStoragePath = `w/${workspace.sId}/conversations/${conversation.sId}/files/.history/poem.md`;
+    fileStorageMock.setFilesByPrefix((prefix) =>
+      prefix === `${historyStoragePath}/`
+        ? [
+            `${historyStoragePath}/2026-10-19T10-00-00-000Z.md`,
+            `${historyStoragePath}/2026-10-19T11-00-00-000Z.md`,
+          ].map((name) => ({
+            name,
+            metadata: { contentType: "text/markdown" },
+          }))
+        : []
+    );
+
+    const response = await historyRequest(
+      workspace,
+      `conversation-${conversation.sId}/poem.md`,
+      "?history=list"
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      snapshots: [
+        `conversation-${conversation.sId}/.history/poem.md/2026-10-19T11-00-00-000Z.md`,
+        `conversation-${conversation.sId}/.history/poem.md/2026-10-19T10-00-00-000Z.md`,
+      ],
+    });
+  });
+});
