@@ -24,6 +24,7 @@ class ListTransport:
     def __init__(self, pages):
         self.pages = iter(pages)
         self.page_tokens = []
+        self.prefixes = []
 
     def request(self, method, url, **kwargs):
         parsed = urlsplit(url)
@@ -33,6 +34,7 @@ class ListTransport:
         if query.get("fields") != [inventory.LIST_FIELDS]:
             raise AssertionError("The listing must request only inventory metadata")
         self.page_tokens.append(query.get("pageToken", [None])[0])
+        self.prefixes.append(query.get("prefix", [""])[0])
         payload = next(self.pages)
         response = requests.Response()
         response.request = requests.Request(method, url).prepare()
@@ -150,7 +152,7 @@ class InventoryTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "name/size"):
                 inventory.scan(client.bucket("test-bucket"), "private-uploads", ["files/w/"], 1)
 
-    def test_failed_listing_leaves_an_incomplete_report(self):
+    def test_failed_listing_can_be_retried_and_completed_results_are_preserved(self):
         transport = ListTransport([
             {"items": [{"name": "files/w/ws/f/original", "size": "100"}], "nextPageToken": "second"},
             {"error": {"code": 403, "message": "fixture access denied"}},
@@ -168,6 +170,100 @@ class InventoryTests(unittest.TestCase):
             self.assertEqual(summary["status"], "incomplete")
             self.assertNotIn("totals", summary)
             self.assertEqual(list(output_dir.glob("*.csv")), [])
+            retry_transport = ListTransport([
+                {"items": [{"name": "files/w/ws/f/original", "size": "100", "contentType": "application/pdf"}]},
+            ])
+            retry_client = storage.Client(
+                project="unit-tests", credentials=AnonymousCredentials(), _http=retry_transport,
+            )
+            arguments = [
+                "--bucket", "test-bucket", "--layout", "private-uploads",
+                "--output-dir", str(output_dir),
+            ]
+            with patch.object(storage, "Client", return_value=retry_client):
+                inventory.main(arguments)
+            completed = json.loads((output_dir / "summary.json").read_text())
+            self.assertEqual(completed["status"], "complete")
+            self.assertEqual(completed["totals"]["stored_bytes"], 100)
+            reports = {
+                path.name: path.read_bytes() for path in output_dir.iterdir()
+                if path.name != ".scan.lock"
+            }
+            with patch.object(storage, "Client") as client_factory:
+                with self.assertRaisesRegex(ValueError, "choose a new --output-dir"):
+                    inventory.main(arguments)
+                client_factory.assert_not_called()
+            self.assertEqual(reports, {
+                path.name: path.read_bytes() for path in output_dir.iterdir()
+                if path.name != ".scan.lock"
+            })
+
+    def test_workspace_scan_lists_both_exact_workspace_prefixes(self):
+        transport = ListTransport([
+            {"items": [{"name": "files/w/ws/f/original", "size": "100", "contentType": "application/pdf"}]},
+            {"items": [{"name": "w/ws/pods/p/files/report.pdf", "size": "100", "contentType": "application/pdf"}]},
+        ])
+        client = storage.Client(project="unit-tests", credentials=AnonymousCredentials(), _http=transport)
+        with tempfile.TemporaryDirectory() as directory:
+            output_dir = Path(directory) / "workspace-report"
+            with patch.object(storage, "Client", return_value=client):
+                inventory.main([
+                    "--bucket", "test-bucket", "--layout", "private-uploads",
+                    "--workspace-id", "ws", "--output-dir", str(output_dir),
+                ])
+            summary = json.loads((output_dir / "summary.json").read_text())
+        self.assertEqual(transport.prefixes, ["files/w/ws/", "w/ws/"])
+        self.assertEqual(summary["prefixes"], transport.prefixes)
+        self.assertEqual(summary["totals"]["object_count"], 2)
+
+    def test_invalid_workspace_scopes_are_rejected(self):
+        for layout, scope in [
+            ("private-uploads", ["--workspace-id", "ws", "--prefix", "w/ws/"]),
+            ("private-uploads", ["--workspace-id", "w/ws"]),
+            ("private-uploads", ["--workspace-id", ""]),
+            ("data-sources", ["--workspace-id", "ws"]),
+        ]:
+            with self.subTest(layout=layout, scope=scope):
+                with contextlib.redirect_stderr(io.StringIO()):
+                    with self.assertRaises(SystemExit) as raised:
+                        inventory.parse_args([
+                            "--bucket", "test-bucket", "--layout", layout,
+                            "--output-dir", "/tmp/unused-inventory-test", *scope,
+                        ])
+                self.assertEqual(raised.exception.code, 2)
+
+    def test_placeholder_bucket_fails_without_creating_output_or_a_client(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output_dir = Path(directory) / "new-report"
+            with patch.object(storage, "Client") as client_factory:
+                with contextlib.redirect_stderr(io.StringIO()) as errors:
+                    with self.assertRaises(SystemExit) as raised:
+                        inventory.main([
+                            "--bucket", "YOUR_PRIVATE_UPLOADS_BUCKET", "--layout", "private-uploads",
+                            "--output-dir", str(output_dir),
+                        ])
+                client_factory.assert_not_called()
+            self.assertEqual(raised.exception.code, 2)
+            self.assertIn("placeholder", errors.getvalue())
+            self.assertFalse(output_dir.exists())
+
+    def test_output_directory_retries_legacy_markers_but_protects_partial_and_active_runs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output_dir = Path(directory)
+            marker = output_dir / "summary.json"
+            marker.write_text(json.dumps({"schema_version": 1, "status": "incomplete"}))
+            with inventory.report_directory(output_dir):
+                with self.assertRaisesRegex(ValueError, "another scan"):
+                    with inventory.report_directory(output_dir):
+                        self.fail("the second scan must not start")
+            self.assertEqual(json.loads(marker.read_text())["status"], "incomplete")
+            partial = output_dir / "by-content-type.csv"
+            partial.write_text("unfinished report")
+            with self.assertRaisesRegex(ValueError, "choose a new --output-dir"):
+                with inventory.report_directory(output_dir):
+                    self.fail("partial reports must not be overwritten")
+            self.assertEqual(partial.read_text(), "unfinished report")
+            self.assertEqual(json.loads(marker.read_text())["status"], "incomplete")
 
 
 if __name__ == "__main__":

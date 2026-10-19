@@ -12,10 +12,12 @@ from __future__ import annotations
 
 import argparse
 import csv
+import fcntl
 import json
 import logging
 import re
 from collections import defaultdict
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,6 +25,7 @@ from pathlib import Path
 
 LOGGER = logging.getLogger("gcs_corpus_stats")
 DEFAULT_PAGE_SIZE = 1000
+REPORT_SCHEMA_VERSION = 1
 REQUEST_TIMEOUT_SECONDS = 60
 PROGRESS_EVERY_PAGES = 25
 LIST_FIELDS = "items(name,size,contentType,contentEncoding),nextPageToken"
@@ -251,6 +254,39 @@ def write_report(output_dir: Path, run: dict, inventory: Inventory) -> None:
     })
 
 
+@contextmanager
+def report_directory(output_dir: Path):
+    """@cc [owner:flvndvd,label:cli,label:error-handling] inventory-output-retry
+    Apart from the scan lock, only an empty directory or one containing solely
+    this script's incomplete summary MAY be reused. Completed or partial reports
+    MUST remain unchanged.
+    Concurrent scans in the same directory MUST be rejected. This CLI boundary
+    raises ValueError for these conflicts, which the CLI may report and exit.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    with (output_dir / ".scan.lock").open("a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise ValueError(f"another scan is using {output_dir}") from None
+        entries = {entry.name for entry in output_dir.iterdir()} - {".scan.lock"}
+        if entries:
+            message = f"{output_dir} already contains files, choose a new --output-dir"
+            if entries != {"summary.json"}:
+                raise ValueError(message)
+            try:
+                summary = json.loads((output_dir / "summary.json").read_text())
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                raise ValueError(message) from None
+            if (
+                not isinstance(summary, dict)
+                or summary.get("schema_version") != REPORT_SCHEMA_VERSION
+                or summary.get("status") != "incomplete"
+            ):
+                raise ValueError(message)
+        yield
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bucket", required=True, help="Bucket name without gs://")
@@ -258,19 +294,38 @@ def parse_args(argv=None):
         "--layout", required=True, choices=["private-uploads", "data-sources", "generic"],
         help="Interpret object paths using the selected repository storage layout",
     )
-    parser.add_argument(
+    scope = parser.add_mutually_exclusive_group()
+    scope.add_argument(
         "--prefix", action="append", help="Literal GCS prefix, repeatable. Default: entire bucket",
     )
-    parser.add_argument("--output-dir", type=Path, required=True, help="New local output directory")
+    scope.add_argument(
+        "--workspace-id",
+        help="Scan files/w/ID/ and w/ID/ in the private-uploads layout",
+    )
+    parser.add_argument(
+        "--output-dir", type=Path, required=True,
+        help="Local report directory, an incomplete scan without CSVs can be retried",
+    )
     parser.add_argument("--project", help="Google Cloud project for the ADC client")
     parser.add_argument("--billing-project", help="Billing project for Requester Pays buckets")
     parser.add_argument("--page-size", type=int, default=DEFAULT_PAGE_SIZE)
     args = parser.parse_args(argv)
+    if args.bucket.startswith("YOUR_"):
+        parser.error("--bucket is a placeholder, use the real bucket name for the target cell")
     if not args.bucket or "/" in args.bucket:
         parser.error("--bucket must be a bucket name without a scheme or path")
     if not 1 <= args.page_size <= DEFAULT_PAGE_SIZE:
         parser.error(f"--page-size must be between 1 and {DEFAULT_PAGE_SIZE}")
-    args.prefixes = sorted(args.prefix or [""])
+    if args.workspace_id is not None:
+        if args.layout != "private-uploads":
+            parser.error("--workspace-id requires --layout private-uploads")
+        if not args.workspace_id or any(
+            character.isspace() or character == "/" for character in args.workspace_id
+        ):
+            parser.error("--workspace-id must be a workspace ID without spaces or a path")
+        args.prefixes = [f"files/w/{args.workspace_id}/", f"w/{args.workspace_id}/"]
+    else:
+        args.prefixes = sorted(args.prefix or [""])
     for previous, current in zip(args.prefixes, args.prefixes[1:]):
         if current.startswith(previous):
             parser.error("--prefix values must not duplicate or overlap each other")
@@ -283,9 +338,8 @@ def main(argv=None) -> None:
     from google.cloud import storage
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    args.output_dir.mkdir(parents=True, exist_ok=False)
     run = {
-        "schema_version": 1,
+        "schema_version": REPORT_SCHEMA_VERSION,
         "status": "incomplete",
         "bucket": args.bucket,
         "layout": args.layout,
@@ -294,11 +348,12 @@ def main(argv=None) -> None:
         "object_versions": "live only",
         "page_size": args.page_size,
     }
-    write_json(args.output_dir / "summary.json", run)
-    with storage.Client(project=args.project) as client:
-        bucket = client.bucket(args.bucket, user_project=args.billing_project)
-        inventory = scan(bucket, args.layout, args.prefixes, args.page_size)
-    write_report(args.output_dir, run, inventory)
+    with report_directory(args.output_dir):
+        write_json(args.output_dir / "summary.json", run)
+        with storage.Client(project=args.project) as client:
+            bucket = client.bucket(args.bucket, user_project=args.billing_project)
+            inventory = scan(bucket, args.layout, args.prefixes, args.page_size)
+        write_report(args.output_dir, run, inventory)
     LOGGER.info(
         "Complete: %s objects, %s stored bytes. Reports: %s",
         inventory.totals.object_count, inventory.totals.stored_bytes, args.output_dir,
@@ -306,4 +361,8 @@ def main(argv=None) -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except (ValueError, FileExistsError) as error:
+        LOGGER.error("%s", error)
+        raise SystemExit(2) from None

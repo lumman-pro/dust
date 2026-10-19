@@ -2,25 +2,41 @@
 
 `gcs_corpus_stats.py` counts live GCS objects and their stored bytes by MIME type, storage role, and workspace or core project. It only lists metadata. It does not download content, query a database, or change GCS.
 
-Run from the repository root with Python 3.10+. Authentication uses Application Default Credentials, such as `gcloud auth application-default login`, or the machine's existing workload identity. The caller needs `storage.objects.list` on the bucket.
+Run from the repository root with Python 3.10+ on macOS or Linux. Authentication uses Application Default Credentials, such as `gcloud auth application-default login`, or the machine's existing workload identity. The caller needs `storage.objects.list` on the bucket.
 
 ```sh
 python3 -m venv /tmp/dfs-gcs-stats-venv
 /tmp/dfs-gcs-stats-venv/bin/python -m pip install 'google-cloud-storage>=3,<4'
 
-/tmp/dfs-gcs-stats-venv/bin/python dfs/design-docs/search/gcs_corpus_stats.py \
-  --bucket YOUR_PRIVATE_UPLOADS_BUCKET \
-  --layout private-uploads \
-  --prefix files/w/ --prefix w/ \
-  --output-dir /tmp/dfs-private-uploads-stats
+printf 'Private uploads bucket: '
+read -r GCS_STATS_BUCKET
+printf 'Workspace ID: '
+read -r GCS_STATS_WORKSPACE_ID
 
 /tmp/dfs-gcs-stats-venv/bin/python dfs/design-docs/search/gcs_corpus_stats.py \
-  --bucket YOUR_DATA_SOURCES_BUCKET \
+  --bucket "$GCS_STATS_BUCKET" \
+  --layout private-uploads \
+  --workspace-id "$GCS_STATS_WORKSPACE_ID" \
+  --output-dir /tmp/dfs-private-uploads-stats
+```
+
+Use the real bucket name configured by `DUST_PRIVATE_UPLOADS_BUCKET` or `DUST_DATA_SOURCES_BUCKET` in the cell being measured. Local development variables may point to test buckets. Placeholder bucket names fail before creating an output directory or connecting to GCS.
+
+`--workspace-id` scans both `files/w/ID/` for canonical uploads and `w/ID/` for mounted files and workspace state. It requires `--layout private-uploads` and cannot be combined with `--prefix`. For a custom scope, `--prefix` is repeatable, literal, and must not overlap. Omitting both scope options scans the entire bucket.
+
+For a data-source bucket, use the following command. To narrow it, add a prefix containing the core project ID and optionally the data-source internal ID. These IDs are distinct from workspace IDs.
+
+```sh
+printf 'Data-source bucket: '
+read -r GCS_STATS_DATA_SOURCE_BUCKET
+
+/tmp/dfs-gcs-stats-venv/bin/python dfs/design-docs/search/gcs_corpus_stats.py \
+  --bucket "$GCS_STATS_DATA_SOURCE_BUCKET" \
   --layout data-sources \
   --output-dir /tmp/dfs-data-source-stats
 ```
 
-Use the bucket names configured by `DUST_PRIVATE_UPLOADS_BUCKET` and `DUST_DATA_SOURCES_BUCKET` in the cell being measured. For one workspace, use `--prefix files/w/WORKSPACE_ID/ --prefix w/WORKSPACE_ID/`. For one core data source, use `--prefix CORE_PROJECT_ID/DATA_SOURCE_INTERNAL_ID/`. Prefixes are literal and must not overlap. Omitting them scans the entire bucket. Use a different output directory for each run. `--project` selects the client project, and `--billing-project` supports Requester Pays buckets.
+A failed scan can reuse its directory when it contains only an incomplete summary. Completed reports and partial CSV output require a new directory. Concurrent scans cannot write to the same directory. `--project` selects the client project, and `--billing-project` supports Requester Pays buckets.
 
 Alternatively, `uv run dfs/design-docs/search/gcs_corpus_stats.py ...` installs the dependency from the script's inline metadata.
 
