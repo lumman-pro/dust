@@ -60,7 +60,8 @@ The [mount design](MOUNT.md) describes the library behind the dfs FUSE client fo
 ## Search
 
 The [object search proposal](search/dfs-object-search-revised-design.md) defines the
-`dfs.objects` index, multilingual analysis, prefix and phrase matching, selected attribute
-projections, and future ranking features. Its linked JSON definitions and diagnostic results
-record the validated Elasticsearch 8.16 proposal. The lexer/parser and query compiler are deferred
-to the application implementation.
+`dfs.objects` index, per-cell allocation, selective English/French stemming, prefix and phrase
+matching, path-based access filtering, selected attributes, and future ranking features. Its linked
+JSON definitions and diagnostics record the Elasticsearch 8.16 checks. Language detector integration,
+object projection/indexing, authorization rechecks, and the lexer/parser/query compiler remain
+application work.

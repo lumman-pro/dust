@@ -29,25 +29,6 @@
       "dfs_french_stem": {
         "type": "stemmer",
         "language": "light_french"
-      },
-      "dfs_french_elision": {
-        "type": "elision",
-        "articles_case": true,
-        "articles": [
-          "l",
-          "m",
-          "t",
-          "qu",
-          "n",
-          "s",
-          "j",
-          "d",
-          "c",
-          "jusqu",
-          "quoiqu",
-          "lorsqu",
-          "puisqu"
-        ]
       }
     },
     "analyzer": {
@@ -74,7 +55,7 @@
         "type": "custom",
         "tokenizer": "icu_tokenizer",
         "filter": [
-          "dfs_french_elision",
+          "elision",
           "icu_folding",
           "dfs_french_stem"
         ]

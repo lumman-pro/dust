@@ -3,7 +3,7 @@ use std::{io::Write, path::PathBuf, time::Duration};
 use anyhow::{Context, Result};
 use clap::Parser;
 use dfs_api::search::{
-    IndexRegion, OBJECTS_INDEX_ALIAS, OBJECTS_INDEX_NAME, create_objects_index, objects_index_body,
+    IndexCell, OBJECTS_INDEX_ALIAS, OBJECTS_INDEX_NAME, create_objects_index, objects_index_body,
 };
 use elasticsearch::{
     Elasticsearch,
@@ -17,8 +17,8 @@ const REQUEST_TIMEOUT_SECONDS: u64 = 90;
 #[derive(Parser)]
 #[command(about = "Preview or create the DFS object search index and write alias")]
 struct Args {
-    #[arg(long, value_enum, env = "REGION")]
-    region: IndexRegion,
+    #[arg(long, value_enum, env = "CELL")]
+    cell: IndexCell,
     /// Create the index. Without this flag, print the request body without contacting Elasticsearch.
     #[arg(long)]
     execute: bool,
@@ -53,7 +53,7 @@ async fn main() -> Result<()> {
 
     if !args.execute {
         let mut stdout = std::io::stdout().lock();
-        serde_json::to_writer_pretty(&mut stdout, &objects_index_body(args.region)?)?;
+        serde_json::to_writer_pretty(&mut stdout, &objects_index_body(args.cell)?)?;
         writeln!(stdout)?;
         return Ok(());
     }
@@ -73,7 +73,7 @@ async fn main() -> Result<()> {
         transport = transport.cert_validation(CertificateValidation::Full(certificate));
     }
     let client = Elasticsearch::new(transport.build()?);
-    create_objects_index(&client, args.region).await?;
+    create_objects_index(&client, args.cell).await?;
     tracing::info!(
         index = OBJECTS_INDEX_NAME,
         alias = OBJECTS_INDEX_ALIAS,

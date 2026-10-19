@@ -10,14 +10,15 @@
     "minimum_wire_compatibility_version": "7.17.0",
     "minimum_index_compatibility_version": "7.0.0"
   },
-  "document_count": 138,
+  "document_count": 144,
   "mapping_source": "../../server/src/search/indices/objects_1.mappings.json",
-  "settings_source": "../../server/src/search/indices/objects_1.settings.us-central1.json",
+  "settings_source": "../../server/src/search/indices/objects_1.settings.cell-00000.json",
   "local_settings_changes": {
     "removed_allocation_require": true,
     "shards": 1,
     "replicas": 0
   },
+  "language_assignments": "explicit fixtures, not detector predictions",
   "checks": [
     {
       "label": "prefix matches filename, content, and selected xattr",
@@ -55,6 +56,7 @@
         "draft",
         "supplementary",
         "folder",
+        "report_annee",
         "attribute_prefix",
         "tag_prefix",
         "cross_metadata",
@@ -92,6 +94,7 @@
       "hits": [
         "supplementary",
         "singular",
+        "report_annee",
         "inexact_inflection",
         "composite_wrong_form"
       ],
@@ -250,6 +253,7 @@
       "expected_exact": null,
       "hits": [
         "english_stem",
+        "mixed_body",
         "metadata_stem"
       ],
       "passed": true
@@ -268,28 +272,13 @@
       "hits": [
         "supplementary",
         "singular",
+        "report_annee",
         "inexact_inflection",
         "composite_wrong_form",
         "name_prefix",
-        "reverse_cross_prefix",
         "bilingual",
-        "folder",
         "camel",
-        "exact_phrase",
-        "inexact_order",
-        "composite",
-        "composite_wrong_type",
-        "draft",
-        "inexact_gap",
-        "inexact_split",
-        "body_prefix",
-        "cross_prefix",
-        "exact_body_phrase",
-        "name_components",
-        "attribute_prefix",
-        "tag_prefix",
-        "inexact_value_boundary",
-        "cross_metadata"
+        "name_components"
       ],
       "passed": true
     },
@@ -334,8 +323,9 @@
       "expected_exact": null,
       "hits": [
         "french_stem",
+        "metadata_french_stem",
         "bilingual",
-        "metadata_french_stem"
+        "mixed_body"
       ],
       "passed": true
     },
@@ -652,6 +642,7 @@
         "composite_wrong_form",
         "supplementary",
         "folder",
+        "report_annee",
         "attribute_prefix",
         "tag_prefix",
         "cross_metadata",
@@ -780,6 +771,7 @@
         "filter_other_owner",
         "long_prefix",
         "folder",
+        "unknown_language",
         "camel",
         "exact_phrase",
         "inexact_inflection",
@@ -806,15 +798,272 @@
       "passed": true
     },
     {
+      "label": "incomplete French word matches without language detection",
+      "input": "report an",
+      "interactive": true,
+      "expected_present": [
+        "report_annee"
+      ],
+      "expected_absent": [],
+      "expected_exact": null,
+      "hits": [
+        "report_annee",
+        "inexact_inflection",
+        "composite_wrong_form",
+        "camel"
+      ],
+      "passed": true
+    },
+    {
+      "label": "quoted incomplete French word is not a prefix",
+      "input": "\"report an\"",
+      "interactive": false,
+      "expected_present": [],
+      "expected_absent": [
+        "report_annee"
+      ],
+      "expected_exact": null,
+      "hits": [],
+      "passed": true
+    },
+    {
+      "label": "unclassified text keeps prefix recall",
+      "input": "journ",
+      "interactive": true,
+      "expected_present": [
+        "unknown_language"
+      ],
+      "expected_absent": [],
+      "expected_exact": null,
+      "hits": [
+        "french_stem",
+        "unknown_language",
+        "metadata_french_stem",
+        "bilingual",
+        "mixed_body"
+      ],
+      "passed": true
+    },
+    {
+      "label": "unclassified text is not automatically stemmed",
+      "input": "journal",
+      "interactive": false,
+      "expected_present": [],
+      "expected_absent": [
+        "unknown_language"
+      ],
+      "expected_exact": null,
+      "hits": [
+        "french_stem",
+        "metadata_french_stem",
+        "bilingual",
+        "mixed_body"
+      ],
+      "passed": true
+    },
+    {
+      "label": "English text does not acquire French stems",
+      "input": "new",
+      "interactive": false,
+      "expected_present": [],
+      "expected_absent": [
+        "english_only_news"
+      ],
+      "expected_exact": null,
+      "hits": [],
+      "passed": true
+    },
+    {
+      "label": "mixed body can satisfy English and French stems in separate classified spans",
+      "input": "employee journal",
+      "interactive": false,
+      "expected_present": [
+        "mixed_body"
+      ],
+      "expected_absent": [],
+      "expected_exact": null,
+      "hits": [
+        "mixed_body"
+      ],
+      "passed": true
+    },
+    {
+      "label": "quotes can span language segment boundaries in the neutral full text",
+      "input": "\"equipment Les journaux\"",
+      "interactive": false,
+      "expected_present": [
+        "mixed_body"
+      ],
+      "expected_absent": [],
+      "expected_exact": null,
+      "hits": [
+        "mixed_body"
+      ],
+      "passed": true
+    },
+    {
+      "label": "English fixture only populates the requested en representation",
+      "passed": true
+    },
+    {
+      "label": "English fixture only populates the requested fr representation",
+      "passed": true
+    },
+    {
+      "label": "a grant below DENY restores access under an ancestor scope",
+      "grant_ids": [
+        "folder123"
+      ],
+      "scope_id": "foo",
+      "expected_exact": [
+        "scope_x"
+      ],
+      "hits": [
+        "scope_x"
+      ],
+      "passed": true
+    },
+    {
+      "label": "a grant above DENY is excluded",
+      "grant_ids": [
+        "foo"
+      ],
+      "scope_id": "foo",
+      "expected_exact": [],
+      "hits": [],
+      "passed": true
+    },
+    {
+      "label": "ALLOW on the DENY node can restore read",
+      "grant_ids": [
+        "bar"
+      ],
+      "scope_id": "foo",
+      "expected_exact": [
+        "scope_x"
+      ],
+      "hits": [
+        "scope_x"
+      ],
+      "passed": true
+    },
+    {
+      "label": "an ALLOW on the object itself can restore read",
+      "grant_ids": [
+        "scope_x"
+      ],
+      "scope_id": "foo",
+      "expected_exact": [
+        "scope_x"
+      ],
+      "hits": [
+        "scope_x"
+      ],
+      "passed": true
+    },
+    {
+      "label": "read paths use any matching grant ID",
+      "grant_ids": [
+        "unrelated",
+        "folder123"
+      ],
+      "scope_id": "foo",
+      "expected_exact": [
+        "scope_x"
+      ],
+      "hits": [
+        "scope_x"
+      ],
+      "passed": true
+    },
+    {
+      "label": "a different physical subtree excludes an otherwise readable object",
+      "grant_ids": [
+        "folder123"
+      ],
+      "scope_id": "elsewhere",
+      "expected_exact": [],
+      "hits": [],
+      "passed": true
+    },
+    {
+      "label": "the full path includes the object itself",
+      "grant_ids": [
+        "folder123"
+      ],
+      "scope_id": "scope_x",
+      "expected_exact": [
+        "scope_x"
+      ],
+      "hits": [
+        "scope_x"
+      ],
+      "passed": true
+    },
+    {
+      "label": "adding an ALLOW changes the query without reindexing",
+      "grant_ids": [
+        "folder123"
+      ],
+      "scope_id": "foo",
+      "expected_exact": [
+        "scope_x"
+      ],
+      "hits": [
+        "scope_x"
+      ],
+      "passed": true
+    },
+    {
+      "label": "revoking the only ALLOW changes the query without reindexing",
+      "grant_ids": [],
+      "scope_id": "foo",
+      "expected_exact": [],
+      "hits": [],
+      "passed": true
+    },
+    {
+      "label": "built-in French elision handles uppercase and supported apostrophes",
+      "input": "L'AVION",
+      "tokens": [
+        "avion"
+      ],
+      "passed": true
+    },
+    {
+      "label": "built-in French elision handles uppercase and supported apostrophes",
+      "input": "L’AVION",
+      "tokens": [
+        "avion"
+      ],
+      "passed": true
+    },
+    {
+      "label": "built-in French elision handles uppercase and supported apostrophes",
+      "input": "l'avion",
+      "tokens": [
+        "avion"
+      ],
+      "passed": true
+    },
+    {
+      "label": "built-in French elision handles uppercase and supported apostrophes",
+      "input": "l’avion",
+      "tokens": [
+        "avion"
+      ],
+      "passed": true
+    },
+    {
       "label": "unrelated body length does not change filename score",
       "scores": {
-        "length_short": 16.35145,
-        "length_long": 16.35145
+        "length_short": 16.555742,
+        "length_long": 16.555742
       },
       "passed": true
     },
     {
-      "label": "stemmed content hit highlights original text",
+      "label": "stemmed content hit highlights its own classified text",
       "passed": true
     },
     {
@@ -2042,6 +2291,7 @@
         "draft",
         "supplementary",
         "folder",
+        "report_annee",
         "attribute_prefix",
         "tag_prefix",
         "cross_metadata",
@@ -2054,45 +2304,59 @@
     },
     "electroencephalographic": {
       "allowed": false,
-      "error": "{\"error\":{\"root_cause\":[{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}],\"type\":\"search_phase_execution_exception\",\"reason\":\"all shards failed\",\"phase\":\"query\",\"grouped\":true,\"failed_shards\":[{\"shard\":0,\"index\":\"codex-dfs-object-search-v1\",\"node\":\"THEFp__5Tr-1y-UuTP7Baw\",\"reason\":{\"type\":\"query_shard_exception\",\"reason\":\"failed to create query: [prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\",\"index_uuid\":\"2rlhZzMvR6ybROtVJ8aPlA\",\"index\":\"codex-dfs-object-search-v1\",\"caused_by\":{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}}}],\"caused_by\":{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}},\"status\":400}"
+      "error": "{\"error\":{\"root_cause\":[{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}],\"type\":\"search_phase_execution_exception\",\"reason\":\"all shards failed\",\"phase\":\"query\",\"grouped\":true,\"failed_shards\":[{\"shard\":0,\"index\":\"codex-dfs-object-search-v1\",\"node\":\"U-0MQ4uTQn2y-y0t_mSyCw\",\"reason\":{\"type\":\"query_shard_exception\",\"reason\":\"failed to create query: [prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\",\"index_uuid\":\"DK13_-QiTnyiwYyV0Nj8Pg\",\"index\":\"codex-dfs-object-search-v1\",\"caused_by\":{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}}}],\"caused_by\":{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}},\"status\":400}"
     }
   },
   "stem_highlights": [
     {
       "_index": "codex-dfs-object-search-v1",
       "_id": "french_stem",
-      "_score": 11.97962,
+      "_score": 1.8021824,
       "_source": {
         "name": "Journaux.pdf",
         "file_type": "pdf"
       },
       "highlight": {
-        "name": [
+        "stemmed.fr.name": [
           "<em>Journaux</em>.pdf"
         ]
       }
     },
     {
       "_index": "codex-dfs-object-search-v1",
+      "_id": "metadata_french_stem",
+      "_score": 0.56098,
+      "_source": {
+        "name": "Documents",
+        "file_type": "pdf"
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
       "_id": "bilingual",
-      "_score": 4.661337,
+      "_score": 0.4256689,
       "_source": {
         "name": "Reports.pdf",
         "file_type": "pdf"
       },
       "highlight": {
-        "content_text": [
+        "stemmed.fr.content_text": [
           "Les <em>journaux</em> des sociétés."
         ]
       }
     },
     {
       "_index": "codex-dfs-object-search-v1",
-      "_id": "metadata_french_stem",
-      "_score": 1.2770067,
+      "_id": "mixed_body",
+      "_score": 0.4256689,
       "_source": {
-        "name": "Documents",
+        "name": "Bilingual bulletin",
         "file_type": "pdf"
+      },
+      "highlight": {
+        "stemmed.fr.content_text": [
+          "Les <em>journaux</em> des sociétés."
+        ]
       }
     }
   ],
@@ -2323,6 +2587,20 @@
     },
     {
       "_index": "codex-dfs-object-search-v1",
+      "_id": "report_annee",
+      "_score": 1.0,
+      "_source": {
+        "name": "report année 2026",
+        "file_type": "pdf"
+      },
+      "highlight": {
+        "name": [
+          "<em>report</em> année 2026"
+        ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
       "_id": "attribute_prefix",
       "_score": 0.75,
       "_source": {
@@ -2418,7 +2696,7 @@
     {
       "_index": "codex-dfs-object-search-v1",
       "_id": "length_short",
-      "_score": 16.35145,
+      "_score": 16.555742,
       "_source": {
         "name": "Quasar budget",
         "file_type": "pdf"
@@ -2438,7 +2716,7 @@
     {
       "_index": "codex-dfs-object-search-v1",
       "_id": "length_long",
-      "_score": 16.35145,
+      "_score": 16.555742,
       "_source": {
         "name": "Quasar budget",
         "file_type": "pdf"
@@ -3425,7 +3703,7 @@
           },
           {
             "terms": {
-              "read_inheritance_ids": [
+              "read_path_ids": [
                 "grant-a"
               ]
             }
@@ -3559,7 +3837,7 @@
                       },
                       {
                         "match": {
-                          "name.en": {
+                          "stemmed.en.name": {
                             "query": "budg",
                             "operator": "and",
                             "boost": 2.6
@@ -3568,7 +3846,7 @@
                       },
                       {
                         "match": {
-                          "name.fr": {
+                          "stemmed.fr.name": {
                             "query": "budg",
                             "operator": "and",
                             "boost": 2.6
@@ -3619,7 +3897,7 @@
                       },
                       {
                         "match": {
-                          "attributes.title.en": {
+                          "stemmed.en.attributes.title": {
                             "query": "budg",
                             "operator": "and",
                             "boost": 1.9500000000000002
@@ -3628,7 +3906,7 @@
                       },
                       {
                         "match": {
-                          "attributes.title.fr": {
+                          "stemmed.fr.attributes.title": {
                             "query": "budg",
                             "operator": "and",
                             "boost": 1.9500000000000002
@@ -3666,7 +3944,7 @@
                       },
                       {
                         "match": {
-                          "attributes.tags.en": {
+                          "stemmed.en.attributes.tags": {
                             "query": "budg",
                             "operator": "and",
                             "boost": 1.3
@@ -3675,7 +3953,7 @@
                       },
                       {
                         "match": {
-                          "attributes.tags.fr": {
+                          "stemmed.fr.attributes.tags": {
                             "query": "budg",
                             "operator": "and",
                             "boost": 1.3
@@ -3713,7 +3991,7 @@
                       },
                       {
                         "match": {
-                          "attributes.description.en": {
+                          "stemmed.en.attributes.description": {
                             "query": "budg",
                             "operator": "and",
                             "boost": 0.9750000000000001
@@ -3722,7 +4000,7 @@
                       },
                       {
                         "match": {
-                          "attributes.description.fr": {
+                          "stemmed.fr.attributes.description": {
                             "query": "budg",
                             "operator": "and",
                             "boost": 0.9750000000000001
@@ -3760,7 +4038,7 @@
                       },
                       {
                         "match": {
-                          "content_text.en": {
+                          "stemmed.en.content_text": {
                             "query": "budg",
                             "operator": "and",
                             "boost": 0.65
@@ -3769,7 +4047,7 @@
                       },
                       {
                         "match": {
-                          "content_text.fr": {
+                          "stemmed.fr.content_text": {
                             "query": "budg",
                             "operator": "and",
                             "boost": 0.65

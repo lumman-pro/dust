@@ -11,27 +11,39 @@ pub const OBJECTS_INDEX_ALIAS: &str = "dfs.objects";
 pub const OBJECTS_INDEX_NAME: &str = "dfs.objects_1";
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
-pub enum IndexRegion {
+pub enum IndexCell {
     Local,
-    #[value(name = "us-central1")]
-    UsCentral1,
-    #[value(name = "europe-west1")]
-    EuropeWest1,
+    #[value(name = "cell-00000")]
+    Cell00000,
+    #[value(name = "cell-00001")]
+    Cell00001,
+    #[value(name = "cell-00002")]
+    Cell00002,
 }
 
 /**
- * @cc [owner:flvndvd,label:backend] objects-index-region-settings
- * All regions MUST use the same mapping and analysis settings. Production regions MUST require
- * nodes with workload=filesystem; local settings MUST work with one node and no workload label.
+ * @cc [owner:flvndvd,label:backend] objects-index-cell-settings
+ * All cells MUST use the same mapping and analysis settings. Cells cell-00000 and cell-00001
+ * MUST require nodes with workload=filesystem. Cell cell-00002 and local settings MUST NOT
+ * require a workload label. Local settings MUST work with one node.
  */
-pub fn objects_index_body(region: IndexRegion) -> Result<Value> {
-    let settings = match region {
-        IndexRegion::Local => include_str!("search/indices/objects_1.settings.local.json"),
-        IndexRegion::UsCentral1 => {
-            include_str!("search/indices/objects_1.settings.us-central1.json")
+/**
+ * @cc [owner:flvndvd,label:backend] objects-index-language-fields
+ * Language-specific text MUST use explicit source properties under stemmed.en and stemmed.fr.
+ * Neutral text fields MUST NOT automatically populate language representations through
+ * multi-fields or copy_to.
+ */
+pub fn objects_index_body(cell: IndexCell) -> Result<Value> {
+    let settings = match cell {
+        IndexCell::Local => include_str!("search/indices/objects_1.settings.local.json"),
+        IndexCell::Cell00000 => {
+            include_str!("search/indices/objects_1.settings.cell-00000.json")
         }
-        IndexRegion::EuropeWest1 => {
-            include_str!("search/indices/objects_1.settings.europe-west1.json")
+        IndexCell::Cell00001 => {
+            include_str!("search/indices/objects_1.settings.cell-00001.json")
+        }
+        IndexCell::Cell00002 => {
+            include_str!("search/indices/objects_1.settings.cell-00002.json")
         }
     };
     let settings: Value =
@@ -59,8 +71,8 @@ pub fn objects_index_body(region: IndexRegion) -> Result<Value> {
  * Elasticsearch reports both acknowledged=true and shards_acknowledged=true. An unacknowledged
  * or timed-out operation MUST NOT trigger automatic deletion or retry of the creation request.
  */
-pub async fn create_objects_index(client: &Elasticsearch, region: IndexRegion) -> Result<()> {
-    let body = objects_index_body(region)?;
+pub async fn create_objects_index(client: &Elasticsearch, cell: IndexCell) -> Result<()> {
+    let body = objects_index_body(cell)?;
     require_missing(
         client
             .indices()

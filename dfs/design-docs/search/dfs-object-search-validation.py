@@ -57,11 +57,11 @@ def bulk(index, documents):
 # Representations of the same logical field compete; their scores are not added.
 # These weights are illustrative, not relevance-calibrated production constants.
 GROUPS = [
-    (4.0, ["name", "name.parts"], ["name.en", "name.fr"]),
-    (3.0, ["attributes.title"], ["attributes.title.en", "attributes.title.fr"]),
-    (2.0, ["attributes.tags.text"], ["attributes.tags.en", "attributes.tags.fr"]),
-    (1.5, ["attributes.description"], ["attributes.description.en", "attributes.description.fr"]),
-    (1.0, ["content_text"], ["content_text.en", "content_text.fr"]),
+    (4.0, ["name", "name.parts"], ["stemmed.en.name", "stemmed.fr.name"]),
+    (3.0, ["attributes.title"], ["stemmed.en.attributes.title", "stemmed.fr.attributes.title"]),
+    (2.0, ["attributes.tags.text"], ["stemmed.en.attributes.tags", "stemmed.fr.attributes.tags"]),
+    (1.5, ["attributes.description"], ["stemmed.en.attributes.description", "stemmed.fr.attributes.description"]),
+    (1.0, ["content_text"], ["stemmed.en.content_text", "stemmed.fr.content_text"]),
 ]
 
 
@@ -100,7 +100,7 @@ MODIFIER_FIELDS = {
 }
 
 
-def compile_query(text, interactive=False):
+def compile_query(text, interactive=False, read_grant_ids=("grant-a",), scope_id=None):
     terms = []
     end = 0
     for match in LEXEME.finditer(text):
@@ -116,8 +116,10 @@ def compile_query(text, interactive=False):
     filters = [
         {"term": {"tenant_id": "tenant-a"}},
         {"term": {"is_deleted": False}},
-        {"terms": {"read_inheritance_ids": ["grant-a"]}},
+        {"terms": {"read_path_ids": list(read_grant_ids)}} if read_grant_ids else {"match_none": {}},
     ]
+    if scope_id is not None:
+        filters.append({"term": {"path_ids": scope_id}})
     required, prohibited = [], []
     for token in terms:
         modifier = token["modifier"]
@@ -148,7 +150,7 @@ def search(text, interactive=False, index=INDEX, query=None, **extra):
 
 def document(name, content=None, **extra):
     result = {"tenant_id": "tenant-a", "object_id": name,
-              "read_inheritance_ids": ["grant-a"], "is_deleted": False,
+              "is_deleted": False,
               "kind": "file", "name": name, "file_type": "pdf",
               "mime_type": "application/pdf", "extension": "pdf",
               "modified_at": "2026-10-01T00:00:00Z", **extra}
@@ -160,7 +162,7 @@ def document(name, content=None, **extra):
 info = request("GET", "/")
 assert info["cluster_name"] == "codex-dfs-search-analysis", info
 assert info["version"]["number"] == "8.16.0", info
-settings = json.loads((DEFINITIONS / "objects_1.settings.us-central1.json").read_text())
+settings = json.loads((DEFINITIONS / "objects_1.settings.cell-00000.json").read_text())
 settings.pop("routing.allocation.require.workload")
 settings.update({"number_of_shards": 1, "number_of_replicas": 0})
 mappings = json.loads((DEFINITIONS / "objects_1.mappings.json").read_text())
@@ -212,7 +214,8 @@ documents = {
     "filter_type_word": document("PDF budget.txt", "Budget", file_type="txt", mime_type="text/plain"),
     "filter_other_owner": document("Forecast.pdf", "Budget", attributes={"owner_ids": ["bob-id"]}),
     "wrong_tenant": document("Reports.pdf", "Budget", tenant_id="tenant-b"),
-    "no_permission": document("Reports.pdf", "Budget", read_inheritance_ids=["grant-b"]),
+    "no_permission": document("Reports.pdf", "Budget", path_ids=["root", "grant-b", "no_permission"],
+                              read_path_ids=["grant-b", "no_permission"]),
     "deleted": document("Reports.pdf", "Budget", is_deleted=True),
     "draft": document("Reports draft.pdf", "Budget"),
     "old": document("Older archive", "Budget", modified_at="2025-01-01T00:00:00Z"),
@@ -226,8 +229,53 @@ documents = {
     "length_short": document("Quasar budget", "unrelated"),
     "length_long": document("Quasar budget", "unrelated " * 10000),
 }
+# Language assignments are explicit fixtures, not predictions from a detector. This
+# harness tests the ES projection; detector accuracy and confidence policy are separate.
+FIELD_LANGUAGES = {
+    "name_prefix": {"name": "en"},
+    "name_components": {"name": "en"},
+    "camel": {"name": "en"},
+    "english_stem": {"name": "en", "content_text": "en"},
+    "english_irregular_suffix": {"name": "en"},
+    "english_running": {"name": "en"},
+    "french_stem": {"name": "fr", "content_text": "fr"},
+    "french_plural": {"name": "fr"},
+    "french_elision": {"content_text": "fr"},
+    "bilingual": {"name": "en", "content_text": "fr"},
+    "metadata_stem": {"attributes.description": "en"},
+    "metadata_french_stem": {"attributes.title": "fr"},
+}
+for object_id, fields in FIELD_LANGUAGES.items():
+    for field, language in fields.items():
+        source = documents[object_id]
+        target = source.setdefault("stemmed", {}).setdefault(language, {})
+        parts = field.split(".")
+        for part in parts[:-1]:
+            source = source[part]
+            target = target.setdefault(part, {})
+        target[parts[-1]] = source[parts[-1]]
+
+documents.update({
+    "english_only_news": document("English bulletin", "News from the newsroom.",
+                                  stemmed={"en": {"content_text": "News from the newsroom."}}),
+    "unknown_language": document("Journaux.pdf"),
+    "report_annee": document("report année 2026"),
+    "mixed_body": document("Bilingual bulletin", "Employees requested equipment. Les journaux des sociétés.",
+                           stemmed={"en": {"content_text": ["Employees requested equipment."]},
+                                    "fr": {"content_text": ["Les journaux des sociétés."]}}),
+    "scope_x": document("Scope example", "Hierarchy permission fixture.",
+                        path_ids=["foo", "bar", "folder123", "scope_x"],
+                        read_path_ids=["bar", "folder123", "scope_x"]),
+    "scope_other_tenant": document("Scope other tenant", tenant_id="tenant-b",
+                        path_ids=["foo", "bar", "folder123", "scope_other_tenant"],
+                        read_path_ids=["bar", "folder123", "scope_other_tenant"]),
+})
 for i in range(80):
     documents[f"background_{i}"] = document(f"Reference {i}", "General reference material " * 30)
+for object_id, source in documents.items():
+    source["object_id"] = object_id
+    source.setdefault("path_ids", ["root", "grant-a", object_id])
+    source.setdefault("read_path_ids", source["path_ids"])
 bulk(INDEX, documents)
 
 checks = []
@@ -298,6 +346,42 @@ check("directory kind modifier", "type:folder", exact=["folder"])
 check("literal PDF suffix remains searchable", '"pdf"', present=["name_prefix", "name_components"])
 check("trailing whitespace commits the active word", "repo ", interactive=True, exact=[])
 
+
+check("incomplete French word matches without language detection", "report an", interactive=True, present=["report_annee"])
+check("quoted incomplete French word is not a prefix", '"report an"', absent=["report_annee"])
+check("unclassified text keeps prefix recall", "journ", interactive=True, present=["unknown_language"])
+check("unclassified text is not automatically stemmed", "journal", absent=["unknown_language"])
+check("English text does not acquire French stems", "new", absent=["english_only_news"])
+check("mixed body can satisfy English and French stems in separate classified spans",
+      "employee journal", present=["mixed_body"])
+check("quotes can span language segment boundaries in the neutral full text",
+      '"equipment Les journaux"', present=["mixed_body"])
+for language, expected in [("en", True), ("fr", False)]:
+    query = {"bool": {"filter": [{"term": {"object_id": "english_only_news"}},
+                                  {"exists": {"field": f"stemmed.{language}.content_text"}}]}}
+    found = search("", query=query)["hits"]["total"]["value"] > 0
+    checks.append({"label": f"English fixture only populates the requested {language} representation",
+                   "passed": found == expected})
+
+# The caller supplies current direct READ-grant object IDs. This tests ES membership
+# and scope filters, not a grant resolver, permission recheck, or indexing workflow.
+for label, grants, scope, expected in [
+    ("a grant below DENY restores access under an ancestor scope", ["folder123"], "foo", ["scope_x"]),
+    ("a grant above DENY is excluded", ["foo"], "foo", []),
+    ("ALLOW on the DENY node can restore read", ["bar"], "foo", ["scope_x"]),
+    ("an ALLOW on the object itself can restore read", ["scope_x"], "foo", ["scope_x"]),
+    ("read paths use any matching grant ID", ["unrelated", "folder123"], "foo", ["scope_x"]),
+    ("a different physical subtree excludes an otherwise readable object", ["folder123"], "elsewhere", []),
+    ("the full path includes the object itself", ["folder123"], "scope_x", ["scope_x"]),
+    ("adding an ALLOW changes the query without reindexing", ["folder123"], "foo", ["scope_x"]),
+    ("revoking the only ALLOW changes the query without reindexing", [], "foo", []),
+]:
+    query = compile_query("", read_grant_ids=grants, scope_id=scope)
+    hits = search("", query=query)["hits"]["hits"]
+    ids = [hit["_id"] for hit in hits]
+    checks.append({"label": label, "grant_ids": grants, "scope_id": scope,
+                   "expected_exact": expected, "hits": ids, "passed": set(ids) == set(expected)})
+
 analyzers = {}
 for value in ["Reports.pdf", "Q4_Reports-final_v2.pdf", "AnnualReports.pdf", "archive.tar.gz",
               ".gitignore", "v1.2", "東京 予算報告書", "C++ C#", "L’avion des sociétés",
@@ -307,6 +391,13 @@ for value in ["Reports.pdf", "Q4_Reports-final_v2.pdf", "AnnualReports.pdf", "ar
         analyzed = request("POST", "/" + INDEX + "/_analyze", {"text": value, "analyzer": analyzer})
         analyzers[value][analyzer] = [{key: token[key] for key in ["token", "position", "start_offset", "end_offset"]}
                                       for token in analyzed["tokens"]]
+
+
+for value in ["L'AVION", "L’AVION", "l'avion", "l’avion"]:
+    analyzed = request("POST", "/" + INDEX + "/_analyze", {"text": value, "analyzer": "dfs_text_fr"})
+    tokens = [token["token"] for token in analyzed["tokens"]]
+    checks.append({"label": "built-in French elision handles uppercase and supported apostrophes",
+                   "input": value, "tokens": tokens, "passed": tokens == ["avion"]})
 
 rewrites = {}
 for field, text in [("name.parts", "repo"), ("content_text", "repo"),
@@ -320,16 +411,19 @@ length_scores = {hit["_id"]: hit["_score"] for hit in length_hits if hit["_id"].
 checks.append({"label": "unrelated body length does not change filename score",
                "scores": length_scores, "passed": length_scores["length_short"] == length_scores["length_long"]})
 
+# Classified segments have their own offsets. Highlight them in their own fields,
+# rather than merging segment offsets into the full neutral content_text.
 highlight = search("journal", highlight={"fields": {
-    "name": {"matched_fields": ["name.parts", "name.en", "name.fr"]},
-    "content_text": {"matched_fields": ["content_text.en", "content_text.fr"]}
+    "name": {"matched_fields": ["name.parts"]},
+    "stemmed.en.name": {}, "stemmed.fr.name": {},
+    "content_text": {}, "stemmed.en.content_text": {}, "stemmed.fr.content_text": {}
 }})
 prefix_highlight = search("repo", interactive=True, highlight={"fields": {
     "name": {"matched_fields": ["name.parts", "name._index_prefix", "name.parts._index_prefix"]},
     "content_text": {"matched_fields": ["content_text._index_prefix"]}
 }})
-checks.append({"label": "stemmed content hit highlights original text", "passed": any(
-    hit["_id"] == "bilingual" and "content_text" in hit.get("highlight", {})
+checks.append({"label": "stemmed content hit highlights its own classified text", "passed": any(
+    hit["_id"] == "bilingual" and "stemmed.fr.content_text" in hit.get("highlight", {})
     for hit in highlight["hits"]["hits"]
 )})
 checks.append({"label": "prefix hit highlights filename", "passed": any(
@@ -395,8 +489,9 @@ for variant in ["plain", "prefixes", "bilingual_prefixes", "edge", "search_as_yo
 
 output = {"elasticsearch": info["version"], "document_count": len(documents),
           "mapping_source": "../../server/src/search/indices/objects_1.mappings.json",
-          "settings_source": "../../server/src/search/indices/objects_1.settings.us-central1.json",
+          "settings_source": "../../server/src/search/indices/objects_1.settings.cell-00000.json",
           "local_settings_changes": {"removed_allocation_require": True, "shards": 1, "replicas": 0},
+          "language_assignments": "explicit fixtures, not detector predictions",
           "checks": checks, "analyzers": analyzers, "prefix_rewrites": rewrites,
           "expensive_query_gate": prefix_gate, "stem_highlights": highlight["hits"]["hits"],
           "prefix_highlights": prefix_highlight["hits"]["hits"],

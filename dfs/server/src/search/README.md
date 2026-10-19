@@ -4,26 +4,36 @@ DFS owns the `dfs.objects` search alias and its first physical index, `dfs.objec
 The [design and validation evidence](../../../design-docs/search/dfs-object-search-revised-design.md)
 explain the object projection, analysis, and intended query behavior.
 
-The versioned JSON files in `indices/` are embedded in the Rust bootstrap command. All regions
+Neutral name, content, and selected attribute fields always retain the original searchable text.
+Only classified text populates the explicit `stemmed.en` / `stemmed.fr` fields. Language detection
+and confidence policy belong to the projection work; this command does not run a detector.
+`path_ids` stores the inclusive full physical path; `read_path_ids` stores the inclusive suffix
+from the closest read-DENY. Current read grants select candidates, then DFS must recheck permission
+once per distinct object before returning its title or content.
+
+The versioned JSON files in `indices/` are embedded in the Rust bootstrap command. All cells
 share the same mapping and analysis. Local settings use one primary and no replica. Production
-settings use three primaries, one replica, a five-second refresh, and require nodes labeled
-`workload=filesystem`. These operational values still need validation against the real corpus.
+settings use three primaries, one replica, and a five-second refresh. Each cell has its own settings
+file: `cell-00000` and `cell-00001` require nodes labeled `workload=filesystem`; `cell-00002` uses
+the shared pool without a workload allocation constraint. These operational values still need
+validation against the real corpus.
 Elasticsearch 8.16 with `analysis-icu` is required.
 
 From `dfs/server`, preview the complete creation body without contacting Elasticsearch:
 
 ```sh
-cargo run --bin elasticsearch_create_index -- --region local
+cargo run --bin elasticsearch_create_index -- --cell local
 ```
 
 Create the index and write alias on a local cluster:
 
 ```sh
 ELASTICSEARCH_URL=http://127.0.0.1:9200 \
-  cargo run --bin elasticsearch_create_index -- --region local --execute
+  cargo run --bin elasticsearch_create_index -- --cell local --execute
 ```
 
-For production, select `--region us-central1` or `--region europe-west1` and provide
+For production, select `--cell cell-00000`, `--cell cell-00001`, or `--cell cell-00002`
+(or set `CELL`) and provide
 `ELASTICSEARCH_URL`, `ELASTICSEARCH_USERNAME`, and `ELASTICSEARCH_PASSWORD`. Credentials are
 optional for a local cluster with security disabled; username and password must be supplied
 together. `ELASTICSEARCH_CA_CERT` may point to a PEM CA certificate for a private cluster.

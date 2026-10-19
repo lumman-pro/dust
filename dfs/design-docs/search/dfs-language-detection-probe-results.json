@@ -1,0 +1,1126 @@
+{
+  "upstream": "https://github.com/google/cld3",
+  "commit": "b48dc46512566f5a2d41118c8c1116c4f96dc661",
+  "platform": "macOS arm64",
+  "compiler": "Apple clang++, C++17",
+  "protobuf": "36.2.0",
+  "synthetic_inputs": 18,
+  "cases": [
+    {
+      "min_num_bytes": 0,
+      "max_num_bytes": 700,
+      "text": "repo",
+      "find_language": {
+        "language": "it",
+        "probability": 1.0,
+        "is_reliable": true,
+        "proportion": 1.0
+      },
+      "find_top_n": [
+        {
+          "language": "it",
+          "probability": 1.0,
+          "is_reliable": true,
+          "proportion": 1.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 0,
+      "max_num_bytes": 700,
+      "text": "report an",
+      "find_language": {
+        "language": "lb",
+        "probability": 0.72842425,
+        "is_reliable": true,
+        "proportion": 1.0
+      },
+      "find_top_n": [
+        {
+          "language": "lb",
+          "probability": 0.72842425,
+          "is_reliable": true,
+          "proportion": 1.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 0,
+      "max_num_bytes": 700,
+      "text": "Reports.pdf",
+      "find_language": {
+        "language": "ht",
+        "probability": 0.28798625,
+        "is_reliable": false,
+        "proportion": 1.0
+      },
+      "find_top_n": [
+        {
+          "language": "ht",
+          "probability": 0.28798625,
+          "is_reliable": false,
+          "proportion": 1.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 0,
+      "max_num_bytes": 700,
+      "text": "Reports",
+      "find_language": {
+        "language": "en",
+        "probability": 0.93852299,
+        "is_reliable": true,
+        "proportion": 1.0
+      },
+      "find_top_n": [
+        {
+          "language": "en",
+          "probability": 0.93852299,
+          "is_reliable": true,
+          "proportion": 1.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 0,
+      "max_num_bytes": 700,
+      "text": "report annee 2026",
+      "find_language": {
+        "language": "en",
+        "probability": 0.29396245,
+        "is_reliable": false,
+        "proportion": 1.0
+      },
+      "find_top_n": [
+        {
+          "language": "en",
+          "probability": 0.29396245,
+          "is_reliable": false,
+          "proportion": 1.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 0,
+      "max_num_bytes": 700,
+      "text": "Journaux.pdf",
+      "find_language": {
+        "language": "pl",
+        "probability": 0.90521508,
+        "is_reliable": true,
+        "proportion": 1.0
+      },
+      "find_top_n": [
+        {
+          "language": "pl",
+          "probability": 0.90521508,
+          "is_reliable": true,
+          "proportion": 1.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 0,
+      "max_num_bytes": 700,
+      "text": "rapport année 2026",
+      "find_language": {
+        "language": "fr",
+        "probability": 0.99634647,
+        "is_reliable": true,
+        "proportion": 1.0
+      },
+      "find_top_n": [
+        {
+          "language": "fr",
+          "probability": 0.99634647,
+          "is_reliable": true,
+          "proportion": 1.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 0,
+      "max_num_bytes": 700,
+      "text": "Les journaux des sociétés.",
+      "find_language": {
+        "language": "fr",
+        "probability": 0.99988556,
+        "is_reliable": true,
+        "proportion": 1.0
+      },
+      "find_top_n": [
+        {
+          "language": "fr",
+          "probability": 0.99988556,
+          "is_reliable": true,
+          "proportion": 1.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 0,
+      "max_num_bytes": 700,
+      "text": "L’avion est prêt.",
+      "find_language": {
+        "language": "fr",
+        "probability": 0.99828678,
+        "is_reliable": true,
+        "proportion": 1.0
+      },
+      "find_top_n": [
+        {
+          "language": "fr",
+          "probability": 0.99828678,
+          "is_reliable": true,
+          "proportion": 1.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 0,
+      "max_num_bytes": 700,
+      "text": "budget",
+      "find_language": {
+        "language": "pt",
+        "probability": 0.30657029,
+        "is_reliable": false,
+        "proportion": 1.0
+      },
+      "find_top_n": [
+        {
+          "language": "pt",
+          "probability": 0.30657029,
+          "is_reliable": false,
+          "proportion": 1.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 0,
+      "max_num_bytes": 700,
+      "text": "API_v2_final.pdf",
+      "find_language": {
+        "language": "pt",
+        "probability": 0.81751764,
+        "is_reliable": true,
+        "proportion": 1.0
+      },
+      "find_top_n": [
+        {
+          "language": "pt",
+          "probability": 0.81751764,
+          "is_reliable": true,
+          "proportion": 1.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 0,
+      "max_num_bytes": 700,
+      "text": "2026-01-02.pdf",
+      "find_language": {
+        "language": "uk",
+        "probability": 0.93458945,
+        "is_reliable": true,
+        "proportion": 1.0
+      },
+      "find_top_n": [
+        {
+          "language": "uk",
+          "probability": 0.93458951,
+          "is_reliable": true,
+          "proportion": 1.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 0,
+      "max_num_bytes": 700,
+      "text": "This report describes the new project and the results of our recent experiments. The team expects to complete the remaining work next week, after reviewing the budget and the risks.",
+      "find_language": {
+        "language": "en",
+        "probability": 0.99999619,
+        "is_reliable": true,
+        "proportion": 1.0
+      },
+      "find_top_n": [
+        {
+          "language": "en",
+          "probability": 0.99999619,
+          "is_reliable": true,
+          "proportion": 1.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 0,
+      "max_num_bytes": 700,
+      "text": "Ce rapport présente les résultats de notre projet et les prochaines étapes prévues pour notre équipe. Nous allons examiner les documents et les chiffres avant de prendre une décision collective.",
+      "find_language": {
+        "language": "fr",
+        "probability": 0.99999046,
+        "is_reliable": true,
+        "proportion": 1.0
+      },
+      "find_top_n": [
+        {
+          "language": "fr",
+          "probability": 0.99999046,
+          "is_reliable": true,
+          "proportion": 1.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 0,
+      "max_num_bytes": 700,
+      "text": "This report describes the new project and the results of our recent experiments. The team expects to complete the remaining work next week, after reviewing the budget and the risks. Ce rapport présente les résultats de notre projet et les prochaines étapes prévues pour notre équipe. Nous allons examiner les documents et les chiffres avant de prendre une décision collective.",
+      "find_language": {
+        "language": "fr",
+        "probability": 0.86524963,
+        "is_reliable": true,
+        "proportion": 1.0
+      },
+      "find_top_n": [
+        {
+          "language": "fr",
+          "probability": 0.86524969,
+          "is_reliable": true,
+          "proportion": 1.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 0,
+      "max_num_bytes": 700,
+      "text": "This report describes the new project and the results of our recent experiments. The team expects to complete the remaining work next week, after reviewing the budget and the risks.\n\nCe rapport présente les résultats de notre projet et les prochaines étapes prévues pour notre équipe. Nous allons examiner les documents et les chiffres avant de prendre une décision collective.",
+      "find_language": {
+        "language": "fr",
+        "probability": 0.86524963,
+        "is_reliable": true,
+        "proportion": 1.0
+      },
+      "find_top_n": [
+        {
+          "language": "fr",
+          "probability": 0.86524969,
+          "is_reliable": true,
+          "proportion": 1.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 0,
+      "max_num_bytes": 700,
+      "text": "Journaux",
+      "find_language": {
+        "language": "sr",
+        "probability": 0.49182284,
+        "is_reliable": false,
+        "proportion": 1.0
+      },
+      "find_top_n": [
+        {
+          "language": "sr",
+          "probability": 0.49182281,
+          "is_reliable": false,
+          "proportion": 1.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 0,
+      "max_num_bytes": 700,
+      "text": "report année 2026",
+      "find_language": {
+        "language": "fr",
+        "probability": 0.70415443,
+        "is_reliable": true,
+        "proportion": 1.0
+      },
+      "find_top_n": [
+        {
+          "language": "fr",
+          "probability": 0.70415443,
+          "is_reliable": true,
+          "proportion": 1.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 140,
+      "max_num_bytes": 700,
+      "text": "repo",
+      "find_language": {
+        "language": "und",
+        "probability": 0.0,
+        "is_reliable": false,
+        "proportion": 0.0
+      },
+      "find_top_n": [
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 140,
+      "max_num_bytes": 700,
+      "text": "report an",
+      "find_language": {
+        "language": "und",
+        "probability": 0.0,
+        "is_reliable": false,
+        "proportion": 0.0
+      },
+      "find_top_n": [
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 140,
+      "max_num_bytes": 700,
+      "text": "Reports.pdf",
+      "find_language": {
+        "language": "und",
+        "probability": 0.0,
+        "is_reliable": false,
+        "proportion": 0.0
+      },
+      "find_top_n": [
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 140,
+      "max_num_bytes": 700,
+      "text": "Reports",
+      "find_language": {
+        "language": "und",
+        "probability": 0.0,
+        "is_reliable": false,
+        "proportion": 0.0
+      },
+      "find_top_n": [
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 140,
+      "max_num_bytes": 700,
+      "text": "report annee 2026",
+      "find_language": {
+        "language": "und",
+        "probability": 0.0,
+        "is_reliable": false,
+        "proportion": 0.0
+      },
+      "find_top_n": [
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 140,
+      "max_num_bytes": 700,
+      "text": "Journaux.pdf",
+      "find_language": {
+        "language": "und",
+        "probability": 0.0,
+        "is_reliable": false,
+        "proportion": 0.0
+      },
+      "find_top_n": [
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 140,
+      "max_num_bytes": 700,
+      "text": "rapport année 2026",
+      "find_language": {
+        "language": "und",
+        "probability": 0.0,
+        "is_reliable": false,
+        "proportion": 0.0
+      },
+      "find_top_n": [
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 140,
+      "max_num_bytes": 700,
+      "text": "Les journaux des sociétés.",
+      "find_language": {
+        "language": "und",
+        "probability": 0.0,
+        "is_reliable": false,
+        "proportion": 0.0
+      },
+      "find_top_n": [
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 140,
+      "max_num_bytes": 700,
+      "text": "L’avion est prêt.",
+      "find_language": {
+        "language": "und",
+        "probability": 0.0,
+        "is_reliable": false,
+        "proportion": 0.0
+      },
+      "find_top_n": [
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 140,
+      "max_num_bytes": 700,
+      "text": "budget",
+      "find_language": {
+        "language": "und",
+        "probability": 0.0,
+        "is_reliable": false,
+        "proportion": 0.0
+      },
+      "find_top_n": [
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 140,
+      "max_num_bytes": 700,
+      "text": "API_v2_final.pdf",
+      "find_language": {
+        "language": "und",
+        "probability": 0.0,
+        "is_reliable": false,
+        "proportion": 0.0
+      },
+      "find_top_n": [
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 140,
+      "max_num_bytes": 700,
+      "text": "2026-01-02.pdf",
+      "find_language": {
+        "language": "und",
+        "probability": 0.0,
+        "is_reliable": false,
+        "proportion": 0.0
+      },
+      "find_top_n": [
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 140,
+      "max_num_bytes": 700,
+      "text": "This report describes the new project and the results of our recent experiments. The team expects to complete the remaining work next week, after reviewing the budget and the risks.",
+      "find_language": {
+        "language": "en",
+        "probability": 0.99999619,
+        "is_reliable": true,
+        "proportion": 1.0
+      },
+      "find_top_n": [
+        {
+          "language": "en",
+          "probability": 0.99999619,
+          "is_reliable": true,
+          "proportion": 1.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 140,
+      "max_num_bytes": 700,
+      "text": "Ce rapport présente les résultats de notre projet et les prochaines étapes prévues pour notre équipe. Nous allons examiner les documents et les chiffres avant de prendre une décision collective.",
+      "find_language": {
+        "language": "fr",
+        "probability": 0.99999046,
+        "is_reliable": true,
+        "proportion": 1.0
+      },
+      "find_top_n": [
+        {
+          "language": "fr",
+          "probability": 0.99999046,
+          "is_reliable": true,
+          "proportion": 1.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 140,
+      "max_num_bytes": 700,
+      "text": "This report describes the new project and the results of our recent experiments. The team expects to complete the remaining work next week, after reviewing the budget and the risks. Ce rapport présente les résultats de notre projet et les prochaines étapes prévues pour notre équipe. Nous allons examiner les documents et les chiffres avant de prendre une décision collective.",
+      "find_language": {
+        "language": "fr",
+        "probability": 0.86524963,
+        "is_reliable": true,
+        "proportion": 1.0
+      },
+      "find_top_n": [
+        {
+          "language": "fr",
+          "probability": 0.86524969,
+          "is_reliable": true,
+          "proportion": 1.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 140,
+      "max_num_bytes": 700,
+      "text": "This report describes the new project and the results of our recent experiments. The team expects to complete the remaining work next week, after reviewing the budget and the risks.\n\nCe rapport présente les résultats de notre projet et les prochaines étapes prévues pour notre équipe. Nous allons examiner les documents et les chiffres avant de prendre une décision collective.",
+      "find_language": {
+        "language": "fr",
+        "probability": 0.86524963,
+        "is_reliable": true,
+        "proportion": 1.0
+      },
+      "find_top_n": [
+        {
+          "language": "fr",
+          "probability": 0.86524969,
+          "is_reliable": true,
+          "proportion": 1.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 140,
+      "max_num_bytes": 700,
+      "text": "Journaux",
+      "find_language": {
+        "language": "und",
+        "probability": 0.0,
+        "is_reliable": false,
+        "proportion": 0.0
+      },
+      "find_top_n": [
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    },
+    {
+      "min_num_bytes": 140,
+      "max_num_bytes": 700,
+      "text": "report année 2026",
+      "find_language": {
+        "language": "und",
+        "probability": 0.0,
+        "is_reliable": false,
+        "proportion": 0.0
+      },
+      "find_top_n": [
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        },
+        {
+          "language": "und",
+          "probability": 0.0,
+          "is_reliable": false,
+          "proportion": 0.0
+        }
+      ]
+    }
+  ]
+}

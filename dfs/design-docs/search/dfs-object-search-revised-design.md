@@ -5,43 +5,49 @@ This revision supersedes the earlier analysis/query recommendations in
 [the first proposal](dfs-object-search-index-design.md) and
 [the keyword-only note](dfs-full-keyword-search-design.md).
 
-**Status: research complete; initial index definition and bootstrap implemented in DFS.**
-The [DFS search module](../../server/src/search.rs) embeds versioned mappings and regional settings;
+**Status: index definition and bootstrap implemented; cell, language, and permission projections revised.**
+The [DFS search module](../../server/src/search.rs) embeds versioned mappings and per-cell settings;
 its [bootstrap command](../../server/src/search/README.md) previews the creation request or creates
 the index and write alias together. Remaining work is the object projection and durable indexing,
-extraction lifecycle, authorization rechecks, application lexer/parser/query compiler, and producer
-xattribute registry. Relevance, capacity, and operational settings still require validation on a
-representative production corpus.
+extraction lifecycle, detector selection/calibration, authorization rechecks, application
+lexer/parser/query compiler, and producer xattribute registry. Relevance, capacity, and operational
+settings still require validation on a representative production corpus.
 
 **Recommendation:** one `dfs.objects` alias, backed initially by `dfs.objects_1`, with one ES
 document per original DFS object. Retain distinct filename, extracted-content, and selected
-attribute fields. Index an unstemmed representation for phrases and prefixes, plus separate
-English/French representations for inflection matching. Use `index_prefixes` to accelerate
-completion, and compile the expression into required word/phrase groups whose alternatives can
-match different fields. Keep typed metadata and timestamps available for later LTR.
+attribute fields. Always index unstemmed text for phrases and prefixes. Populate explicit
+English/French fields only with text classified for that language. Use `index_prefixes` to accelerate
+completion, and compile expressions into required word/phrase groups whose alternatives can match
+different fields. Keep typed metadata and timestamps available for later LTR.
 
 | Index proposal | Value |
 | --- | --- |
 | Search alias | `dfs.objects` |
 | Initial physical index | `dfs.objects_1` |
 | Indexed entity | One original DFS object, including its extracted text |
-| Mapping | `dynamic: strict`; independent name/content/attribute fields with unstemmed, English, and French representations |
-| Node allocation | `index.routing.allocation.require.workload: filesystem` |
+| Mapping | `dynamic: strict`; neutral name/content/attribute fields plus explicitly populated `stemmed.en` / `stemmed.fr` text |
+| Node allocation | `cell-00000` / `cell-00001`: require `workload=filesystem`; `cell-00002`: shared pool, no workload constraint |
 | Initial operational settings | 3 primary shards, 1 replica, `5s` refresh; provisional pending capacity validation |
 
 The active, executable definition is in the [mapping](../../server/src/search/indices/objects_1.mappings.json)
-and [production settings](../../server/src/search/indices/objects_1.settings.us-central1.json). The
+and settings for [cell-00000](../../server/src/search/indices/objects_1.settings.cell-00000.json),
+[cell-00001](../../server/src/search/indices/objects_1.settings.cell-00001.json), and
+[cell-00002](../../server/src/search/indices/objects_1.settings.cell-00002.json). The
 original proposed JSON files remain alongside this note as research snapshots. The
 [verification harness](dfs-object-search-validation.py)
-loaded those exact files into a disposable ES 8.16 instance, changing only shard/replica counts and
-removing the production allocation constraint. [Results](dfs-object-search-validation-results.json):
-**46 checks passed on 138 synthetic objects**, plus a separate comparison of five prefix/indexing
-configurations. This establishes mechanics; it is not a production relevance or capacity benchmark.
+loaded the active mapping and `cell-00000` settings into a disposable ES 8.16 instance, changing
+only shard/replica counts and removing the production allocation constraint.
+[Results](dfs-object-search-validation-results.json): **68 checks passed on 144 synthetic objects**,
+plus a separate comparison of five prefix/indexing configurations. This establishes mechanics; it is not a production relevance or capacity benchmark.
 
-The initial bootstrap also passed three focused [Rust tests](../../server/tests/search.rs) for
-creation, preflight failures, and acknowledgement handling. Live ES validation confirmed offline
-previews for all three regions, index/write-alias creation, and rejection of a repeat creation
-without replacing the index or losing the indexed probe object.
+All five [Rust bootstrap tests](../../server/tests/search.rs) passed, covering creation, preflight
+and acknowledgement failures, cell allocation, offline preview, and rejection of regional selectors.
+Live validation used the compiled command to preview every cell/local profile and create the index
+on an unlabelled ES node using `cell-00002`. Writes through the alias and the example's independent
+scope/access filters worked. A repeated bootstrap failed without replacing the index or losing data.
+Cell selection uses `--cell` / `CELL` exclusively. Formatting, Clippy, and code-contract checks passed.
+These checks do not implement a production detector, grant resolver, indexing workflow, or permission
+recheck.
 
 **The requested behavior determines the query structure.** The following examples use case/accent
 normalization. Quotes mean consecutive, ordered, unstemmed analyzed tokens at zero slop. They do
@@ -54,8 +60,8 @@ not mean byte-for-byte equality, and they never enable prefix expansion.
 | `A B` | Requires both clauses on the same object; each can be satisfied by a different searchable field. |
 | `"annual reports"` | Matches adjacent annual + reports in one field/value. Does not match annual report, annual revised reports, or annual in the name and reports in the body. |
 | `"report"` | Does not match reports merely through stemming or prefixing. |
-| `employee request` | Can match Employees in the filename and requested in content. |
-| `journal société` | Can match Journaux in the filename and sociétés in content. |
+| `employee request` | Can match Employees in the filename and requested in content when the relevant text is accepted for English stemming. |
+| `journal société` | Can match Journaux in the filename and sociétés in content when the relevant text is accepted for French stemming. |
 | `type:pdf "annual reports" budg`, while typing | Requires the PDF type, the exact analyzed phrase, and budget/budgeting/etc. through the active prefix. |
 | `tag:"Réseau sécurité"` | Equality on the normalized whole tag, not a phrase query over arbitrary metadata. |
 | `filename:"Literal-v1.2.PDF"` | Equality on the normalized complete basename; punctuation remains significant. Raw identity is also available on `name.keyword`. |
@@ -80,26 +86,30 @@ projection, populated only when a producer/registry defines the corresponding so
 [Stored object/metadata types](https://github.com/dust-tt/dust/blob/7f5fba70710c3e1cf7866aeeae97a8c40fa0a4fd/dfs/server/src/storage/resources/object.rs#L152),
 [extraction proposal](https://github.com/dust-tt/dust/pull/35070).
 
-**Use explicit representations of each logical field.** Multi-fields index the same source value
-separately without duplicating that value in `_source`. Each representation has its own options;
-they do not inherit the parent's analyzer. The full JSON uses flat sibling multi-fields because
-ES 8.16 rejects a multi-field containing another multi-field.
+**Use explicit representations of each logical field.** Multi-fields always analyze the same
+source value, so they cannot selectively enable English or French analysis after detection. The
+language variants are real source fields under `stemmed.en` and `stemmed.fr`. The projection supplies
+original text only to its accepted language field. Ordinary multi-fields remain for neutral filename
+components, keyword equality, tags, and token counts. Explicit language fields duplicate selected
+text in `_source`; measure this storage tradeoff with real extracted sizes.
 [8.16 multi-fields](https://www.elastic.co/guide/en/elasticsearch/reference/8.16/multi-fields.html).
 
 | Field family | Mapping and purpose |
 | --- | --- |
 | `name` | Unstemmed ICU text, positions/offsets, prefix acceleration. Supports ordinary multilingual names. |
 | `name.parts` | Unstemmed filename components, positions/offsets, prefix acceleration. Splits punctuation, underscores, and case transitions. |
-| `name.en`, `name.fr` | The component analyzer followed by English/French stemming. A stemmer applied directly to the ICU token Reports.pdf would not create report. |
+| `stemmed.en.name`, `stemmed.fr.name` | Optional classified filename text, with component analysis followed by the selected stemmer. Unknown names have neither field. |
 | `name.keyword`, `name.folded` | Original complete basename and ICU-normalized complete basename. Identity, equality, and later exact-name ranking features. |
-| `content_text`, `.en`, `.fr` | Entire available extracted/native text, with independent unstemmed, English, and French analysis. Prefixes only on the unstemmed root. |
-| `attributes.title`, `attributes.description` | Optional selected text attributes, with the same root/en/fr structure. Title can receive its own weight and LTR feature. |
-| `attributes.tags` | Normalized keyword array for exact filtering, plus sibling `.text`, `.en`, `.fr` fields for unqualified lexical search. |
+| `content_text` | Complete extracted/native text, unstemmed, with phrase positions and prefix acceleration. Always retained regardless of language classification. |
+| `stemmed.en.content_text`, `stemmed.fr.content_text` | Text accepted for that language: the whole field when appropriate, or independently classified segments in a mixed body. |
+| `attributes.title`, `attributes.description` | Selected unstemmed text attributes; optional language projections live under `stemmed.en.attributes` / `stemmed.fr.attributes`. Each field retains its own score. |
+| `attributes.tags` | Normalized keyword array for filtering plus neutral `.text` for lexical search. Only reliably classified tag values populate `stemmed.en.attributes.tags` / `stemmed.fr.attributes.tags`. |
 | `mime_type`, `file_type`, `extension`, `kind` | Separate keywords with explicit meanings; not copied into natural-language text. |
 | `attributes.owner_ids`, `attributes.source` | Exact keywords; IDs are not stemmed or accent-folded. |
 | `modified_at`, `created_at`, `attributes.source_modified_at` | Validated date values with doc values for filters and future freshness features. |
 | `name.token_count`, `content_text.token_count` | Numeric doc values for future length features. Not precomputed relevance scores. |
-| Tenant, ancestry, permission, deletion, provenance fields | Preserve the object projection's scope, authorization prefilter, extraction/version provenance, and tombstones. |
+| `path_ids`, `read_path_ids` | Inclusive full physical path and read-DENY-bounded suffix, respectively. Independent subtree and access filters. |
+| Tenant, deletion, provenance fields | Tenant isolation, tombstones, and extraction/version provenance. |
 
 `dynamic: strict` prevents arbitrary xattribute names from creating mappings. Selected keywords
 must be validated/bounded in the projection before indexing, including their encoded byte length;
@@ -114,7 +124,7 @@ explicit raw existence/equality predicates independently of friendly modifiers.
 | `dfs_text` | Map straight/curly apostrophes to spaces → ICU tokenizer → ICU folding. No stemming or stop-word removal. |
 | `dfs_filename` | Whitespace tokenizer → word_delimiter_graph → ICU folding. Case splitting happens before folding; numeric splitting is disabled. |
 | `dfs_text_en` | ICU tokenizer → English possessive normalization → ICU folding → Porter2. |
-| `dfs_text_fr` | ICU tokenizer → French elision → ICU folding → light_french. |
+| `dfs_text_fr` | ICU tokenizer → built-in `elision` → ICU folding → light_french. |
 | `dfs_filename_en/fr` | Filename components → ICU folding → the corresponding stemmer. |
 | `dfs_folded` | Keyword normalization with ICU folding. Used consistently for friendly full-name/tag equality. |
 
@@ -153,19 +163,35 @@ If literal symbol-sensitive phrases inside content are required, add a deliberat
 literal analysis policy and acceptance cases; do not advertise ordinary phrase queries as
 byte-exact substring search.
 
-**Keep English and French in one index.** The proposed multi-fields analyze each value through
-both language chains. This covers unlabeled/mixed-language files and allows an English name and
-French body to match the same object without result merging. Group language alternatives under
-`dis_max`, so a token unchanged by both stemmers does not get two independent ranking bonuses.
+**Keep English and French in one index, and select analysis during projection.** Neutral fields
+always contain the original text. Detect substantive fields independently: an English filename and
+a French body can legitimately populate different language groups. A reliable supported-language
+assignment populates only that language field. Do not infer a short filename's or tag's language
+from the body. Unknown, short, unsupported, or failed classifications retain neutral search without
+stemming. This sacrifices some inflection recall and needs explicit evaluation on our corpus.
 
-There is a real cost: two extra analyzed body representations and possible cross-language stem
-collisions. A document-level language filter does not remove those indexed postings. If reliable
-language classification becomes available, explicit language-specific body fields populated from
-classified text can reduce the cost; mixed documents need segment-level treatment to retain
-minority-language recall. That is an alternative projection, not a requirement for separate
-indexes. The single-index design remains suitable.
-[Elastic's mixed-language alternatives](https://www.elastic.co/guide/en/elasticsearch/guide/current/mixed-lang-fields.html)
-(historical conceptual guidance; mapping syntax verified separately on 8.16).
+For mixed bodies, independently classified paragraphs or extraction blocks can populate separate
+language arrays while the complete original remains in `content_text`. Do not assign one winning
+language to the entire body merely because a detector returns high confidence. Each segment has its
+own position/offset space: highlight language fields independently, rather than merging their offsets
+into the full neutral body's `matched_fields`. Neutral token counts still describe whole-field length
+for LTR; segment-field BM25 statistics do not.
+
+Google CLD3 is a candidate local detector, but its upstream repository is archived. Its default
+minimum length excludes most filenames, and its top-N method splits by script rather than separating
+English/French paragraphs. Short query fragments must never choose a single search-language branch.
+The [language detection investigation](dfs-language-detection-evidence.md) records primary sources,
+reproducible detector probes, and the integration/calibration work still required. No detector is
+integrated in this schema/bootstrap PR. The ES harness uses explicitly labeled language fixtures,
+which validates selective indexing mechanics rather than classifier accuracy.
+
+Queries still consider neutral and both supported language fields for each required word, grouping
+alternatives under `dis_max`. Only populated fields can match. This preserves matches spanning an
+English filename and French content without relying on language detection of a short query.
+Quotes and prefixes use only the neutral fields. The built-in French `elision` filter replaces the
+copied article list; detecting French does not itself normalize `l'avion` to `avion`.
+[Elision behavior](https://www.elastic.co/guide/en/elasticsearch/reference/8.16/analysis-elision-tokenfilter.html),
+[selective-field analysis](https://www.elastic.co/guide/en/elasticsearch/reference/8.16/multi-fields.html).
 
 **Use `index_prefixes` as an accelerator on the unstemmed fields.** The proposed starting ranges
 are 1–10 for names/title and 1–5 for body/description/tags. They are tuning inputs, not measured
@@ -197,13 +223,14 @@ explicit fallback, but preserve_original alone leaves intermediate long prefixes
 The separate 201-document synthetic comparison measured these configurations. All use the same
 source corpus; these are as-configured storage figures, not equal-gram-range efficiency ratios
 or a forecast for real extraction data. The main mapping's offsets and attribute fields add
-further costs beyond this minimal comparison.
+further costs beyond this minimal comparison. The unconditional bilingual row is a historical
+comparison, not the current selective-language projection or its `_source` storage cost.
 
 | Configuration | Inverted-index bytes | Long intermediate prefix found? |
 | --- | ---: | --- |
 | Plain unstemmed text | 59,194 | Yes, dictionary prefix query |
 | Unstemmed + index_prefixes 1–5 | 109,142 | Yes, fallback |
-| Same + English/French alternates | 226,414 | Yes, fallback |
+| Historical unconditional English/French alternates | 226,414 | Yes, fallback |
 | Unstemmed + manual edge field 1–20, preserve_original | 364,458 | No with match on that edge field |
 | search_as_you_type with 2/3-word shingles | 619,841 | Yes, fallback |
 
@@ -290,16 +317,80 @@ proposal shows Basic. The mapping is also usable by an application reranker or a
 implementation. These are future integration choices, not a request to add LTR today.
 [Pinned LTR/rescore evidence](dfs-search-ranking-evidence.md).
 
-**Scope and rollout remain object-aware.** Tenant, ancestry, read-inheritance, and tombstone
-filters wrap every lexical path. Search must recheck current DFS authorization before exposing
-names/excerpts. Attribute/extraction changes must publish a consistent complete projection;
-stale extraction text must not survive a content-version change. The earlier source-grounded
-[projection/permission analysis](dfs-object-search-index-design.md) remains relevant for these
-facts, independently of its superseded lexical proposal.
+**Subtree scope and access use two independent inclusive paths.**
 
-The settings route the index to workload=filesystem, matching the dedicated pool proposal.
-Three primaries, one replica, and five-second refresh are provisional operational settings.
-Capacity tests must use realistic extracted sizes, language mix, vocabulary, short-prefix traffic,
-refresh/indexing rates, concurrent queries, and reindex headroom before deployment. The local
-fixture does not establish p95 latency, final boosts, shard count, production ACL correctness,
-extraction completeness, or acceptable relevance on real queries.
+```text
+foo              ALLOW g:engineering read
+└── bar          DENY read
+    └── folder123 ALLOW u:flav + g:finance read/write
+        └── x.pdf
+```
+
+For `x.pdf`, using the example's top node as the root:
+
+```json
+{
+  "object_id": "x_pdf_id",
+  "path_ids": ["foo_id", "bar_id", "folder123_id", "x_pdf_id"],
+  "read_path_ids": ["bar_id", "folder123_id", "x_pdf_id"]
+}
+```
+
+`path_ids` contains the full physical chain from the real tenant root through the indexed object,
+including both. `read_path_ids` is its suffix starting at the closest ancestor-or-self with a read
+DENY, including that node and the object. Without a read DENY, both arrays are identical. A write-only
+DENY does not truncate the read path. No subjects or current ALLOW attachments are copied into either
+array. Array order explains the projection; ES filters use membership, not positional lookup.
+There is no separate `parent_id` or strict-ancestor field in the search mapping.
+
+Resolve current direct ALLOW grants for the session's exact subjects, retaining only grants with
+the read bit, then require at least one grant object ID in `read_path_ids`. Ordinary sessions with
+no matching read-grant IDs get no candidates. A failed/incomplete grant lookup must not disable the
+filter. Subtree search separately filters `path_ids` by the requested folder ID:
+
+```json
+{
+  "bool": {
+    "filter": [
+      { "term": { "tenant_id": "tenant_id" } },
+      { "term": { "is_deleted": false } },
+      { "term": { "path_ids": "foo_id" } },
+      { "terms": { "read_path_ids": ["folder123_id"] } }
+    ]
+  }
+}
+```
+
+Finance can find `x.pdf` under `foo`, while Engineering's grant on `foo` does not cross the read DENY.
+An ALLOW on `bar` itself would work, because local ALLOW is applied after local DENY. This agrees
+with DFS's existing `(inherited & ~local_deny) | matching_local_allow` rule.
+[Current permission evaluation](../../server/src/storage/resources/object/modes.rs).
+
+Adding/removing an ordinary user/group ALLOW updates grant records and their subject lookup index;
+it does not require updating descendants in ES. Moving a subtree or changing its closest read-DENY
+boundary can require descendant updates. These costs are accepted. An inclusive scope also matches
+the scoped object itself when otherwise eligible; a strict-descendants operation must explicitly
+exclude that object ID. Physical scope does not require an ALLOW on the scope node itself.
+
+The ES membership query is a candidate prefilter. Before exposing any title, content, or excerpt,
+deduplicate object IDs and check current permissions once per distinct object in DFS. Recheck current
+physical scope as well when moves could leave stale indexed paths. Stale candidates may be removed
+by these checks; missing candidates after a move or DENY removal need index repair. Superusers bypass
+only the grant prefilter, retaining tenant and requested-scope restrictions and existence checks.
+The current subject-listing helper includes write-only ALLOWs, so it is not a ready-made read-grant
+resolver. [Existing subject lookup](../../server/src/storage/resources/object.rs),
+[shared listing](../../server/src/storage/resources/directory/shared.rs).
+
+The validation harness exercises the example's membership/scope queries, self inclusion, same-node
+ALLOW, any-grant matching, tenant isolation, and grant changes without modifying indexed paths.
+It does not implement or validate the grant resolver, transactional rechecks, or durable subtree
+reindexing. Attribute/extraction changes still need to publish a consistent complete projection;
+stale extraction text must not survive a content-version change.
+
+**Deployment settings are selected by cell only.** `cell-00000` and `cell-00001` require
+`workload=filesystem`; `cell-00002` has no workload allocation requirement. `--cell` / `CELL` has no
+region fallback. Three primaries, one replica, and five-second refresh remain provisional production
+settings. Capacity tests must use realistic extracted sizes, language mix, vocabulary, short-prefix
+traffic, refresh/indexing rates, concurrent queries, and reindex headroom. The local fixture does not
+establish p95 latency, final boosts, production ACL correctness, extraction completeness, or real
+query relevance.

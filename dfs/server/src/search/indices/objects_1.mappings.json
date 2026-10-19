@@ -6,7 +6,12 @@
     "supported_stemming_languages": [
       "en",
       "fr"
-    ]
+    ],
+    "language_stemming_policy": "populate explicit stemmed fields only for reliably identified text; keep all original text in neutral fields",
+    "hierarchy": {
+      "path_ids": "full physical path from tenant root through object, inclusive",
+      "read_path_ids": "suffix of path_ids from nearest read-DENY through object, inclusive; full path if no read-DENY"
+    }
   },
   "properties": {
     "tenant_id": {
@@ -15,13 +20,10 @@
     "object_id": {
       "type": "keyword"
     },
-    "parent_id": {
+    "path_ids": {
       "type": "keyword"
     },
-    "ancestor_ids": {
-      "type": "keyword"
-    },
-    "read_inheritance_ids": {
+    "read_path_ids": {
       "type": "keyword"
     },
     "kind": {
@@ -49,16 +51,6 @@
             "max_chars": 10
           }
         },
-        "en": {
-          "type": "text",
-          "analyzer": "dfs_filename_en",
-          "index_options": "offsets"
-        },
-        "fr": {
-          "type": "text",
-          "analyzer": "dfs_filename_fr",
-          "index_options": "offsets"
-        },
         "keyword": {
           "type": "keyword"
         },
@@ -84,16 +76,6 @@
         "max_chars": 5
       },
       "fields": {
-        "en": {
-          "type": "text",
-          "analyzer": "dfs_text_en",
-          "index_options": "offsets"
-        },
-        "fr": {
-          "type": "text",
-          "analyzer": "dfs_text_fr",
-          "index_options": "offsets"
-        },
         "token_count": {
           "type": "token_count",
           "analyzer": "dfs_text",
@@ -151,18 +133,6 @@
           "index_prefixes": {
             "min_chars": 1,
             "max_chars": 10
-          },
-          "fields": {
-            "en": {
-              "type": "text",
-              "analyzer": "dfs_text_en",
-              "index_options": "offsets"
-            },
-            "fr": {
-              "type": "text",
-              "analyzer": "dfs_text_fr",
-              "index_options": "offsets"
-            }
           }
         },
         "description": {
@@ -173,18 +143,6 @@
           "index_prefixes": {
             "min_chars": 1,
             "max_chars": 5
-          },
-          "fields": {
-            "en": {
-              "type": "text",
-              "analyzer": "dfs_text_en",
-              "index_options": "offsets"
-            },
-            "fr": {
-              "type": "text",
-              "analyzer": "dfs_text_fr",
-              "index_options": "offsets"
-            }
           }
         },
         "tags": {
@@ -200,16 +158,6 @@
                 "min_chars": 1,
                 "max_chars": 5
               }
-            },
-            "en": {
-              "type": "text",
-              "analyzer": "dfs_text_en",
-              "index_options": "offsets"
-            },
-            "fr": {
-              "type": "text",
-              "analyzer": "dfs_text_fr",
-              "index_options": "offsets"
             }
           }
         },
@@ -252,6 +200,96 @@
       "type": "unsigned_long",
       "index": false,
       "doc_values": false
+    },
+    "stemmed": {
+      "type": "object",
+      "dynamic": "strict",
+      "properties": {
+        "en": {
+          "type": "object",
+          "dynamic": "strict",
+          "properties": {
+            "name": {
+              "type": "text",
+              "analyzer": "dfs_filename_en",
+              "index_options": "offsets",
+              "position_increment_gap": 100
+            },
+            "content_text": {
+              "type": "text",
+              "analyzer": "dfs_text_en",
+              "index_options": "offsets",
+              "position_increment_gap": 100
+            },
+            "attributes": {
+              "type": "object",
+              "dynamic": "strict",
+              "properties": {
+                "title": {
+                  "type": "text",
+                  "analyzer": "dfs_text_en",
+                  "index_options": "offsets",
+                  "position_increment_gap": 100
+                },
+                "description": {
+                  "type": "text",
+                  "analyzer": "dfs_text_en",
+                  "index_options": "offsets",
+                  "position_increment_gap": 100
+                },
+                "tags": {
+                  "type": "text",
+                  "analyzer": "dfs_text_en",
+                  "index_options": "offsets",
+                  "position_increment_gap": 100
+                }
+              }
+            }
+          }
+        },
+        "fr": {
+          "type": "object",
+          "dynamic": "strict",
+          "properties": {
+            "name": {
+              "type": "text",
+              "analyzer": "dfs_filename_fr",
+              "index_options": "offsets",
+              "position_increment_gap": 100
+            },
+            "content_text": {
+              "type": "text",
+              "analyzer": "dfs_text_fr",
+              "index_options": "offsets",
+              "position_increment_gap": 100
+            },
+            "attributes": {
+              "type": "object",
+              "dynamic": "strict",
+              "properties": {
+                "title": {
+                  "type": "text",
+                  "analyzer": "dfs_text_fr",
+                  "index_options": "offsets",
+                  "position_increment_gap": 100
+                },
+                "description": {
+                  "type": "text",
+                  "analyzer": "dfs_text_fr",
+                  "index_options": "offsets",
+                  "position_increment_gap": 100
+                },
+                "tags": {
+                  "type": "text",
+                  "analyzer": "dfs_text_fr",
+                  "index_options": "offsets",
+                  "position_increment_gap": 100
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

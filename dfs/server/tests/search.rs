@@ -1,7 +1,7 @@
 use std::{collections::VecDeque, time::Duration};
 
 use anyhow::{Context, Result, ensure};
-use dfs_api::search::{IndexRegion, create_objects_index};
+use dfs_api::search::{IndexCell, create_objects_index, objects_index_body};
 use elasticsearch::{
     Elasticsearch,
     http::transport::{SingleNodeConnectionPool, TransportBuilder},
@@ -137,7 +137,7 @@ async fn bootstrap_creates_the_index_and_write_alias_in_one_request() -> Result<
         ),
     ])
     .await?;
-    create_objects_index(&server.client, IndexRegion::Local).await?;
+    create_objects_index(&server.client, IndexCell::Local).await?;
     let requests = server.finish().await?;
     assert_eq!(requests.len(), 3);
     assert_eq!(requests[0].method, "HEAD");
@@ -171,7 +171,7 @@ async fn bootstrap_does_not_mutate_after_an_existing_name_or_failed_preflight() 
         )
         .await?;
         assert!(
-            create_objects_index(&server.client, IndexRegion::Local)
+            create_objects_index(&server.client, IndexCell::Local)
                 .await
                 .is_err()
         );
@@ -200,13 +200,90 @@ async fn bootstrap_reports_creation_failures_without_retry_or_cleanup() -> Resul
             MockElasticsearch::start(vec![(404, Value::Null), (404, Value::Null), (status, body)])
                 .await?;
         assert!(
-            create_objects_index(&server.client, IndexRegion::Local)
+            create_objects_index(&server.client, IndexCell::Local)
                 .await
                 .is_err()
         );
         let requests = server.finish().await?;
         assert_eq!(requests.len(), 3);
         assert_eq!(requests[2].method, "PUT");
+    }
+    Ok(())
+}
+
+#[test]
+fn cell_settings_preserve_shared_analysis_and_target_the_available_nodes() -> Result<()> {
+    let reference = objects_index_body(IndexCell::Local)?;
+    for cell in [IndexCell::Cell00000, IndexCell::Cell00001] {
+        let body = objects_index_body(cell)?;
+        assert_eq!(body["mappings"], reference["mappings"]);
+        assert_eq!(
+            body["settings"]["analysis"],
+            reference["settings"]["analysis"]
+        );
+        assert_eq!(
+            body["settings"]["routing.allocation.require.workload"],
+            "filesystem"
+        );
+    }
+    let shared = objects_index_body(IndexCell::Cell00002)?;
+    assert_eq!(shared["mappings"], reference["mappings"]);
+    assert_eq!(
+        shared["settings"]["analysis"],
+        reference["settings"]["analysis"]
+    );
+    for body in [&reference, &shared] {
+        assert!(
+            body["settings"]
+                .as_object()
+                .context("missing settings")?
+                .keys()
+                .all(|key| { !key.starts_with("routing.allocation.") })
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn preview_uses_cell_ids_and_rejects_regional_selectors() -> Result<()> {
+    let preview = |args: &[&str], cell: Option<&str>| {
+        let mut command =
+            std::process::Command::new(env!("CARGO_BIN_EXE_elasticsearch_create_index"));
+        command
+            .env_remove("CELL")
+            .env_remove("REGION")
+            .env_remove("ELASTICSEARCH_USERNAME")
+            .env_remove("ELASTICSEARCH_PASSWORD");
+        if let Some(cell) = cell {
+            command.env("CELL", cell);
+        }
+        command.args(args).output()
+    };
+    let output = preview(
+        &["--cell", "cell-00002", "--url", "http://127.0.0.1:1"],
+        None,
+    )?;
+    assert!(output.status.success());
+    let body: Value = serde_json::from_slice(&output.stdout)?;
+    assert!(
+        body["settings"]
+            .get("routing.allocation.require.workload")
+            .is_none()
+    );
+    let from_env = preview(&[], Some("cell-00001"))?;
+    assert!(from_env.status.success());
+    let body: Value = serde_json::from_slice(&from_env.stdout)?;
+    assert_eq!(
+        body["settings"]["routing.allocation.require.workload"],
+        "filesystem"
+    );
+    for args in [
+        ["--cell", "europe-west1"],
+        ["--cell", "us-central1"],
+        ["--cell", "cell-99999"],
+        ["--region", "europe-west1"],
+    ] {
+        assert!(!preview(&args, None)?.status.success());
     }
     Ok(())
 }
