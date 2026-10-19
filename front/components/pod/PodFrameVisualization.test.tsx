@@ -56,4 +56,20 @@ describe("PodFrameVisualization", () => {
       );
     }
   );
+
+  it("passes the Frame's props to its iframe", () => {
+    render(
+      <PodFrameVisualization
+        owner={{ sId: "w_current" } as LightWorkspaceType}
+        fileContent="export default function Frame() {}"
+        frameProps={{ region: "EU" }}
+        vizUrl="https://viz.dust.tt"
+        identifier="viz-frame"
+      />
+    );
+
+    expect(mocks.iframe).toHaveBeenCalledWith(
+      expect.objectContaining({ frameProps: { region: "EU" } })
+    );
+  });
 });

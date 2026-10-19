@@ -15,6 +15,7 @@ import type { DfmComment } from "@app/lib/markdown/dfm";
 import { parseDfm } from "@app/lib/markdown/dfm";
 import { FIXTURE, FIXTURES } from "@app/lib/markdown/dfm/tests/dfm.test_utils";
 import { FILE_PREVIEW_NODE_TYPE } from "@app/lib/markdown/file_preview";
+import { serializeFrameEmbedDirective } from "@app/lib/markdown/frame_embed";
 import type { Result } from "@app/types/shared/result";
 import { Ok } from "@app/types/shared/result";
 import type { JSONContent } from "@tiptap/core";
@@ -668,6 +669,8 @@ describe("saveDfm", () => {
       '# Report\n\n::embed_frame{path="conversation-c1/a &amp; b.tsx"}\n\nText.\n',
       'Intro\n\n::embed_frame{path="pod-abc/x.tsx"}\n\n::embed_frame{path="pod-abc/y.tsx"}\n',
       '::embed_frame{path="pod-abc/x.tsx" height="400"}\n',
+      '::embed_frame{path="pod-abc/x.tsx" region="EU" label="a &amp; b"}\n',
+      '::embed_frame{path="pod-abc/x.tsx" height="400" region="EU" year="2026"}\n',
     ]) {
       expect(roundTrip(source)).toBe(source);
       expect(() =>
@@ -696,9 +699,26 @@ describe("saveDfm", () => {
     for (const source of [
       'See ::embed_frame{path="pod-abc/x.tsx"} here.\n',
       'See::embed_frame{path="pod-abc/x.tsx"}\n',
-      '::embed_frame{path="pod-abc/x.tsx" title="X"}\n',
+      '::embed_frame{path="pod-abc/x.tsx" title=X}\n',
+      '::embed_frame{path="pod-abc/x.tsx" region="EU" height="400"}\n',
     ]) {
       expect(JSON.stringify(load(source).content)).not.toContain("frameEmbed");
+    }
+  });
+
+  it("saves a Frame inserted with only its path, as the / menu does", () => {
+    for (const attrs of [
+      { path: "pod-abc/x.tsx" },
+      { path: "pod-abc/x.tsx", props: { region: "EU" } },
+    ]) {
+      const saved = saveDfm(
+        { frontMatter: null, anchorOrder: [] },
+        { type: "doc", content: [{ type: "frameEmbed", attrs }] }
+      );
+      expect(saved.isOk() && saved.value).toBe(
+        serializeFrameEmbedDirective("pod-abc/x.tsx", null, attrs.props ?? {}) +
+          "\n"
+      );
     }
   });
 
@@ -733,6 +753,9 @@ describe("saveDfm", () => {
     expect(
       roundTrip('- ::embed_frame{path="pod-abc/x.tsx" height="400"}\n')
     ).toBe('- ::embed\\_frame{path="pod-abc/x.tsx" height="400"}\n');
+    expect(
+      roundTrip('- ::embed_frame{path="pod-abc/x.tsx" region="EU"}\n')
+    ).toBe('- ::embed\\_frame{path="pod-abc/x.tsx" region="EU"}\n');
   });
 
   it("reads an image's width after its alt text, and keeps alt text ending like one", () => {
