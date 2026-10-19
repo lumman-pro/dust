@@ -11,7 +11,7 @@ import * as readline from "readline";
  * Usage:
  * tsx front/scripts/create_elasticsearch_index.ts [--index-name agent_message_analytics] [--index-version 1] [--skip-confirmation] [--remove-previous-alias] [--execute]
  *
- * Without --index-name, creates every index in INDEX_REGISTRY at its current version, skipping the ones that already exist.
+ * Without --index-name, creates every index in INDEX_REGISTRY at its current version, repairing missing aliases for existing indices.
  * INDEX_REGISTRY in lib/api/elasticsearch.ts holds each index's directory and current version.
  * Settings and mappings are loaded from [directory]/[index_name]_[version].settings.[region].json and [directory]/[index_name]_[version].mappings.json.
  * Creates each index at front.[index_name]_[version], and sets the alias to front.[index_name]
@@ -84,6 +84,20 @@ makeScript(
 
     const client = await getClient();
 
+    /**
+     * @cc [owner:flvndvd,label:backend] repair-missing-index-alias
+     * When executing against an existing index whose alias is absent, restore the
+     * write alias without recreating the index or changing its mappings or documents.
+     */
+    /**
+     * @cc [owner:flvndvd,label:backend] preserve-existing-index-alias
+     * When reusing an existing index, preserve any existing alias, including one
+     * pointing to a different version.
+     */
+    /**
+     * @cc [owner:flvndvd,label:backend] dry-run-index-initialization
+     * Dry runs MUST NOT mutate Elasticsearch, including when an alias is missing.
+     */
     const createOne = async (target: {
       name: string;
       version: number;
@@ -106,64 +120,19 @@ makeScript(
         index: indexFullname,
       });
 
-      if (indexExists) {
-        if (indexName) {
-          throw new Error(`Index ${indexFullname} already exists`);
-        }
-        logger.info(`Index ${indexFullname} already exists, skipping`);
+      if (
+        indexExists &&
+        (await client.indices.existsAlias({ name: indexAlias }))
+      ) {
+        logger.info(
+          `Index ${indexFullname} already exists, preserving alias ${indexAlias}`
+        );
         return;
-      }
-
-      const settingsPath = path.join(
-        __dirname,
-        `../${target.directory}/${target.name}_${target.version}.settings.${region}.json`
-      );
-      const mappingsPath = path.join(
-        __dirname,
-        `../${target.directory}/${target.name}_${target.version}.mappings.json`
-      );
-
-      let settingsRaw: string;
-      let mappingsRaw: string;
-
-      try {
-        settingsRaw = fs.readFileSync(settingsPath, "utf8");
-      } catch (err) {
-        throw new Error(
-          `Failed to read settings file at ${settingsPath}: ${err}`
-        );
-      }
-
-      try {
-        mappingsRaw = fs.readFileSync(mappingsPath, "utf8");
-      } catch (err) {
-        throw new Error(
-          `Failed to read mappings file at ${mappingsPath}: ${err}`
-        );
-      }
-
-      let settings: Record<string, unknown>;
-      let mappings: Record<string, unknown>;
-
-      try {
-        settings = JSON.parse(settingsRaw);
-      } catch (err) {
-        throw new Error(
-          `Failed to parse settings file at ${settingsPath}: ${err}`
-        );
-      }
-
-      try {
-        mappings = JSON.parse(mappingsRaw);
-      } catch (err) {
-        throw new Error(
-          `Failed to parse mappings file at ${mappingsPath}: ${err}`
-        );
       }
 
       if (!skipConfirmation && execute) {
         logger.info(
-          `CHECK: Create index '${indexFullname}' with alias '${indexAlias}' in region '${region}' (remove previous alias: ${removePreviousAlias})? (y to confirm)`
+          `CHECK: Initialize index '${indexFullname}' with alias '${indexAlias}' in region '${region}' (remove previous alias: ${removePreviousAlias})? (y to confirm)`
         );
 
         const rl = readline.createInterface({
@@ -185,26 +154,77 @@ makeScript(
 
       if (!execute) {
         logger.info(
-          `[DRY RUN] Would create index ${indexFullname} and alias ${indexAlias}`
+          indexExists
+            ? `[DRY RUN] Would restore alias ${indexAlias} for ${indexFullname}`
+            : `[DRY RUN] Would create index ${indexFullname} and alias ${indexAlias}`
         );
         return;
       }
 
-      logger.info(`Creating index ${indexFullname}...`);
-
-      const indexCreationResponse = await client.indices.create({
-        index: indexFullname,
-        settings,
-        mappings,
-      });
-
-      if (!indexCreationResponse.acknowledged) {
-        throw new Error(
-          `Failed to create index: ${JSON.stringify(indexCreationResponse)}`
+      if (!indexExists) {
+        const settingsPath = path.join(
+          __dirname,
+          `../${target.directory}/${target.name}_${target.version}.settings.${region}.json`
         );
-      }
+        const mappingsPath = path.join(
+          __dirname,
+          `../${target.directory}/${target.name}_${target.version}.mappings.json`
+        );
 
-      logger.info(`✅ Index created: ${indexFullname}`);
+        let settingsRaw: string;
+        let mappingsRaw: string;
+
+        try {
+          settingsRaw = fs.readFileSync(settingsPath, "utf8");
+        } catch (err) {
+          throw new Error(
+            `Failed to read settings file at ${settingsPath}: ${err}`
+          );
+        }
+
+        try {
+          mappingsRaw = fs.readFileSync(mappingsPath, "utf8");
+        } catch (err) {
+          throw new Error(
+            `Failed to read mappings file at ${mappingsPath}: ${err}`
+          );
+        }
+
+        let settings: Record<string, unknown>;
+        let mappings: Record<string, unknown>;
+
+        try {
+          settings = JSON.parse(settingsRaw);
+        } catch (err) {
+          throw new Error(
+            `Failed to parse settings file at ${settingsPath}: ${err}`
+          );
+        }
+
+        try {
+          mappings = JSON.parse(mappingsRaw);
+        } catch (err) {
+          throw new Error(
+            `Failed to parse mappings file at ${mappingsPath}: ${err}`
+          );
+        }
+
+        logger.info(`Creating index ${indexFullname}...`);
+
+        const indexCreationResponse = await client.indices.create({
+          index: indexFullname,
+          settings,
+          mappings,
+        });
+
+        if (!indexCreationResponse.acknowledged) {
+          throw new Error(
+            `Failed to create index: ${JSON.stringify(indexCreationResponse)}`
+          );
+        }
+
+        logger.info(`✅ Index created: ${indexFullname}`);
+      }
 
       const aliasActions: Array<
         | { add: { index: string; alias: string; is_write_index: boolean } }
@@ -219,7 +239,7 @@ makeScript(
         },
       ];
 
-      if (removePreviousAlias) {
+      if (removePreviousAlias && !indexExists) {
         aliasActions.push({
           remove: {
             index: indexPreviousFullname,
