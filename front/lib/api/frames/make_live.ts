@@ -107,7 +107,7 @@ export async function makeFrameDraftLive(
 
       const publicSharing = await checkFramePublicFunctionSharing(
         fresh,
-        descriptor.value
+        descriptor.value.functions
       );
       if (publicSharing.isErr()) {
         return publicSharing;

@@ -23,6 +23,7 @@ import { SandboxResource } from "@app/lib/resources/sandbox_resource";
 import { ConversationFactory } from "@app/tests/utils/ConversationFactory";
 import { FeatureFlagFactory } from "@app/tests/utils/FeatureFlagFactory";
 import { FileFactory } from "@app/tests/utils/FileFactory";
+import { enablePublicFrameFunctions } from "@app/tests/utils/FrameFunctionFactory";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
 import { fileStorageMock } from "@app/tests/utils/mocks/file_storage";
 import { SpaceFactory } from "@app/tests/utils/SpaceFactory";
@@ -683,6 +684,80 @@ describe("publishFrameFromSource replacing a legacy Frame", () => {
     expect(frame.useCaseMetadata?.activePublicationId).toBe(
       result.value.kind === "v2" ? result.value.publicationId : undefined
     );
+  });
+
+  it("leaves a public legacy Frame untouched when its replacement has no public function", async () => {
+    const replacementManifest = JSON.stringify({
+      version: 1,
+      description: "Sales with a private function.",
+      functions: [
+        {
+          name: "run",
+          description: "Run it.",
+          entryPoint: "functions/run.ts",
+        },
+      ],
+    });
+    const { auth, conversation, legacyFrame, legacyPath, manifestPath } =
+      await setupLegacyFrameReplacement({
+        scope: "conversation",
+        replacementManifest,
+        extraSources: functionSources,
+      });
+    await enablePublicFrameFunctions(auth);
+    await legacyFrame.setShareScope(auth, "public");
+
+    const sandbox = await SandboxResource.makeNew(auth, {
+      providerId: "test-provider-id",
+      status: "running",
+      baseImage: "dust-base",
+      version: "0.0.0-test",
+    });
+    const stagedRelativePaths = [
+      FRAME_MANIFEST_FILE,
+      "index.tsx",
+      "theme.ts",
+      "functions/run.ts",
+    ];
+    vi.spyOn(sandbox, "writeFile").mockResolvedValue(new Ok(undefined));
+    vi.spyOn(sandbox, "execRoot").mockResolvedValue(
+      new Ok({
+        exitCode: 0,
+        stdout: `${computeFrameSourcePathSetSha256(stagedRelativePaths)}  -\n`,
+        stderr: "",
+      })
+    );
+    vi.mocked(ensureConversationSandboxReadyWithScope).mockResolvedValue(
+      new Ok({
+        sandbox,
+        freshlyCreated: false,
+        scope: { spaceId: null },
+      })
+    );
+    vi.mocked(buildSandboxFunctionOnReadySandbox).mockResolvedValue(
+      new Ok({
+        bundleCode: "export default true;",
+        userIdentity: "workspace_user_required",
+        inputSchema: { type: "object" },
+        outputSchema: { type: "object" },
+      })
+    );
+
+    const result = await publishFrameFromSource(auth, {
+      mode: "live",
+      conversation,
+      publishedByAgentConfigurationId: "test-agent",
+      sourcePath: manifestPath,
+      replacesPath: legacyPath,
+    });
+
+    assert(result.isErr(), "Expected the replacement to be refused");
+    expect(result.error).toMatchObject({ code: "sharing_conflict" });
+    expect(ensureFrameSandboxReady).not.toHaveBeenCalled();
+    const frame = await FileResource.fetchById(auth, legacyFrame.sId);
+    assert(frame, "Frame not found");
+    expect(frame.isFrameV2).toBe(false);
+    expect(frame.toScopedPath(auth)).toBe(legacyPath);
   });
 });
 

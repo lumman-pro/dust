@@ -917,10 +917,10 @@ export async function activateFramePublication(
  */
 export async function checkFramePublicFunctionSharing(
   frame: FileResource,
-  descriptor: FramePublicationDescriptor
+  functions: FramePublicationDescriptor["functions"]
 ): Promise<Result<void, FramePublicationError>> {
   const conflict = await getFramePublicFunctionSharingConflict(frame, {
-    userIdentities: descriptor.functions.map((fn) => fn.userIdentity),
+    userIdentities: functions.map((fn) => fn.userIdentity),
   });
 
   return conflict
@@ -994,7 +994,7 @@ export async function publishFramePublication(
 
     const publicSharing = await checkFramePublicFunctionSharing(
       freshFrame,
-      descriptor
+      descriptor.functions
     );
     if (publicSharing.isErr()) {
       return publicSharing;

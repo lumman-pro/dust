@@ -11,6 +11,7 @@ import { withFrameSourceLock } from "@app/lib/api/frames/operation_lock";
 import type { FramePublicationSourceFile } from "@app/lib/api/frames/publication_storage";
 import {
   buildFramePublicationContracts,
+  checkFramePublicFunctionSharing,
   FramePublicationError,
   publishFramePublication,
 } from "@app/lib/api/frames/publication_storage";
@@ -581,6 +582,14 @@ async function replaceLegacyFrameFromSource(
     });
     if (contracts.isErr()) {
       return contracts;
+    }
+
+    const publicSharing = await checkFramePublicFunctionSharing(
+      legacyFrame,
+      contracts.value.functions
+    );
+    if (publicSharing.isErr()) {
+      return publicSharing;
     }
 
     const manifestSource = sourceFiles.find(
