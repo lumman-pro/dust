@@ -78,8 +78,16 @@ msgid "Workspace"
 msgstr "Workspace"
 
 #: front/components/assistant/conversation/interactive_content/frame/FrameSharingFiles.tsx
+msgid "These files and data will be shared too"
+msgstr "Diese Dateien und Daten werden ebenfalls geteilt"
+
+#: front/components/assistant/conversation/interactive_content/frame/FrameSharingFiles.tsx
 msgid "Files and data used by this frame are shared too"
 msgstr "Von diesem Frame verwendete Dateien und Daten werden ebenfalls geteilt"
+
+#: front/components/assistant/conversation/interactive_content/frame/FrameSharingFiles.tsx
+msgid "Once your changes are live, people who can view this frame will also be able to access the files and data it uses. They won’t be able to access the rest of the conversation or pod."
+msgstr "Sobald Ihre Änderungen live sind, haben Personen, die dieses Frame sehen können, auch Zugriff auf die verwendeten Dateien und Daten. Auf den Rest der Unterhaltung oder des Pods haben sie keinen Zugriff."
 
 #: front/components/assistant/conversation/interactive_content/frame/FrameSharingFiles.tsx
 msgid "People who can view this frame can also access the files and data it uses. They can’t access the rest of the conversation or pod."
@@ -92,6 +100,10 @@ msgstr "{fileCount, plural, one {# Datei anzeigen} other {# Dateien anzeigen}}"
 #: front/components/assistant/conversation/interactive_content/frame/FrameSharingFiles.tsx
 msgid "Included files"
 msgstr "Enthaltene Dateien"
+
+#: front/components/assistant/conversation/interactive_content/frame/FrameSharingFiles.tsx
+msgid "Files and data that will be available to people you share this frame with."
+msgstr "Dateien und Daten, die für Personen verfügbar sein werden, mit denen Sie dieses Frame teilen."
 
 #: front/components/assistant/conversation/interactive_content/frame/FrameSharingFiles.tsx
 msgid "Files and data available to people you share this frame with."
@@ -384,6 +396,18 @@ msgstr "Einige referenzierte Dateien können nicht geteilt werden"
 #: front/components/assistant/conversation/interactive_content/frame/ShareFramePopover.tsx
 msgid "Viewers will only be able to access files you can verify. Fix or remove these references before sharing: {blockedRefs}"
 msgstr "Betrachter können nur auf Dateien zugreifen, die Sie überprüfen können. Korrigieren oder entfernen Sie diese Verweise vor dem Teilen: {blockedRefs}"
+
+#: front/components/assistant/conversation/interactive_content/frame/ShareFramePopover.tsx
+msgid "The link shows the live version, not the changes you haven’t made live yet."
+msgstr "Der Link zeigt die Live-Version, nicht die Änderungen, die Sie noch nicht live geschaltet haben."
+
+#: front/components/assistant/conversation/interactive_content/frame/ShareFramePopover.tsx
+msgid "After you make your changes live"
+msgstr "Nachdem Sie Ihre Änderungen live geschaltet haben"
+
+#: front/components/assistant/conversation/interactive_content/frame/ShareFramePopover.tsx
+msgid "No files will be shared once your changes are live."
+msgstr "Sobald Ihre Änderungen live sind, werden keine Dateien geteilt."
 
 #: front/components/assistant/conversation/interactive_content/frame/ShareFramePopover.tsx
 msgid "Who has access"
