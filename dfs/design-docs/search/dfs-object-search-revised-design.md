@@ -37,7 +37,7 @@ original proposed JSON files remain alongside this note as research snapshots. T
 [verification harness](dfs-object-search-validation.py)
 loaded the active mapping and `cell-00000` settings into a disposable ES 8.16 instance, changing
 only shard/replica counts and removing the production allocation constraint.
-[Results](dfs-object-search-validation-results.json): **68 checks passed on 144 synthetic objects**,
+[Results](dfs-object-search-validation-results.json): **70 checks passed on 144 synthetic objects**,
 plus a separate comparison of five prefix/indexing configurations. This establishes mechanics; it is not a production relevance or capacity benchmark.
 
 All five [Rust bootstrap tests](../../server/tests/search.rs) passed, covering creation, preflight
@@ -108,7 +108,8 @@ text in `_source`; measure this storage tradeoff with real extracted sizes.
 | `attributes.owner_ids`, `attributes.source` | Exact keywords; IDs are not stemmed or accent-folded. |
 | `modified_at`, `created_at`, `attributes.source_modified_at` | Validated date values with doc values for filters and future freshness features. |
 | `name.token_count`, `content_text.token_count` | Numeric doc values for future length features. Not precomputed relevance scores. |
-| `path_ids`, `read_path_ids` | Inclusive full physical path and read-DENY-bounded suffix, respectively. Independent subtree and access filters. |
+| `ancestor_ids` | All physical ancestors, excluding self. Recursive scope also checks `object_id` when including the selected object. |
+| `read_grant_scope_ids` | Object IDs where a direct READ grant could authorize this object, including self and the closest read-DENY node. Independent of current grants. |
 | Tenant, deletion, provenance fields | Tenant isolation, tombstones, and extraction/version provenance. |
 
 `dynamic: strict` prevents arbitrary xattribute names from creating mappings. Selected keywords
@@ -317,7 +318,7 @@ proposal shows Basic. The mapping is also usable by an application reranker or a
 implementation. These are future integration choices, not a request to add LTR today.
 [Pinned LTR/rescore evidence](dfs-search-ranking-evidence.md).
 
-**Subtree scope and access use two independent inclusive paths.**
+**Subtree scope and access use separate ancestry and grant-eligibility fields.**
 
 ```text
 foo              ALLOW g:engineering read
@@ -331,22 +332,26 @@ For `x.pdf`, using the example's top node as the root:
 ```json
 {
   "object_id": "x_pdf_id",
-  "path_ids": ["foo_id", "bar_id", "folder123_id", "x_pdf_id"],
-  "read_path_ids": ["bar_id", "folder123_id", "x_pdf_id"]
+  "ancestor_ids": ["foo_id", "bar_id", "folder123_id"],
+  "read_grant_scope_ids": ["bar_id", "folder123_id", "x_pdf_id"]
 }
 ```
 
-`path_ids` contains the full physical chain from the real tenant root through the indexed object,
-including both. `read_path_ids` is its suffix starting at the closest ancestor-or-self with a read
-DENY, including that node and the object. Without a read DENY, both arrays are identical. A write-only
-DENY does not truncate the read path. No subjects or current ALLOW attachments are copied into either
-array. Array order explains the projection; ES filters use membership, not positional lookup.
-There is no separate `parent_id` or strict-ancestor field in the search mapping.
+`ancestor_ids` contains every physical ancestor from the real tenant root to the immediate parent,
+excluding the indexed object itself. The tenant root has an empty ancestor list.
+`read_grant_scope_ids` contains the object IDs where a direct READ grant could authorize this
+object: itself and its ancestors through the closest ancestor-or-self carrying a read DENY,
+including that DENY node. Without a read DENY, it contains all `ancestor_ids` plus `object_id`.
+A read DENY on the object itself leaves only `object_id`; a write-only DENY does not truncate this
+set. Include eligible object IDs even when no ALLOW is currently attached. No subjects or actual
+grant records are copied into either array. Array order explains the projection; ES filters use
+membership, not positional lookup. There is no separate `parent_id` field in the search mapping.
 
 Resolve current direct ALLOW grants for the session's exact subjects, retaining only grants with
-the read bit, then require at least one grant object ID in `read_path_ids`. Ordinary sessions with
+the read bit, then require at least one grant object ID in `read_grant_scope_ids`. Ordinary sessions with
 no matching read-grant IDs get no candidates. A failed/incomplete grant lookup must not disable the
-filter. Subtree search separately filters `path_ids` by the requested folder ID:
+filter. Subtree search separately matches the requested folder ID against `ancestor_ids`, or
+against `object_id` when the selected folder itself should also be eligible:
 
 ```json
 {
@@ -354,8 +359,16 @@ filter. Subtree search separately filters `path_ids` by the requested folder ID:
     "filter": [
       { "term": { "tenant_id": "tenant_id" } },
       { "term": { "is_deleted": false } },
-      { "term": { "path_ids": "foo_id" } },
-      { "terms": { "read_path_ids": ["folder123_id"] } }
+      {
+        "bool": {
+          "should": [
+            { "term": { "ancestor_ids": "foo_id" } },
+            { "term": { "object_id": "foo_id" } }
+          ],
+          "minimum_should_match": 1
+        }
+      },
+      { "terms": { "read_grant_scope_ids": ["folder123_id"] } }
     ]
   }
 }
@@ -368,21 +381,23 @@ with DFS's existing `(inherited & ~local_deny) | matching_local_allow` rule.
 
 Adding/removing an ordinary user/group ALLOW updates grant records and their subject lookup index;
 it does not require updating descendants in ES. Moving a subtree or changing its closest read-DENY
-boundary can require descendant updates. These costs are accepted. An inclusive scope also matches
-the scoped object itself when otherwise eligible; a strict-descendants operation must explicitly
-exclude that object ID. Physical scope does not require an ALLOW on the scope node itself.
+boundary can require descendant updates. These costs are accepted. An inclusive scope uses the
+`ancestor_ids` / `object_id` alternative above. Strict-descendant search uses only `ancestor_ids`.
+Both remain separate from the mandatory grant filter, so matching the scope object itself does not
+bypass access checks. Physical scope does not require an ALLOW on the scope node itself.
 
 The ES membership query is a candidate prefilter. Before exposing any title, content, or excerpt,
 deduplicate object IDs and check current permissions once per distinct object in DFS. Recheck current
-physical scope as well when moves could leave stale indexed paths. Stale candidates may be removed
+physical scope as well when moves could leave stale indexed ancestry. Stale candidates may be removed
 by these checks; missing candidates after a move or DENY removal need index repair. Superusers bypass
 only the grant prefilter, retaining tenant and requested-scope restrictions and existence checks.
 The current subject-listing helper includes write-only ALLOWs, so it is not a ready-made read-grant
 resolver. [Existing subject lookup](../../server/src/storage/resources/object.rs),
 [shared listing](../../server/src/storage/resources/directory/shared.rs).
 
-The validation harness exercises the example's membership/scope queries, self inclusion, same-node
-ALLOW, any-grant matching, tenant isolation, and grant changes without modifying indexed paths.
+The validation harness exercises the example's membership/scope queries, explicit self inclusion,
+strict ancestry, same-node ALLOW, any-grant matching, tenant isolation, and grant changes without
+modifying the indexed ancestry or grant scopes. Selecting the object itself still enforces access.
 It does not implement or validate the grant resolver, transactional rechecks, or durable subtree
 reindexing. Attribute/extraction changes still need to publish a consistent complete projection;
 stale extraction text must not survive a content-version change.

@@ -101,7 +101,7 @@ The following are proposed signals grounded in the [existing index proposal](dfs
 | Query coverage | Matched-term counts and query length computed consistently from the selected search analysis |
 | Recency | `mtime_ms` plus request time; clamp/transform deliberately and define missing values |
 | File-type preference | `mime_type` and `kind`; explicit user filters remain hard constraints |
-| Folder affinity | `path_ids` plus query context, only inside the authorized search scope |
+| Folder affinity | `ancestor_ids` plus query context, only inside the authorized search scope |
 | Size-related feature | `size_bytes`; logical file size is not extracted text length and should not be treated as equivalent |
 
 The proposal does not contain click counts, per-user opens, author, favorites, or historical query/document judgments. `atime_ms` is not a substitute for per-user engagement, and `projected_at` describes indexing activity rather than document relevance. Source-only timestamps such as `created_at_ms` currently disable indexing and doc values; do not assume cheap script access without changing the feature implementation.

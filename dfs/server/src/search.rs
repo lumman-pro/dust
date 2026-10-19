@@ -33,6 +33,12 @@ pub enum IndexCell {
  * Neutral text fields MUST NOT automatically populate language representations through
  * multi-fields or copy_to.
  */
+/**
+ * @cc [owner:flvndvd,label:backend;security] objects-index-hierarchy-fields
+ * The mapping MUST distinguish physical ancestry in ancestor_ids (self excluded) from eligible
+ * direct READ-grant object IDs in read_grant_scope_ids (self included, bounded by the nearest
+ * read-DENY inclusively). Both fields MUST be keywords, independent of current grant attachments.
+ */
 pub fn objects_index_body(cell: IndexCell) -> Result<Value> {
     let settings = match cell {
         IndexCell::Local => include_str!("search/indices/objects_1.settings.local.json"),

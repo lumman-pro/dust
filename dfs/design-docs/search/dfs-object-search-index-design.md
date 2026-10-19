@@ -33,8 +33,8 @@ explains the retrieval design and its local evidence.
 | Projection type | `ObjectSearchDocument` | Internal ES representation, separate from the RPC's `SearchAttr`. |
 | Object identity | `object_id` | Existing UUIDv7, displayed as lowercase 32-digit hex. |
 | Tenant identity | `tenant_id` | Existing DFS tenant string, preserved exactly. |
-| Physical path | `path_ids` | Full chain from tenant root through the indexed object, inclusive. |
-| Read inheritance | `read_path_ids` | Object and ancestors whose local read grants can authorize this object, bounded by read DENY. Defined below. |
+| Physical ancestry | `ancestor_ids` | All ancestors from tenant root to immediate parent, excluding the indexed object. |
+| Read-grant eligibility | `read_grant_scope_ids` | Object IDs where a direct READ grant could authorize this object, including self and the closest read-DENY node. Defined below. |
 | Extracted or native searchable text | `content_text` | Text belonging to the original object's search result. |
 | Infrastructure placement | Per-cell settings | `cell-00000` / `cell-00001` require `workload=filesystem`; `cell-00002` uses its shared pool. |
 
@@ -105,7 +105,7 @@ A scalar “highest accessible parent” differs between these users. Filtering 
 against each user's direct grant locations loses one valid access path. Calling it an ACL scope
 would require an additional scope model and rules for splitting scopes when grants change.
 
-Proposed representation: build `read_path_ids` from the indexed object toward the tenant
+Proposed representation: build `read_grant_scope_ids` from the indexed object toward the tenant
 root, stopping after including the closest ancestor-or-self carrying a DENY with the read bit.
 Without such a DENY, include the tenant root. Include every object on that chain, even when it has
 no ALLOW today; otherwise adding a grant would require descendant rewrites. The DENY object is
@@ -117,7 +117,7 @@ becomes `[denied_directory, reports, budget]`.
 
 At query time, resolve `read_grant_object_ids` from the tenant's reverse ALLOW index for the
 session's exact subjects, retaining only modes with `mode & 4 != 0`. Intersect those IDs with
-`read_path_ids` using `terms`. The current shared-listing helper also returns zero and
+`read_grant_scope_ids` using `terms`. The current shared-listing helper also returns zero and
 write-only grants, so it cannot be reused unchanged as a read-grant resolver.
 [Reverse index writes](https://github.com/dust-tt/dust/blob/7f5fba70710c3e1cf7866aeeae97a8c40fa0a4fd/dfs/server/src/storage/resources/object.rs#L604),
 [existing shared candidates](https://github.com/dust-tt/dust/blob/7f5fba70710c3e1cf7866aeeae97a8c40fa0a4fd/dfs/server/src/storage/resources/object/shared.rs#L17)
@@ -149,8 +149,8 @@ results; silently taking the first 65,536 IDs is incorrect.
 | Field | Mapping / meaning |
 | --- | --- |
 | `tenant_id`, `object_id` | Exact `keyword`; no case folding or normalizer |
-| `path_ids` | `keyword` array, inclusive full physical path for recursive scope |
-| `read_path_ids` | `keyword` array, inclusive read inheritance chain as above |
+| `ancestor_ids` | `keyword` array, all physical ancestors excluding self for recursive scope |
+| `read_grant_scope_ids` | `keyword` array, eligible direct READ-grant object IDs including self, as above |
 | `kind` | `keyword`, serialized as `file` or `directory`; symlinks remain unsupported |
 | `name` / `name.keyword` | Analyzed basename / exact case-sensitive basename and prefix filtering |
 | `name.parts` | Filename components for separators and case transitions that ordinary text tokenization can miss |
@@ -265,8 +265,8 @@ cost. Fields used only for freshness or provenance disable both indexing and doc
   "properties": {
     "tenant_id": { "type": "keyword" },
     "object_id": { "type": "keyword" },
-    "path_ids": { "type": "keyword" },
-    "read_path_ids": { "type": "keyword" },
+    "ancestor_ids": { "type": "keyword" },
+    "read_grant_scope_ids": { "type": "keyword" },
     "kind": { "type": "keyword" },
     "name": {
       "type": "text",
@@ -319,10 +319,11 @@ cost. Fields used only for freshness or provenance disable both indexing and doc
 }
 ```
 
-No full textual pathname is materialized. A directory rename therefore changes its own document; a move
-changes descendant paths. `path_ids` supports recursive search and includes the scoped object
-itself. Strict-descendant search must explicitly exclude that object ID. These are useful
-filesystem scope operations independently of how a future API exposes them.
+No full textual pathname is materialized. A directory rename therefore changes its own document;
+a move changes descendant ancestry. `ancestor_ids` supports strict-descendant search. To include
+the scoped object itself, match either `ancestor_ids` or `object_id`, while retaining the separate
+grant filter. These are useful filesystem scope operations independently of how a future API
+exposes them.
 
 **Index settings and allocation.**
 
@@ -462,8 +463,16 @@ fields. An explicit any-term option or visible partial-match fallback can relax 
       "filter": [
         { "term": { "tenant_id": "authenticated-tenant" } },
         { "term": { "is_deleted": false } },
-        { "terms": { "read_path_ids": ["direct-read-grant-object-id"] } },
-        { "term": { "path_ids": "authorized-scope-directory-id" } }
+        { "terms": { "read_grant_scope_ids": ["direct-read-grant-object-id"] } },
+        {
+          "bool": {
+            "should": [
+              { "term": { "ancestor_ids": "authorized-scope-directory-id" } },
+              { "term": { "object_id": "authorized-scope-directory-id" } }
+            ],
+            "minimum_should_match": 1
+          }
+        }
       ],
       "must": [
         {
@@ -513,8 +522,9 @@ additionally requires `window_size >= from + size`.
 
 Use `match_all` for an explicit filter-only browse. Field-restricted searches can select the
 appropriate lexical fields; content searches return files. Exact name and name-prefix predicates
-target `name.keyword`; subtree scope targets `path_ids`; modification predicates target
-`mtime_ms`; size/MIME predicates select files. Combine independent metadata predicates with AND.
+target `name.keyword`; subtree scope targets `ancestor_ids`, with an `object_id` alternative when
+including the selected object; modification predicates target `mtime_ms`; size/MIME predicates
+select files. Combine independent metadata predicates with AND.
 Enforce an application excerpt budget after highlighting; `fragment_size` is not a strict output
 length guarantee. Names, snippets, and metadata are emitted only after current authorization and
 the relevant source-version/predicate checks. Pagination, total counts, result limits, and query

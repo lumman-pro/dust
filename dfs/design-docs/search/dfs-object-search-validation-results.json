@@ -962,7 +962,7 @@
       "passed": true
     },
     {
-      "label": "read paths use any matching grant ID",
+      "label": "read grant scopes use any matching grant ID",
       "grant_ids": [
         "unrelated",
         "folder123"
@@ -987,7 +987,7 @@
       "passed": true
     },
     {
-      "label": "the full path includes the object itself",
+      "label": "inclusive scope explicitly includes the object itself",
       "grant_ids": [
         "folder123"
       ],
@@ -998,6 +998,16 @@
       "hits": [
         "scope_x"
       ],
+      "passed": true
+    },
+    {
+      "label": "selecting the object itself does not bypass its read-DENY boundary",
+      "grant_ids": [
+        "foo"
+      ],
+      "scope_id": "scope_x",
+      "expected_exact": [],
+      "hits": [],
       "passed": true
     },
     {
@@ -1019,6 +1029,47 @@
       "grant_ids": [],
       "scope_id": "foo",
       "expected_exact": [],
+      "hits": [],
+      "passed": true
+    },
+    {
+      "label": "strict ancestry excludes the scoped object itself",
+      "query": {
+        "bool": {
+          "filter": [
+            {
+              "bool": {
+                "filter": [
+                  {
+                    "term": {
+                      "tenant_id": "tenant-a"
+                    }
+                  },
+                  {
+                    "term": {
+                      "is_deleted": false
+                    }
+                  },
+                  {
+                    "terms": {
+                      "read_grant_scope_ids": [
+                        "folder123"
+                      ]
+                    }
+                  }
+                ],
+                "must": [],
+                "must_not": []
+              }
+            },
+            {
+              "term": {
+                "ancestor_ids": "scope_x"
+              }
+            }
+          ]
+        }
+      },
       "hits": [],
       "passed": true
     },
@@ -2304,7 +2355,7 @@
     },
     "electroencephalographic": {
       "allowed": false,
-      "error": "{\"error\":{\"root_cause\":[{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}],\"type\":\"search_phase_execution_exception\",\"reason\":\"all shards failed\",\"phase\":\"query\",\"grouped\":true,\"failed_shards\":[{\"shard\":0,\"index\":\"codex-dfs-object-search-v1\",\"node\":\"U-0MQ4uTQn2y-y0t_mSyCw\",\"reason\":{\"type\":\"query_shard_exception\",\"reason\":\"failed to create query: [prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\",\"index_uuid\":\"DK13_-QiTnyiwYyV0Nj8Pg\",\"index\":\"codex-dfs-object-search-v1\",\"caused_by\":{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}}}],\"caused_by\":{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}},\"status\":400}"
+      "error": "{\"error\":{\"root_cause\":[{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}],\"type\":\"search_phase_execution_exception\",\"reason\":\"all shards failed\",\"phase\":\"query\",\"grouped\":true,\"failed_shards\":[{\"shard\":0,\"index\":\"codex-dfs-object-search-v1\",\"node\":\"mAz_Q4PUSm-bJgYOqv6BnQ\",\"reason\":{\"type\":\"query_shard_exception\",\"reason\":\"failed to create query: [prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\",\"index_uuid\":\"Fuz5DA7uSHG3PBYhPto9Vg\",\"index\":\"codex-dfs-object-search-v1\",\"caused_by\":{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}}}],\"caused_by\":{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}},\"status\":400}"
     }
   },
   "stem_highlights": [
@@ -3703,7 +3754,7 @@
           },
           {
             "terms": {
-              "read_path_ids": [
+              "read_grant_scope_ids": [
                 "grant-a"
               ]
             }

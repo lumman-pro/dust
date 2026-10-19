@@ -9,8 +9,8 @@
     ],
     "language_stemming_policy": "populate explicit stemmed fields only for reliably identified text; keep all original text in neutral fields",
     "hierarchy": {
-      "path_ids": "full physical path from tenant root through object, inclusive",
-      "read_path_ids": "suffix of path_ids from nearest read-DENY through object, inclusive; full path if no read-DENY"
+      "ancestor_ids": "physical ancestors from tenant root to immediate parent, excluding self; empty for the tenant root",
+      "read_grant_scope_ids": "object IDs where a direct READ grant can authorize this object: self and ancestors through the nearest read-DENY, inclusive; all ancestors plus self if no read-DENY, regardless of current grants"
     }
   },
   "properties": {
@@ -20,10 +20,10 @@
     "object_id": {
       "type": "keyword"
     },
-    "path_ids": {
+    "ancestor_ids": {
       "type": "keyword"
     },
-    "read_path_ids": {
+    "read_grant_scope_ids": {
       "type": "keyword"
     },
     "kind": {

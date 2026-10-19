@@ -116,10 +116,13 @@ def compile_query(text, interactive=False, read_grant_ids=("grant-a",), scope_id
     filters = [
         {"term": {"tenant_id": "tenant-a"}},
         {"term": {"is_deleted": False}},
-        {"terms": {"read_path_ids": list(read_grant_ids)}} if read_grant_ids else {"match_none": {}},
+        {"terms": {"read_grant_scope_ids": list(read_grant_ids)}} if read_grant_ids else {"match_none": {}},
     ]
     if scope_id is not None:
-        filters.append({"term": {"path_ids": scope_id}})
+        filters.append({"bool": {"should": [
+            {"term": {"ancestor_ids": scope_id}},
+            {"term": {"object_id": scope_id}},
+        ], "minimum_should_match": 1}})
     required, prohibited = [], []
     for token in terms:
         modifier = token["modifier"]
@@ -214,8 +217,8 @@ documents = {
     "filter_type_word": document("PDF budget.txt", "Budget", file_type="txt", mime_type="text/plain"),
     "filter_other_owner": document("Forecast.pdf", "Budget", attributes={"owner_ids": ["bob-id"]}),
     "wrong_tenant": document("Reports.pdf", "Budget", tenant_id="tenant-b"),
-    "no_permission": document("Reports.pdf", "Budget", path_ids=["root", "grant-b", "no_permission"],
-                              read_path_ids=["grant-b", "no_permission"]),
+    "no_permission": document("Reports.pdf", "Budget", ancestor_ids=["root", "grant-b"],
+                              read_grant_scope_ids=["grant-b", "no_permission"]),
     "deleted": document("Reports.pdf", "Budget", is_deleted=True),
     "draft": document("Reports draft.pdf", "Budget"),
     "old": document("Older archive", "Budget", modified_at="2025-01-01T00:00:00Z"),
@@ -264,18 +267,18 @@ documents.update({
                            stemmed={"en": {"content_text": ["Employees requested equipment."]},
                                     "fr": {"content_text": ["Les journaux des sociétés."]}}),
     "scope_x": document("Scope example", "Hierarchy permission fixture.",
-                        path_ids=["foo", "bar", "folder123", "scope_x"],
-                        read_path_ids=["bar", "folder123", "scope_x"]),
+                        ancestor_ids=["foo", "bar", "folder123"],
+                        read_grant_scope_ids=["bar", "folder123", "scope_x"]),
     "scope_other_tenant": document("Scope other tenant", tenant_id="tenant-b",
-                        path_ids=["foo", "bar", "folder123", "scope_other_tenant"],
-                        read_path_ids=["bar", "folder123", "scope_other_tenant"]),
+                        ancestor_ids=["foo", "bar", "folder123"],
+                        read_grant_scope_ids=["bar", "folder123", "scope_other_tenant"]),
 })
 for i in range(80):
     documents[f"background_{i}"] = document(f"Reference {i}", "General reference material " * 30)
 for object_id, source in documents.items():
     source["object_id"] = object_id
-    source.setdefault("path_ids", ["root", "grant-a", object_id])
-    source.setdefault("read_path_ids", source["path_ids"])
+    source.setdefault("ancestor_ids", ["root", "grant-a"])
+    source.setdefault("read_grant_scope_ids", source["ancestor_ids"] + [object_id])
 bulk(INDEX, documents)
 
 checks = []
@@ -370,9 +373,10 @@ for label, grants, scope, expected in [
     ("a grant above DENY is excluded", ["foo"], "foo", []),
     ("ALLOW on the DENY node can restore read", ["bar"], "foo", ["scope_x"]),
     ("an ALLOW on the object itself can restore read", ["scope_x"], "foo", ["scope_x"]),
-    ("read paths use any matching grant ID", ["unrelated", "folder123"], "foo", ["scope_x"]),
+    ("read grant scopes use any matching grant ID", ["unrelated", "folder123"], "foo", ["scope_x"]),
     ("a different physical subtree excludes an otherwise readable object", ["folder123"], "elsewhere", []),
-    ("the full path includes the object itself", ["folder123"], "scope_x", ["scope_x"]),
+    ("inclusive scope explicitly includes the object itself", ["folder123"], "scope_x", ["scope_x"]),
+    ("selecting the object itself does not bypass its read-DENY boundary", ["foo"], "scope_x", []),
     ("adding an ALLOW changes the query without reindexing", ["folder123"], "foo", ["scope_x"]),
     ("revoking the only ALLOW changes the query without reindexing", [], "foo", []),
 ]:
@@ -381,6 +385,17 @@ for label, grants, scope, expected in [
     ids = [hit["_id"] for hit in hits]
     checks.append({"label": label, "grant_ids": grants, "scope_id": scope,
                    "expected_exact": expected, "hits": ids, "passed": set(ids) == set(expected)})
+
+# Strict ancestry excludes self even when that object is readable and included by
+# the inclusive scope query above.
+strict_scope_query = {"bool": {"filter": [
+    compile_query("", read_grant_ids=["folder123"]),
+    {"term": {"ancestor_ids": "scope_x"}},
+]}}
+strict_scope_hits = search("", query=strict_scope_query)["hits"]["hits"]
+checks.append({"label": "strict ancestry excludes the scoped object itself",
+               "query": strict_scope_query, "hits": [hit["_id"] for hit in strict_scope_hits],
+               "passed": not strict_scope_hits})
 
 analyzers = {}
 for value in ["Reports.pdf", "Q4_Reports-final_v2.pdf", "AnnualReports.pdf", "archive.tar.gz",

@@ -7,9 +7,12 @@ explain the object projection, analysis, and intended query behavior.
 Neutral name, content, and selected attribute fields always retain the original searchable text.
 Only classified text populates the explicit `stemmed.en` / `stemmed.fr` fields. Language detection
 and confidence policy belong to the projection work; this command does not run a detector.
-`path_ids` stores the inclusive full physical path; `read_path_ids` stores the inclusive suffix
-from the closest read-DENY. Current read grants select candidates, then DFS must recheck permission
-once per distinct object before returning its title or content.
+`ancestor_ids` stores all physical ancestors, excluding the object itself. `read_grant_scope_ids`
+stores the object IDs where a direct READ grant could authorize the object, including itself and
+ancestors through the closest read-DENY, inclusive. Without a read-DENY, it includes all ancestors
+plus self. Subtree filters use `ancestor_ids`, with an `object_id` alternative when including the
+selected object. Current read grants select candidates, then DFS must recheck permission once per
+distinct object before returning its title or content.
 
 The versioned JSON files in `indices/` are embedded in the Rust bootstrap command. All cells
 share the same mapping and analysis. Local settings use one primary and no replica. Production
