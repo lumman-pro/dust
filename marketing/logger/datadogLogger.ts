@@ -2,10 +2,6 @@ import { datadogLogs } from "@datadog/browser-logs";
 
 import type { DatadogLogStatus } from "./logger";
 
-// Keep the exported Logger type for compatibility with existing imports. Type-only, so the
-// pino-backed module is erased from the browser bundle.
-export type { Logger } from "./logger";
-
 // Benign error messages that should not be forwarded to Datadog.
 export const IGNORED_LOG_MESSAGES = [
   "ResizeObserver loop completed with undelivered notifications",

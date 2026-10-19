@@ -667,63 +667,6 @@ export function ContinueLearningCard({
   );
 }
 
-interface FeaturedCourseProps {
-  course: CourseSummary;
-  featuredCourseLabel: string;
-  startLearningLabel: string;
-}
-
-export function FeaturedCourse({
-  course,
-  featuredCourseLabel,
-  startLearningLabel,
-}: FeaturedCourseProps) {
-  return (
-    <div className="col-span-12 pt-8">
-      <LinkWrapper
-        href={`/academy/${course.slug}`}
-        className="group flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white transition-all duration-200 hover:border-gray-300 hover:shadow-lg lg:flex-row"
-      >
-        <div className="relative w-full overflow-hidden bg-gray-100 lg:w-1/2">
-          <Image
-            src={course.image?.url ?? ""}
-            alt={course.image?.alt ?? course.title}
-            width={800}
-            height={600}
-            loader={contentfulImageLoader}
-            sizes="(max-width: 1024px) 100vw, 50vw"
-            className="h-full w-full object-cover transition-opacity duration-200 group-hover:opacity-90"
-          />
-        </div>
-
-        <div className="flex w-full flex-col justify-center gap-6 p-10 lg:w-1/2">
-          <div className="inline-block">
-            <span className="rounded-full bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary">
-              {featuredCourseLabel}
-            </span>
-          </div>
-          <h2 className="text-3xl font-semibold text-gray-900 transition-colors group-hover:text-primary md:text-4xl">
-            {course.title}
-          </h2>
-          {course.description && (
-            <p className="text-lg leading-relaxed text-gray-600">
-              {course.description}
-            </p>
-          )}
-          <div>
-            <Button
-              label={startLearningLabel}
-              href={`/academy/${course.slug}`}
-              size="md"
-              variant="primary"
-            />
-          </div>
-        </div>
-      </LinkWrapper>
-    </div>
-  );
-}
-
 interface AcademyLayoutProps {
   children: React.ReactNode;
 }

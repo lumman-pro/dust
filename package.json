@@ -30,7 +30,7 @@
     "test:oxlint-plugin": "node --test oxlint-plugins/dust.test.mjs",
     "doctor": "npx react-doctor@latest --diff",
     "doctor:full": "npx react-doctor@latest --diff false",
-    "knip:dead-code": "knip --production --workspace front --workspace front-api --workspace front-spa --workspace extension --include files,exports,types"
+    "knip:dead-code": "knip --production --workspace front --workspace front-api --workspace front-spa --workspace extension --workspace marketing --include files,exports,types"
   },
   "devDependencies": {
     "@lingui/cli": "6.4.0",

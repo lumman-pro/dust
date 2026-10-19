@@ -49,15 +49,6 @@ function readAnonymousIdFromDocumentCookie(): string | null {
   return parseDustAidFromCookieString(document.cookie);
 }
 
-export function readAnonymousIdFromCookies(
-  cookieHeader: string | undefined
-): string | null {
-  if (!cookieHeader) {
-    return null;
-  }
-  return parseDustAidFromCookieString(cookieHeader);
-}
-
 function parseDustAidFromCookieString(cookies: string): string | null {
   const prefix = `${DUST_ANONYMOUS_ID_COOKIE}=`;
   const match = cookies.split("; ").find((c) => c.startsWith(prefix));

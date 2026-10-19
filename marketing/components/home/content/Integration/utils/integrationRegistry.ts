@@ -1,19 +1,5 @@
 import type { IntegrationBase, IntegrationCategory } from "../types";
 
-export function getIntegrationBySlug(
-  integrations: IntegrationBase[],
-  slug: string
-): IntegrationBase | undefined {
-  return integrations.find((i) => i.slug === slug);
-}
-
-export function getIntegrationsByCategory(
-  integrations: IntegrationBase[],
-  category: IntegrationCategory
-): IntegrationBase[] {
-  return integrations.filter((i) => i.category === category);
-}
-
 export function getAllCategories(
   integrations: IntegrationBase[]
 ): IntegrationCategory[] {

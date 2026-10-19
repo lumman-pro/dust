@@ -1,10 +1,4 @@
-export {
-  FetcherProvider,
-  useFetcher,
-} from "@marketing/components/swr/FetcherContext";
-
-import { isAPIErrorResponse } from "@marketing/types/error";
-import type { PaginationState } from "@tanstack/react-table";
+export { useFetcher } from "@marketing/components/swr/FetcherContext";
 import { useCallback } from "react";
 import type {
   Fetcher,
@@ -14,18 +8,6 @@ import type {
   SWRConfiguration,
 } from "swr";
 import useSWR, { useSWRConfig } from "swr";
-import type {
-  SWRInfiniteConfiguration,
-  SWRInfiniteKeyLoader,
-} from "swr/infinite";
-import useSWRInfinite, { unstable_serialize } from "swr/infinite";
-
-const EMPTY_ARRAY = Object.freeze([]);
-
-// Returns a frozen constant empty array of the required type- use to avoid creating new arrays
-export function emptyArray<T>(): T[] {
-  return EMPTY_ARRAY as unknown as T[];
-}
 
 const DEFAULT_SWR_CONFIG: SWRConfiguration = {
   errorRetryCount: 16,
@@ -126,85 +108,4 @@ export function useSWRWithDefaults<TKey extends Key, TData>(
       mutateRegardlessOfQueryParams: myMutateRegardlessOfQueryParams,
     };
   }
-}
-
-export function useSWRInfiniteWithDefaults<TKey extends Key, TData>(
-  getKey: SWRInfiniteKeyLoader<TData, TKey>,
-  fetcher: Fetcher<TData, TKey> | null,
-  config?: SWRInfiniteConfiguration & { disabled?: boolean }
-) {
-  const { mutate: globalMutate } = useSWRConfig();
-  const mergedConfig = { ...DEFAULT_SWR_CONFIG, ...config };
-  const disabled = !!mergedConfig.disabled;
-
-  const keyLoader = useCallback(
-    (pageIndex: number, previousPageData: TData | null) =>
-      disabled ? null : getKey(pageIndex, previousPageData),
-    [disabled, getKey]
-  );
-
-  // Returning null from an SWR Infinite key loader is documented behavior to stop pagination.
-  // The cast bridges the gap between TKey and TKey|null in the type system.
-  const result = useSWRInfinite<TData>(
-    keyLoader as SWRInfiniteKeyLoader<TData, TKey>,
-    fetcher,
-    mergedConfig
-  );
-
-  const mutateWhenDisabled = useCallback(
-    (
-      data?:
-        | TData[]
-        | Promise<TData[] | undefined>
-        | MutatorCallback<TData[] | undefined>,
-      opts?: boolean | MutatorOptions<any, any>
-    ) => {
-      // When disabled, the SWR key is null so result.mutate is a no-op.
-      // unstable_serialize produces the exact internal cache key useSWRInfinite uses,
-      // so globalMutate correctly reaches all mounted subscribers (including for
-      // optimistic updaters passed as the data argument).
-      const key = unstable_serialize(getKey);
-      if (data !== undefined || opts !== undefined) {
-        return globalMutate(key, data, opts);
-      }
-      return globalMutate(key);
-    },
-    [getKey, globalMutate]
-  );
-
-  // Always return the same shape so the mutate type is consistent for callers.
-  // When disabled, as the key is null, result.mutate is a no-op, so we replace it.
-  return {
-    ...result,
-    mutate: (disabled
-      ? mutateWhenDisabled
-      : result.mutate) as typeof result.mutate,
-  };
-}
-
-export const appendPaginationParams = (
-  params: URLSearchParams,
-  pagination?: PaginationState
-) => {
-  if (pagination && pagination.pageIndex) {
-    params.set(
-      "offset",
-      (pagination.pageSize * pagination.pageIndex).toString()
-    );
-  }
-  if (pagination && pagination.pageSize) {
-    params.set("limit", pagination.pageSize.toString());
-  }
-};
-
-export async function getErrorFromResponse(response: Response) {
-  const errorData = await response.json();
-
-  if (isAPIErrorResponse(errorData)) {
-    return errorData.error.connectors_error
-      ? errorData.error.connectors_error
-      : errorData.error;
-  }
-
-  return { message: "An error occurred" };
 }

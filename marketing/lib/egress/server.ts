@@ -8,10 +8,3 @@ export function untrustedFetch(
 ): Promise<Response> {
   return fetch(input, init);
 }
-
-export function trustedFetch(
-  input: RequestInfo | URL,
-  init?: RequestInit
-): Promise<Response> {
-  return fetch(input, init);
-}

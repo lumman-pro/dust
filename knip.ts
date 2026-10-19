@@ -132,6 +132,16 @@ const config: KnipConfig = {
         "@app/*": ["../front/*"],
       },
     },
+    marketing: {
+      // The Next.js plugin adds pages/ and the next config as entries.
+      entry: [
+        // Loaded by the `next-sitemap` CLI.
+        "next-sitemap.config.js!",
+        // Run by path through `npm run contentful:migrate`.
+        "contentful-migrations/*.cjs!",
+      ],
+      project: ["**/*.{js,jsx,ts,tsx,cjs}!", "!public/**!"],
+    },
     // Only there so its `@app/*` imports of front count as uses.
     extension: {
       entry: [

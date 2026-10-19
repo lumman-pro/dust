@@ -87,7 +87,3 @@ export const ROOM_POPULATIONS: Record<RoomKey, [number, number][]> = {
     [440, 510],
   ],
 };
-
-/** Y-coord of the horizontal corridor rail agents follow when walking
- *  between rooms. Waypoints jitter ~6–8px around this line. */
-export const RAIL_Y = 780;

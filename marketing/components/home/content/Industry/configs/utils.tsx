@@ -210,21 +210,6 @@ export interface IndustryPageConfig {
   justUseDust?: JustUseDustSectionConfig;
 }
 
-// Utility functions for section management
-export const defaultSectionOrder: SectionType[] = [
-  "hero",
-  "aiAgents",
-  "trustedBy",
-  "painPoints",
-  "dustInAction",
-  "impactMetrics",
-  "demoVideo",
-  "trustedBySecond",
-  "testimonial",
-  "customerStories",
-  "justUseDust",
-];
-
 export function createLayoutConfig(
   sections: (SectionType | SectionConfig)[]
 ): LayoutConfig {

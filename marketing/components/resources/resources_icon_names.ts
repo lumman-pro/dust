@@ -262,8 +262,3 @@ export const INTERNAL_ALLOWED_ICONS = [
 ] as const;
 
 export type InternalAllowedIconType = (typeof INTERNAL_ALLOWED_ICONS)[number];
-
-export const isInternalAllowedIcon = (
-  icon: string
-): icon is InternalAllowedIconType =>
-  (INTERNAL_ALLOWED_ICONS as readonly string[]).includes(icon);

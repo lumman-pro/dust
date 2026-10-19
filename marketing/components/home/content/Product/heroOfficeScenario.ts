@@ -962,6 +962,3 @@ export const homeScenarios: Scenario[] = [
   orgNavScenario,
   marketingScenario,
 ];
-
-// Kept for any external imports (the original single-scenario export name).
-export { salesScenario as qualBotScenario };

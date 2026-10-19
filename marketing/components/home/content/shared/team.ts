@@ -757,7 +757,3 @@ export const PEOPLE: Record<string, TeamMember> = {
     github: "",
   },
 };
-
-export const TEAM_AVATAR_URLS: string[] = Object.values(PEOPLE).map(
-  (p) => p.image
-);

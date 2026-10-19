@@ -101,17 +101,11 @@ import {
 } from "@dust-tt/sparkle";
 import type { ComponentProps, ComponentType } from "react";
 
-// Re-export icon names, types, and type guards from the sparkle-free module so
+// Re-export icon types from the sparkle-free module so
 // that existing imports from this file continue to work.
 export type {
   CustomResourceIconType,
   InternalAllowedIconType,
-} from "@marketing/components/resources/resources_icon_names";
-export {
-  CUSTOM_RESOURCE_ALLOWED,
-  INTERNAL_ALLOWED_ICONS,
-  isCustomResourceIconType,
-  isInternalAllowedIcon,
 } from "@marketing/components/resources/resources_icon_names";
 
 import type {
@@ -248,17 +242,6 @@ export const InternalActionIcons = {
 const _internalCheck: Record<InternalAllowedIconType, unknown> =
   InternalActionIcons;
 void _internalCheck;
-
-export const getAvatarFromIcon = (
-  icon: InternalAllowedIconType | CustomResourceIconType,
-  size: ComponentProps<typeof Avatar>["size"] = "sm"
-) => {
-  if (isCustomResourceIconType(icon)) {
-    return <ResourceAvatar icon={ActionIcons[icon]} size={size} />;
-  }
-
-  return <ResourceAvatar icon={InternalActionIcons[icon]} size={size} />;
-};
 
 export const getIcon = (
   icon: InternalAllowedIconType | CustomResourceIconType

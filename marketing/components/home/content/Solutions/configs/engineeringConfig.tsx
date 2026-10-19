@@ -3,16 +3,12 @@ import type {
   BenefitsProps,
   MetricProps,
 } from "@marketing/components/home/content/Solutions/BenefitsSection";
-import type {
-  CustomerStory,
-  QuoteProps,
-} from "@marketing/components/home/content/Solutions/CustomerStoriesSection";
+import type { QuoteProps } from "@marketing/components/home/content/Solutions/CustomerStoriesSection";
 import type { DemoVideoProps } from "@marketing/components/home/content/Solutions/DemoVideoSection";
 import type { UseCaseProps } from "@marketing/components/home/content/Solutions/UseCasesSection";
 import type {
   HeroProps,
   pageSettingsProps,
-  ROIProps,
 } from "@marketing/components/home/content/Solutions/configs/utils";
 
 // Config exports
@@ -149,12 +145,6 @@ export const UseCases: UseCaseProps = {
   ],
 };
 
-export const ROI: ROIProps = {
-  number: "20%",
-  subtitle: "faster project completion",
-  logo: "/static/landing/logos/gray/alan.png",
-};
-
 export const Quote: QuoteProps = {
   quote:
     "It's really become a reflex now to ask a Dust agent. With just two keystrokes, it instantly surfaces exactly the context I need - whether from code, documentation, or overlooked team discussions.",
@@ -168,27 +158,3 @@ export const DemoVideo: DemoVideoProps = {
   videoUrl: "https://fast.wistia.net/embed/iframe/6z5rtwsuvo",
   showCaptions: true,
 };
-
-export const Stories: CustomerStory[] = [
-  {
-    title: "Alan's engineering team speeds up projects 20% with Dust",
-    content:
-      "Alan uses Dust to improve efficiency in the context of an expanding codebase and documentation.",
-    href: "/customers/integrating-ai-workflows-alan",
-    src: "https://blog.dust.tt/content/images/size/w2000/2025/07/Alan-__-Dust-1--1--1.png",
-  },
-  // {
-  //   title: "November Five's journey to minimizing routine tasks with Dust",
-  //   content:
-  //     "Discover how November Five accelerates work with Dust, turning 3-hour tasks into 30 minutes.",
-  //   href: "/customers/november-five-ai-transformation-dust",
-  //   src: "https://blog.dust.tt/content/images/size/w2000/2025/01/dust_november_five.png",
-  // },
-  // {
-  //   title: "Lifen uses Dust AI agents to boost team productivity", // Soon to be replaced with Clay for RFP?
-  //   content:
-  //     "Lifen uses Dust AI agents to boost team productivity and save hours of work each week.",
-  //   href: "/customers/customer-story-lifen",
-  //   src: "https://blog.dust.tt/content/images/size/w2000/2024/11/lifen_dust_customer_story.jpg",
-  // },
-];

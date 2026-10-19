@@ -80,9 +80,6 @@ const makeResHandler =
   };
 
 const resHandler = makeResHandler({ redirectOnUnauthenticated: true });
-const nonRedirectingResHandler = makeResHandler({
-  redirectOnUnauthenticated: false,
-});
 
 export type FetcherFn = (url: string, init?: RequestInit) => Promise<any>;
 
@@ -97,17 +94,6 @@ export const fetcher: FetcherFn = async (url, init) => {
     headers: addClientVersionHeaders(init?.headers),
   });
   return resHandler(res);
-};
-
-// Throws on `not_authenticated` instead of redirecting to login. Use when a
-// 401 should leave the page in place (e.g. a stale `dust-has-session` cookie
-// on the public website should not bounce the visitor through login).
-export const nonRedirectingFetcher: FetcherFn = async (url, init) => {
-  const res = await clientFetch(url, {
-    ...init,
-    headers: addClientVersionHeaders(init?.headers),
-  });
-  return nonRedirectingResHandler(res);
 };
 
 export const fetcherWithBody: FetcherWithBodyFn = async (

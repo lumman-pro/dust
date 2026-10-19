@@ -73,8 +73,6 @@ export function hasExplicitAnalyticsConsent(
 // Separate from DUST_COOKIES_ACCEPTED: accepting analytics cookies never implies replay consent.
 export const DUST_SESSION_REPLAY_CONSENT = "dust-session-replay-consent";
 
-export type SessionReplayConsentValue = "granted" | "denied";
-
 /**
  * @cc [owner:dchristenhuis,label:product;security] replay-consent-explicit-only
  * Returns true only when the replay consent cookie is exactly `"granted"`. A missing, unknown, or

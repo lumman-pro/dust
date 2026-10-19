@@ -502,12 +502,6 @@ export interface ChapterSummary {
   createdAt: string;
 }
 
-export function isChapterSummary(
-  content: ContentSummary
-): content is ChapterSummary {
-  return content.kind === "chapter";
-}
-
 export interface ChapterPageProps {
   chapter: Chapter;
   chapters: ChapterSummary[];
@@ -585,12 +579,6 @@ export function isCourseSummary(
   content: ContentSummary
 ): content is CourseSummary {
   return content.kind === "course";
-}
-
-export function isLessonSummary(
-  content: ContentSummary
-): content is LessonSummary {
-  return content.kind === "lesson";
 }
 
 export interface LessonPageProps {

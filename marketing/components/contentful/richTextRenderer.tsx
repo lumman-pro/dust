@@ -623,47 +623,6 @@ export function splitDocumentForMidCta(
   };
 }
 
-function extractPlainText(node: Block | Inline | Document): string {
-  let text = "";
-
-  if ("content" in node) {
-    for (const child of node.content) {
-      if (isTextNode(child)) {
-        text += child.value;
-      } else if (isBlockOrInline(child)) {
-        const childText = extractPlainText(child);
-        text += childText;
-      }
-    }
-  }
-
-  // Add newlines after block elements
-  if ("nodeType" in node) {
-    const blockTypes = [
-      BLOCKS.PARAGRAPH,
-      BLOCKS.HEADING_1,
-      BLOCKS.HEADING_2,
-      BLOCKS.HEADING_3,
-      BLOCKS.HEADING_4,
-      BLOCKS.HEADING_5,
-      BLOCKS.HEADING_6,
-      BLOCKS.LIST_ITEM,
-    ];
-    if (blockTypes.includes(node.nodeType as BLOCKS)) {
-      text += "\n";
-    }
-  }
-
-  return text;
-}
-
-export function richTextToPlainText(document: Document | null): string {
-  if (!document) {
-    return "";
-  }
-  return extractPlainText(document).trim();
-}
-
 function extractMarkdown(node: Block | Inline | Document, depth = 0): string {
   let text = "";
 

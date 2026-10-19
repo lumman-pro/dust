@@ -231,10 +231,6 @@ export function getStoredLandingContext(): LandingContext | null {
   }
 }
 
-export function getStoredReferrer(): string | null {
-  return getStoredLandingContext()?.referrer ?? null;
-}
-
 export const appendUTMParams = (url: string, utmParams?: UTMParams): string => {
   if (typeof window === "undefined") {
     return url;
