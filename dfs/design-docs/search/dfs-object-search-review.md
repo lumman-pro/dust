@@ -2,7 +2,7 @@
 
 2026-10-19. Reviewed `aafa1435cfc93a833f632f6bafa4fa2d10e7348e` against primary sources and Elasticsearch 8.16.0 + ICU probes.
 
-**Status: the two mapping defects are fixed.** The [active definitions](../../server/src/search/indices/objects_1.mappings.json) pass [83 checks on 151 synthetic objects](dfs-object-search-validation-results.json). Production query weights, relevance, and capacity remain unvalidated.
+**Status: the two mapping defects are fixed.** The [active definitions](../../server/src/search/indices/objects_1.mappings.json) pass [91 checks on 151 text fixtures plus 4 routing fixtures](dfs-object-search-validation-results.json). Production query weights, relevance, and capacity remain unvalidated.
 
 | Defect | Before | Now |
 | --- | --- | --- |
@@ -15,4 +15,4 @@ The fixes follow [word delimiter behavior](https://www.elastic.co/docs/reference
 
 **Ranking is deferred.** The illustrative query can rank a partial name/body match above a complete filename. No production query or weights are shipped here, and these fixes do not tune ranking. Decide exact-name priority and measure recall before adding LTR. Apostrophes in quotes compare normalized word sequences. Filename possessive/elision behavior still differs from prose and needs an explicit application policy.
 
-**Other evidence.** End-of-body highlighting passed on 1,200,035 characters for a word, a short prefix, and a long prefix. Long prefixes still depend on expensive queries being enabled. Body prefix cost, duplicated language source, shard sizing, and real-corpus ranking require measurements. The [DD comparison](dfs-object-search-dd-comparison.md) records routing and extraction-provenance decisions that remain open.
+**Other evidence.** End-of-body highlighting passed on 1,200,035 characters for a word, a short prefix, and a long prefix. Long prefixes still depend on expensive queries being enabled. Body prefix cost, duplicated language source, shard sizing, and real-corpus ranking require measurements. The [DD comparison](dfs-object-search-dd-comparison.md) records the resolved tenant-routing decision and the remaining extraction-provenance question.

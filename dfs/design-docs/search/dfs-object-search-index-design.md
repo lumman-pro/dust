@@ -399,11 +399,11 @@ Leaving both in place makes the new index unallocatable. `_tier_preference` cann
 custom workload. This is a deployment dependency, not an action performed by this proposal.
 [ES 8.16 allocation rules](https://github.com/elastic/elasticsearch/blob/v8.16.0/docs/reference/index-modules/allocation/filtering.asciidoc)
 
-Use normal `_id` routing for the initial benchmark. With three primaries, a tenant search fans out
-to three shards while a large tenant's documents can use the whole pool. Tenant routing is a
-separate decision: it reduces fanout but can concentrate a large tenant on one shard. Adopt
-partitioned tenant routing only after measuring skew. Enforce `_routing.required` and identical
-routing on every operation if chosen. Changing that policy requires rebuilding the index.
+Updated decision: require tenant routing from the first document. Set `_routing.required=true`
+and use `routing=tenant_id` for every document operation, every bulk item, and tenant searches.
+Keep the tenant filter and globally unique tenant/object document IDs. The current settings route
+one tenant to one primary. Measure tenant skew before choosing a routing partition or changing
+shard sizing. The [revised proposal](dfs-object-search-revised-design.md) records the active policy.
 [8.16 routing](https://www.elastic.co/guide/en/elasticsearch/reference/8.16/mapping-routing-field.html)
 
 **Document identity, freshness, and publication order.**

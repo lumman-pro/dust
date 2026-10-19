@@ -25,6 +25,13 @@ distinct object before returning its title or content.
 such as `type:pdf` or `type:spreadsheet` belong to application query compilation and resolve to
 filters on those fields. They do not require a separate indexed category.
 
+The mapping requires explicit `_routing`. Use the tenant ID as `routing` on every document
+write, get, update, delete, and tenant search. Each bulk action carries its own `routing` value.
+Use the authenticated tenant for searches and the persisted tenant for background work, including
+deletions. Elasticsearch does not derive routing from `_source.tenant_id` or check that they agree.
+Every search still needs its `tenant_id` filter because tenants can share a shard. Document `_id`
+remains a globally unique tenant/object pair. The shared alias does not set a fixed routing value.
+
 The versioned JSON files in `indices/` are embedded in the Rust bootstrap command. All cells
 share the same mapping and analysis. Local settings use one primary and no replica. Production
 settings use three primaries, one replica, and a five-second refresh. Each cell has its own settings

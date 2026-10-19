@@ -10,6 +10,7 @@ import json
 import re
 from pathlib import Path
 from urllib.error import HTTPError
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 
@@ -17,6 +18,8 @@ ROOT = Path(__file__).parent
 DEFINITIONS = ROOT.parents[1] / "server/src/search/indices"
 BASE = "http://127.0.0.1:19217"
 INDEX = "codex-dfs-object-search-v1"
+ROUTING_INDEX = "codex-dfs-object-routing-v1"
+ROUTING_ALIAS = "codex-dfs-object-routing"
 RESULTS = ROOT / "dfs-object-search-validation-results.json"
 COMPATIBILITY_TEXT = "\ufdfa" * 1100
 
@@ -35,6 +38,12 @@ def request(method, path, payload=None, ndjson=False):
         raise RuntimeError(error.read().decode()) from error
 
 
+def with_routing(path, tenant_id):
+    if tenant_id is None:
+        return path
+    return path + ("&" if "?" in path else "?") + urlencode({"routing": tenant_id})
+
+
 def recreate(index, definition):
     assert index.startswith("codex-dfs-"), index
     try:
@@ -46,11 +55,13 @@ def recreate(index, definition):
 
 
 def bulk(index, documents):
-    payload = "".join(
-        json.dumps({"index": {"_index": index, "_id": key}}) + "\n"
-        + json.dumps(document, ensure_ascii=False) + "\n"
-        for key, document in documents.items()
-    )
+    lines = []
+    for key, source in documents.items():
+        metadata = {"_index": index, "_id": key}
+        if "tenant_id" in source:
+            metadata["routing"] = source["tenant_id"]
+        lines.extend([json.dumps({"index": metadata}), json.dumps(source, ensure_ascii=False)])
+    payload = "\n".join(lines) + "\n"
     result = request("POST", "/_bulk?refresh=true", payload, ndjson=True)
     assert not result["errors"], result
 
@@ -162,10 +173,10 @@ def compile_query(text, interactive=False, read_grant_ids=("grant-a",), scope_id
     return {"bool": {"filter": filters, "must": required, "must_not": prohibited}}
 
 
-def search(text, interactive=False, index=INDEX, query=None, **extra):
+def search(text, interactive=False, index=INDEX, query=None, routing="tenant-a", **extra):
     body = {"query": query or compile_query(text, interactive), "size": 100,
             "track_total_hits": True, "_source": ["name", "kind", "mime_type"], **extra}
-    return request("POST", "/" + index + "/_search", body)
+    return request("POST", with_routing("/" + index + "/_search", routing), body)
 
 
 def document(name, content=None, **extra):
@@ -412,7 +423,7 @@ for field in ["content_text", "stemmed.en.content_text", "stemmed.fr.content_tex
                    "source_utf8_bytes": len(COMPATIBILITY_TEXT.encode()),
                    "hits": [hit["_id"] for hit in hits],
                    "passed": [hit["_id"] for hit in hits] == ["unicode_expansion"]})
-unicode_source = request("GET", "/" + INDEX + "/_doc/unicode_expansion")["_source"]
+unicode_source = request("GET", with_routing("/" + INDEX + "/_doc/unicode_expansion", "tenant-a"))["_source"]
 checks.append({"label": "Unicode normalization preserves the original extracted source",
                "passed": unicode_source["content_text"] == COMPATIBILITY_TEXT})
 compatibility_highlight = search("financial", highlight={"fields": {"content_text": {}}})
@@ -524,10 +535,81 @@ feature_values = search("quasar", fields=["modified_at", "name.token_count", "co
 checks.append({"label": "query-time ranking features are available without source parsing",
                "passed": all("modified_at" in hit["fields"] and "name.token_count" in hit["fields"]
                              and "content_text.token_count" in hit["fields"] for hit in feature_values["hits"]["hits"])})
-large_timestamp = request("GET", "/" + INDEX + "/_doc/large_timestamp")
+large_timestamp = request("GET", with_routing("/" + INDEX + "/_doc/large_timestamp", "tenant-a"))
 checks.append({"label": "a non-date u64 timestamp does not prevent indexing the object",
                "passed": large_timestamp["_source"]["mtime_ms"] == 18446744073709551615
                and large_timestamp["_source"]["modified_at"] is None})
+
+# Three primaries make routing observable. The text corpus remains on one primary
+# so its existing relevance probes keep the same statistics.
+routing_settings = copy.deepcopy(settings)
+routing_settings["number_of_shards"] = 3
+recreate(ROUTING_INDEX, {"settings": routing_settings, "mappings": mappings,
+                         "aliases": {ROUTING_ALIAS: {"is_write_index": True}}})
+routing_tenants = ["tenant-a", "tenant-b", "tenant-c", "tenant-d"]
+routing_documents = {
+    tenant + ":object": document("Routed report", object_id="object", tenant_id=tenant)
+    for tenant in routing_tenants
+}
+bulk(ROUTING_ALIAS, routing_documents)
+
+tenant_shards = {}
+for tenant in routing_tenants:
+    shard_groups = request("GET", with_routing("/" + ROUTING_ALIAS + "/_search_shards", tenant))["shards"]
+    tenant_shards[tenant] = [group[0]["shard"] for group in shard_groups]
+checks.append({"label": "tenant routing targets one of three primary shards",
+               "tenant_shards": tenant_shards,
+               "passed": all(len(shards) == 1 for shards in tenant_shards.values())})
+
+# Four tenants on three primaries guarantee a collision. Routing cannot replace
+# the tenant filter even when every write uses the correct tenant ID.
+colliding_tenants = next(
+    [tenant for tenant, shards in tenant_shards.items() if shards == selected]
+    for selected in tenant_shards.values()
+    if sum(shards == selected for shards in tenant_shards.values()) > 1
+)
+tenant = colliding_tenants[0]
+unfiltered = search("", index=ROUTING_ALIAS, routing=tenant, query={"match_all": {}})
+filtered = search("", index=ROUTING_ALIAS, routing=tenant, query={"term": {"tenant_id": tenant}})
+unfiltered_ids = {hit["_id"] for hit in unfiltered["hits"]["hits"]}
+filtered_ids = {hit["_id"] for hit in filtered["hits"]["hits"]}
+checks.append({"label": "tenant filter isolates tenants sharing a routed shard", "routing": tenant,
+               "without_tenant_filter": sorted(unfiltered_ids), "with_tenant_filter": sorted(filtered_ids),
+               "passed": unfiltered_ids == {value + ":object" for value in colliding_tenants}
+               and filtered_ids == {tenant + ":object"}})
+
+object_path = "/" + ROUTING_ALIAS + "/_doc/" + tenant + ":object"
+update_path = "/" + ROUTING_ALIAS + "/_update/" + tenant + ":object"
+for operation, method, path, payload in [
+    ("index", "PUT", "/" + ROUTING_ALIAS + "/_doc/missing-route", document("Missing route")),
+    ("get", "GET", object_path, None),
+    ("update", "POST", update_path, {"doc": {"name": "Missing route"}}),
+    ("delete", "DELETE", object_path, None),
+]:
+    error_type = None
+    try:
+        request(method, path, payload)
+    except RuntimeError as error:
+        error_type = json.loads(str(error))["error"]["type"]
+    checks.append({"label": "document operation rejects missing routing", "operation": operation,
+                   "error_type": error_type, "passed": error_type == "routing_missing_exception"})
+
+missing_routing_bulk = request("POST", "/_bulk", "\n".join([
+    json.dumps({"index": {"_index": ROUTING_ALIAS, "_id": "missing-bulk-route"}}),
+    json.dumps(document("Missing bulk route")), "",
+]), ndjson=True)
+bulk_error = missing_routing_bulk["items"][0]["index"].get("error", {}).get("type")
+checks.append({"label": "bulk items reject missing routing", "error_type": bulk_error,
+               "passed": missing_routing_bulk["errors"] and bulk_error == "routing_missing_exception"})
+
+before = request("GET", with_routing(object_path, tenant))
+updated = request("POST", with_routing(update_path, tenant), {"doc": {"name": "Updated routed report"}})
+after = request("GET", with_routing(object_path, tenant))
+deleted = request("DELETE", with_routing(object_path, tenant))
+checks.append({"label": "routed bulk write get update and delete use the same tenant ID", "routing": tenant,
+               "passed": before["_routing"] == tenant and before["_source"]["tenant_id"] == tenant
+               and before["_source"]["name"] == "Routed report" and updated["result"] == "updated"
+               and after["_source"]["name"] == "Updated routed report" and deleted["result"] == "deleted"})
 
 prefix_gate = {}
 try:
@@ -572,7 +654,7 @@ for variant in ["plain", "prefixes", "bilingual_prefixes", "edge", "search_as_yo
     for fragment in ["repo", "electroencephalographic"]:
         query = ({"match": {"text.prefix": fragment}} if variant == "edge"
                  else {"match_bool_prefix": {"text": fragment}})
-        hits = search("", index=index, query=query)["hits"]
+        hits = search("", index=index, query=query, routing=None)["hits"]
         searches[fragment] = {"total": hits["total"]["value"], "long_found": any(h["_id"] == "long" for h in hits["hits"])}
     comparison[variant] = {"usage": usage[index], "queries": searches}
 
@@ -581,12 +663,14 @@ output = {"elasticsearch": info["version"], "document_count": len(documents),
           "settings_source": "../../server/src/search/indices/objects_1.settings.cell-00000.json",
           "local_settings_changes": {"removed_allocation_require": True, "shards": 1, "replicas": 0},
           "language_assignments": "explicit fixtures, not detector predictions",
+          "routing_validation": {"shards": 3, "document_count": len(routing_documents),
+                                 "tenant_shards": tenant_shards},
           "checks": checks, "analyzers": analyzers, "prefix_rewrites": rewrites,
           "expensive_query_gate": prefix_gate, "stem_highlights": highlight["hits"]["hits"],
           "prefix_highlights": prefix_highlight["hits"]["hits"],
           "future_ranking_feature_values": feature_values["hits"]["hits"],
           "prefix_mechanism_comparison": comparison,
-          "compiled_example": {"input": 'type:pdf "annual reports" budg',
+          "compiled_example": {"input": 'type:pdf "annual reports" budg', "routing": "tenant-a",
                                "query": compile_query('type:pdf "annual reports" budg', True)}}
 RESULTS.write_text(json.dumps(output, ensure_ascii=False, indent=2) + "\n")
 failed = [check for check in checks if not check["passed"]]

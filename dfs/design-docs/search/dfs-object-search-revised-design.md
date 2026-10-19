@@ -5,7 +5,7 @@ This revision supersedes the earlier analysis/query recommendations in
 [the first proposal](dfs-object-search-index-design.md) and
 [the keyword-only note](dfs-full-keyword-search-design.md).
 
-**Status: index definition and bootstrap implemented. Filename casing and Unicode term handling verified.**
+**Status: index definition and bootstrap implemented. Tenant routing is required. Filename casing and Unicode term handling verified.**
 The [DFS search module](../../server/src/search.rs) embeds versioned mappings and per-cell settings.
 Its [bootstrap command](../../server/src/search/README.md) previews the creation request or creates
 the index and write alias together. Remaining work is the object projection and durable indexing,
@@ -25,6 +25,7 @@ different fields. Keep typed metadata and timestamps available for later LTR.
 | Search alias | `dfs.objects` |
 | Initial physical index | `dfs.objects_1` |
 | Indexed entity | One original DFS object, including its extracted text |
+| Routing | Required. Use `routing=tenant_id` on every document operation and tenant search |
 | Mapping | `dynamic: strict`. Neutral name/content/attribute fields plus explicitly populated `stemmed.en` / `stemmed.fr` text |
 | Node allocation | `cell-00000` / `cell-00001`: require `workload=filesystem`. `cell-00002`: shared pool, no workload constraint |
 | Initial operational settings | 3 primary shards, 1 replica, `5s` refresh. Provisional pending capacity validation |
@@ -37,8 +38,9 @@ earlier analyzer examples remain alongside this note for reference. The
 [verification harness](dfs-object-search-validation.py)
 loaded the active mapping and `cell-00000` settings into a disposable ES 8.16 instance, changing
 only shard/replica counts and removing the production allocation constraint.
-[Results](dfs-object-search-validation-results.json): **83 checks passed on 151 synthetic objects**,
-plus a separate comparison of five prefix/indexing configurations. This establishes mechanics. It is not a production relevance or capacity benchmark.
+[Results](dfs-object-search-validation-results.json): **91 checks passed on 151 text fixtures plus 4 routing fixtures**,
+with routing checked on three primaries and a separate comparison of five prefix/indexing configurations.
+The routing checks cover missing-routing rejection, routed bulk/get/update/delete, and tenant isolation when two tenants share a shard. This establishes mechanics. It is not a production relevance or capacity benchmark.
 The [review and fixes](dfs-object-search-review.md) record the casing and Unicode regressions.
 The [original DD comparison](dfs-object-search-dd-comparison.md) separates retained fields, intentional changes, and open decisions.
 
@@ -391,7 +393,9 @@ Resolve current direct ALLOW grants for the session's exact subjects, retaining 
 the read bit, then require at least one grant object ID in `read_grant_scope_ids`. Ordinary sessions with
 no matching read-grant IDs get no candidates. A failed/incomplete grant lookup must not disable the
 filter. Subtree search separately matches the requested folder ID against `ancestor_ids`, or
-against `object_id` when the selected folder itself should also be eligible:
+against `object_id` when the selected folder itself should also be eligible.
+Send the following body to `POST /dfs.objects/_search?routing=tenant_id`, using the same actual
+tenant ID in the request parameter and the `tenant_id` filter:
 
 ```json
 {
@@ -441,6 +445,19 @@ modifying the indexed ancestry or grant scopes. Selecting the object itself stil
 It does not implement or validate the grant resolver, transactional rechecks, or durable subtree
 reindexing. Attribute/extraction changes still need to publish a consistent complete projection.
 Stale extraction text must not survive a content-version change.
+
+**Tenant routing is required from the first indexed document.** Set `_routing.required=true`
+and pass `routing=tenant_id` on writes, gets, updates, deletes, every bulk item, and tenant searches.
+The mapping requires a value but cannot verify that it equals the source tenant. The application
+must use the authenticated tenant for search and the persisted tenant for indexing/deletion work.
+Keep the tenant/object compound `_id` and retain the tenant ID in tombstones. Leave routing unset
+on the shared alias so callers select it per request.
+
+Routing selects a shard. Every query still needs the `tenant_id` filter and permission checks,
+including superuser queries. With the current settings, one tenant routes to one primary shard.
+Tenant size and traffic measurements will determine shard sizing or partitioned routing later.
+The three-primary probe verifies routing and isolation, not production capacity.
+[Elasticsearch 8.16 routing](https://www.elastic.co/guide/en/elasticsearch/reference/8.16/mapping-routing-field.html).
 
 **Deployment settings are selected by cell only.** `cell-00000` and `cell-00001` require
 `workload=filesystem`. `cell-00002` has no workload allocation requirement. `--cell` / `CELL` has no

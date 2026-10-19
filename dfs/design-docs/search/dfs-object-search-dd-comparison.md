@@ -15,6 +15,7 @@ Comparison against the [original DD at b37e616](https://github.com/dust-tt/dust/
 | `atime`, `mtime`, `ctime`, `created`: optional `unsigned_long` milliseconds | `atime_ms`, `mtime_ms`, `ctime_ms`, `created_at_ms`: `unsigned_long` | Same source domain with clearer names. `atime_ms`/`ctime_ms` are source-only, with indexing and doc values disabled. Modification/creation remain searchable. |
 | `xattrs`: escaped existence/value keywords, UTF-8 equality truncated at the term limit | `xattr_names`, `xattr_pair_hashes`: keyword arrays | Separate existence from proposed SHA-256 digests of complete key/raw-value pairs. Supports binary equality without deliberate truncation collisions. Projection encoding and final FDB verification remain to implement. |
 | `schema_version`: document field, type unspecified | `_meta.schema_version: 1` | Moves rebuild compatibility to mapping metadata and the versioned index name. No per-document field. |
+| Required tenant routing | `_routing.required: true` | Aligned. Use `routing=tenant_id` for document operations and searches, retaining tenant filters. |
 
 **The original timestamps were already unsigned integers, not Elasticsearch dates.** Added `modified_at` and `created_at` are validated `date` projections for filters and future freshness features. They do not replace the raw values, and invalid/out-of-range dates must be omitted. `ctime_ms` is not creation time.
 
@@ -26,6 +27,6 @@ Additional fields:
 
 There is no `file_type`, `projected_at`, `parent_id`, path, copied grant list, or catch-all field. Type aliases will compile to `kind`/`mime_type` filters. Query weights and compiler implementation remain deferred.
 
-Operational differences: the DD disabled dynamic mapping. Current `dynamic: strict` explicitly rejects unknown fields. The DD required tenant routing and proposed 30-second refresh. Current settings use 5 seconds and do not require routing. Production routing remains open, with normal ID routing justified only for the [initial skew benchmark](dfs-object-search-index-design.md). All production cells use 3 primaries/1 replica. `cell-00000`/`cell-00001` require filesystem nodes, `cell-00002` has no workload constraint.
+Operational differences: the DD disabled dynamic mapping. Current `dynamic: strict` explicitly rejects unknown fields. Tenant routing now follows the DD. The DD proposed 30-second refresh, while current settings use 5 seconds. Shard sizing and any future routing partition remain capacity decisions. All production cells use 3 primaries/1 replica. `cell-00000`/`cell-00001` require filesystem nodes, `cell-00002` has no workload constraint.
 
 Separately, [later DD revision 54a60a2](https://github.com/dust-tt/dust/blob/54a60a2acf3a5368e486ed92553ba381d8b620a8/dfs/design-docs/SEARCH.md#extracted-text-storage) replaces extracted DFS objects with private generations. Reconcile the optional object-ID provenance fields with that newer lifecycle before implementing projection.

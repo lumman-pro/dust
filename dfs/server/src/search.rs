@@ -50,6 +50,12 @@ pub enum IndexCell {
  * Oversized terms MUST be omitted whole rather than truncated into different searchable words.
  * Analysis MUST preserve original source text and offsets for highlighting.
  */
+/**
+ * @cc [owner:flvndvd,label:backend,label:security] objects-index-tenant-routing
+ * The mapping MUST require explicit document routing and the shared alias MUST NOT fix a route.
+ * Document operations and tenant searches MUST use the tenant ID as routing. Search queries
+ * MUST retain a tenant_id filter because different tenants can share a shard.
+ */
 pub fn objects_index_body(cell: IndexCell) -> Result<Value> {
     let settings = match cell {
         IndexCell::Local => include_str!("search/indices/objects_1.settings.local.json"),
