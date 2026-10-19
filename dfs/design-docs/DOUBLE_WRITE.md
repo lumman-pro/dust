@@ -85,7 +85,13 @@ A `412` means the event no longer matches the live object. Skipping it is safe o
 
 ## Concurrency
 
-All workers, backfills, repair jobs and the switch to DFS must use the same exclusive lock for `(tenant, bucket, objectName)`. Acquire it before reading GCS and hold it through file creation, writes, initial grants and the completion marker. The lock key must exist before the DFS file and survive its deletion. DFS must reject writes from a worker that has lost the lock. The lock implementation remains to be defined.
+All workers, backfills, repair jobs and the switch to DFS must use the same exclusive lock for `(tenant, bucket, objectName)`. Acquire it before reading GCS and hold it through file creation, writes, initial grants and the completion marker. The lock key must exist before the DFS file and survive its deletion.
+
+Use a renewable lease with an initial duration of 60 seconds and renew it every 20 seconds while the import is active. The lock service determines expiry. A crashed worker stops renewing, so another worker can acquire the lock after the last lease expires. A busy lock causes a retry, not an acknowledgment. This lease is independent of Pub/Sub's acknowledgment deadline.
+
+Each acquisition returns a newer fencing token for that source. Every DFS mutation, including deletion, grants and the completion marker, must verify that token and the active lease atomically with the mutation. DFS must reject writes from an expired or replaced holder. The token sequence must survive lease expiry and file deletion so an old token cannot become valid again.
+
+If renewal fails or times out, stop the transfer and DFS writes and retry the notification. Do not acknowledge success after losing the lease. Renew only a matching, unexpired lease. Release only when the holder and token still match, so a delayed request cannot release a replacement worker's lease. Release after all writes finish or on cancellation when possible; otherwise let the lease expire. The lock API and storage remain to be implemented.
 
 The current DFS protocol has no lock or conditional-write operation. Front's Redis lock expires and does not fence DFS writes. Neither is sufficient to run the importer safely today.
 
@@ -204,7 +210,8 @@ Check these cases before enabling replication:
 - Original uploads, uploads attached after processing, file-backed content fragments, processed copies and sandbox-created files all reach DFS through GCS events. Other prefixes are ignored.
 - Duplicate and reordered events, including replacement generations whose numeric values decrease, leave the current state in DFS.
 - Finalize `(g,1)` is skipped after metadata reaches `(g,2)`; the metadata event creates the missing file and copies its bytes.
-- A worker stalls after a successful GCS read. Another worker or backfill cannot mutate the same DFS file concurrently. A worker that loses its lock cannot resume writing.
+- A worker crashes while holding the lock. Its lease expires and a retry can acquire the same source lock without manual cleanup. Imports longer than one lease succeed while renewal continues.
+- A worker stalls after a successful GCS read and its lease expires. A replacement worker imports the file. DFS rejects the old worker's writes, and its delayed renewal or release cannot change the replacement lease. A renewal timeout stops the import without acknowledging it.
 - Concurrent first imports and retries after creation reuse one file. Deletion/recreation uses the same source lock.
 - Pod files land in a directory with the pod's exact name. Renames preserve its DFS folder ID and source mappings. Different pods with the same name cannot share a directory.
 - An old delete/archive event leaves a newer live object intact. A missing historical revision does not delete its live replica.
