@@ -4,7 +4,10 @@ import {
   FRAME_SESSION_COOKIE_NAME,
   getFrameSessionEmail,
 } from "@app/lib/api/share/frame_session";
-import { recordFrameView } from "@app/lib/api/share/frame_sharing";
+import {
+  acceptsAnyVerifiedEmail,
+  recordFrameView,
+} from "@app/lib/api/share/frame_sharing";
 import { generateVizAccessToken } from "@app/lib/api/viz/access_tokens";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { FileResource } from "@app/lib/resources/file_resource";
@@ -134,15 +137,28 @@ app.get(
     const hasFunctions = await file.hasActiveFrameFunctions();
 
     // Runs before the email-scope branch so an external viewer is not walked through OTP for a
-    // Frame they still could not use.
+    // Frame they still could not use. A Frame serving public functions only needs a verified email.
     if (!auth && hasFunctions) {
-      return apiError(ctx, {
-        status_code: 404,
-        api_error: {
-          type: "file_not_found",
-          message: "File not found.",
-        },
-      });
+      const sessionToken = getCookie(ctx, FRAME_SESSION_COOKIE_NAME);
+      const verifiedEmail = sessionToken
+        ? await getFrameSessionEmail(workspace, { token: sessionToken })
+        : null;
+      const acceptsVerifiedEmail =
+        verifiedEmail !== null &&
+        (await acceptsAnyVerifiedEmail(file, {
+          shareScope,
+          workspace: result.value.workspace,
+        }));
+
+      if (!acceptsVerifiedEmail) {
+        return apiError(ctx, {
+          status_code: 404,
+          api_error: {
+            type: "file_not_found",
+            message: "File not found.",
+          },
+        });
+      }
     }
 
     // Handle email-based share scopes (treat legacy "workspace" as "workspace_and_emails").

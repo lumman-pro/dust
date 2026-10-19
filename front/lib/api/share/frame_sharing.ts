@@ -1,5 +1,8 @@
 import { runOnRedis } from "@app/lib/api/redis";
-import { frameServesPublicFunctions } from "@app/lib/api/sandbox_functions/workspace_user";
+import {
+  frameServesPublicFunctions,
+  workspaceServesPublicFunctions,
+} from "@app/lib/api/sandbox_functions/workspace_user";
 import type { Authenticator } from "@app/lib/auth";
 import { DustError } from "@app/lib/error";
 import { fireAndForgetNotification } from "@app/lib/notifications/fire_and_forget";
@@ -17,6 +20,7 @@ import { SubscriptionResource } from "@app/lib/resources/subscription_resource";
 import { UserResource } from "@app/lib/resources/user_resource";
 import { rateLimiter } from "@app/lib/utils/rate_limiter";
 import logger from "@app/logger/logger";
+import type { SandboxFunctionUserIdentityPolicy } from "@app/types/api/sandbox_functions";
 import type { FileShareScope } from "@app/types/files";
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
@@ -166,19 +170,32 @@ export async function checkFrameShareScopePermission(
     return new Ok(undefined);
   }
 
-  // Write half of [shared-frame-with-functions-needs-workspace-user]: the read path hides such a
-  // Frame from every viewer who is not a workspace user, so publishing it would mint a dead link.
-  const hasActiveFrameFunctions = await frame.hasActiveFrameFunctions();
-  if (hasActiveFrameFunctions) {
-    return new Err(
-      new DustError(
-        "unauthorized",
-        "This Frame has functions, which only workspace members can run. It cannot be shared publicly."
-      )
-    );
+  // Write half of [shared-frame-with-functions-needs-workspace-user] and
+  // [public-frame-needs-public-function]: the read path hides such a Frame from visitors unless it
+  // has a public function, so publishing it would mint a dead link.
+  const workspace = auth.getNonNullableWorkspace();
+  if (await frame.hasActiveFrameFunctions()) {
+    if (
+      !(await workspaceServesPublicFunctions({ workspace, plan: auth.plan() }))
+    ) {
+      return new Err(
+        new DustError(
+          "unauthorized",
+          "This Frame has functions, which only workspace members can run. It cannot be shared publicly."
+        )
+      );
+    }
+
+    if (!(await frame.hasActivePublicFrameFunctions())) {
+      return new Err(
+        new DustError(
+          "unauthorized",
+          "None of this Frame's functions is public, so visitors could not run any of them. It cannot be shared publicly."
+        )
+      );
+    }
   }
 
-  const workspace = auth.getNonNullableWorkspace();
   if (workspace.sharingPolicy !== "all_scopes") {
     return new Err(
       new DustError(
@@ -221,8 +238,9 @@ export type FrameFunctionSharingConflictParams = {
 /**
  * Declaring functions narrows a Frame to workspace users, per
  * [shared-frame-with-functions-needs-workspace-user], silently breaking the links its external
- * viewers already hold. Publishing writes no sharing, so neither permission check runs to refuse
- * it. Returns why the publication is refused, or null when every viewer can open it.
+ * viewers already hold, except for a public link per [public-frame-needs-public-function].
+ * Publishing writes no sharing, so neither permission check runs to refuse it. Returns why the
+ * publication is refused, or null when every viewer can open it.
  */
 export async function getFrameFunctionSharingConflict(
   auth: Authenticator,
@@ -238,11 +256,21 @@ export async function getFrameFunctionSharingConflict(
     return null;
   }
 
+  const reachesAnyoneWithLink =
+    SHARE_SCOPE_AUDIENCE[shareInfo.scope] === "anyone_with_link";
+  if (
+    reachesAnyoneWithLink &&
+    (await workspaceServesPublicFunctions({
+      workspace: auth.getNonNullableWorkspace(),
+      plan: auth.plan(),
+    }))
+  ) {
+    return null;
+  }
+
   const grants = await SharingGrantResource.listForFile(file);
   const externalGrants = await getExternalFrameGrants(auth, grants);
 
-  const reachesAnyoneWithLink =
-    SHARE_SCOPE_AUDIENCE[shareInfo.scope] === "anyone_with_link";
   if (!reachesAnyoneWithLink && externalGrants.length === 0) {
     return null;
   }
@@ -257,6 +285,39 @@ export async function getFrameFunctionSharingConflict(
     "share link they have. The current version stays live. Do not retry this publish. Tell the " +
     "user that to add functions, they must first restrict the Frame's sharing to workspace " +
     "members in the Dust UI, or ask whether to go on without the functions."
+  );
+}
+
+export type FramePublicFunctionSharingConflictParams = {
+  /** The user identity policy of every function the publication about to go live declares. */
+  userIdentities: SandboxFunctionUserIdentityPolicy[];
+};
+
+/**
+ * A public share of a Frame with functions needs one public function, per
+ * [public-frame-needs-public-function]: without one, its visitors could open it and call nothing.
+ * Function policies are only known once the publication is built, so this runs after the build,
+ * unlike getFrameFunctionSharingConflict. Returns why the publication is refused, or null.
+ */
+export async function getFramePublicFunctionSharingConflict(
+  file: FileResource,
+  { userIdentities }: FramePublicFunctionSharingConflictParams
+): Promise<string | null> {
+  const declaresPublicFunction = userIdentities.includes("public");
+  if (userIdentities.length === 0 || declaresPublicFunction) {
+    return null;
+  }
+
+  const shareInfo = await file.getShareInfo();
+  if (shareInfo?.scope !== "public") {
+    return null;
+  }
+
+  return (
+    "Not published: this Frame is shared publicly, and none of its functions declares " +
+    '`userIdentity: "public"`, so visitors on its link could not call any of them. The current ' +
+    "version stays live. Do not retry this publish unchanged. Tell the user to make at least one " +
+    "function public, or to restrict the Frame's sharing to workspace members in the Dust UI."
   );
 }
 
@@ -512,14 +573,18 @@ type AcceptsAnyVerifiedEmailInput = {
 
 /**
  * @cc [owner:achilleburah,label:security;product] any-email-only-for-public-functions
- * True MUST be returned only for a `public` share of a Frame with active functions for which
- * frameServesPublicFunctions holds. Only then MAY an email verify for the share without a grant.
+ * True MUST be returned only for a `public` share of a Frame whose active publication declares a
+ * public function and for which frameServesPublicFunctions holds. Only then MAY an email verify
+ * for the share without a grant.
  */
 export async function acceptsAnyVerifiedEmail(
   file: FileResource,
   { shareScope, workspace }: AcceptsAnyVerifiedEmailInput
 ): Promise<boolean> {
-  if (shareScope !== "public" || !(await file.hasActiveFrameFunctions())) {
+  if (
+    shareScope !== "public" ||
+    !(await file.hasActivePublicFrameFunctions())
+  ) {
     return false;
   }
 

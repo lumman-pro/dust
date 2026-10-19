@@ -2241,19 +2241,19 @@ export class FileResource extends BaseResource<FileModel> {
   /**
    * @cc [owner:pmilliotte;davidebbo,label:product;security] shared-frame-with-functions-needs-workspace-user
    * A Frame v2 whose active publication declares functions must not be served to a viewer who is
-   * not an authenticated workspace user. Invocation is fail-closed on
-   * `getAuthenticatedWorkspaceUser`, so such a viewer would only ever see a Frame whose every
-   * function call errors. Every public entry point onto a shared Frame — the share metadata
-   * endpoint and the frame payload endpoint — must gate on this predicate and 404, giving the
-   * viewer the same page an unshared link gives them. Gating the payload endpoint alone is not
-   * enough: the share page renders its 404 off the metadata endpoint.
+   * not an authenticated workspace user, except as [public-frame-needs-public-function] allows.
+   * Invocation is fail-closed on `getAuthenticatedWorkspaceUser`, so such a viewer would only ever
+   * see a Frame whose every function call errors. Every public entry point onto a shared Frame
+   * (the share metadata endpoint and the frame payload endpoint) must gate on this predicate and
+   * 404, giving the viewer the same page an unshared link gives them. Gating the payload endpoint
+   * alone is not enough: the share page renders its 404 off the metadata endpoint.
    *
    * The write path carries the mirror obligation: an editor must not be able to create a share
    * whose audience this predicate would then lock out, or sharing succeeds and mints a link that
-   * 404s for everyone it reached. `checkFrameShareScopePermission` refuses `public` and
-   * `checkFrameEmailGrantPermission` refuses invites to non-members, both regardless of the
-   * workspace sharing policy and of the caller's publish/invite permission. Narrowing a scope and
-   * revoking a grant stay allowed so an over-broad earlier share can still be fixed, and
+   * 404s for everyone it reached. `checkFrameShareScopePermission` refuses `public` except as
+   * [public-frame-needs-public-function] allows, and `checkFrameEmailGrantPermission` refuses
+   * invites to non-members, both regardless of the caller's publish/invite permission. Narrowing a
+   * scope and revoking a grant stay allowed so an over-broad earlier share can still be fixed, and
    * `GET /share/grants` reports its external grants as `blockedByPolicy`.
    *
    * Whether this Frame's *active* publication declares any function. Scoped to the active
@@ -2286,6 +2286,37 @@ export class FileResource extends BaseResource<FileModel> {
         workspaceId: this.workspaceId,
         fileId: this.id,
         publicationId,
+      },
+    });
+
+    return count > 0;
+  }
+
+  /**
+   * @cc [owner:achilleburah,label:product;security] public-frame-needs-public-function
+   * A Frame v2 with active functions MAY be served to a viewer who is not a workspace user only on
+   * a `public` share, when its active publication declares a public function, the workspace
+   * sharing policy allows all scopes and the viewer holds a verified frame session
+   * (`acceptsAnyVerifiedEmail`). The share metadata endpoint then asks for email verification
+   * instead of a 404. The write path mirrors it: `checkFrameShareScopePermission` refuses `public`
+   * for a Frame whose functions are all private, and a publication with functions but no public
+   * one is refused onto a public share (`getFramePublicFunctionSharingConflict`).
+   *
+   * Whether this Frame's active publication declares a function with the `public` user identity
+   * policy. Takes no `Authenticator`, for the same reason as `hasActiveFrameFunctions`.
+   */
+  async hasActivePublicFrameFunctions(): Promise<boolean> {
+    const publicationId = this.framePublicationIdFor("live");
+    if (!this.isFrameV2 || !publicationId) {
+      return false;
+    }
+
+    const count = await SandboxFunctionModel.count({
+      where: {
+        workspaceId: this.workspaceId,
+        fileId: this.id,
+        publicationId,
+        userIdentity: "public",
       },
     });
 

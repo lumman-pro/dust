@@ -9,6 +9,7 @@ import { ConversationFactory } from "@app/tests/utils/ConversationFactory";
 import { FeatureFlagFactory } from "@app/tests/utils/FeatureFlagFactory";
 import {
   createTestConversationFrameFile,
+  enablePublicFrameFunctions,
   makeTestFrameFunction,
 } from "@app/tests/utils/FrameFunctionFactory";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
@@ -338,5 +339,33 @@ describe("makeFrameDraftLive", () => {
     const metadata = await metadataOf(auth, frame);
     expect(metadata?.activePublicationId).toBe(liveId);
     expect(metadata?.latestPublicationId).toBe(draftId);
+  });
+
+  it("refuses a draft with no public function onto a public share", async () => {
+    const { auth, frame } = await setupFrame();
+    await enablePublicFrameFunctions(auth);
+    const liveId = await publishBundle(auth, frame, CODE_A, "live");
+    const published = await publishFramePublication(auth, {
+      frame,
+      functionArtifacts,
+      manifest: manifestWithFunction,
+      sourceFiles: sourceFilesWithFunction,
+      uiBundleCode: CODE_B,
+      mode: "draft",
+    });
+    assert(published.isOk(), "draft publish succeeds");
+    const draftId = published.value.publicationId;
+    await frame.setShareScope(auth, "public");
+
+    const result = await makeFrameDraftLive(auth, {
+      frame,
+      draftPublicationId: draftId,
+    });
+
+    assert(result.isErr(), "make live is refused");
+    expect(result.error).toMatchObject({ code: "sharing_conflict" });
+    expect(result.error.message).toContain("none of its functions declares");
+    const metadata = await metadataOf(auth, frame);
+    expect(metadata?.activePublicationId).toBe(liveId);
   });
 });

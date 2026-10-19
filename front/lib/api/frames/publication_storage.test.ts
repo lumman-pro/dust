@@ -1256,6 +1256,54 @@ describe("publishFramePublication", () => {
   });
 });
 
+describe("publishFramePublication public sharing", () => {
+  async function setupPublicFrame() {
+    const { auth, frame } = await setupFrame({ ready: true });
+    await enablePublicFrameFunctions(auth);
+    await frame.ensureShareableFrame(auth);
+    await frame.setShareScope(auth, "public");
+
+    return { auth, frame };
+  }
+
+  it("refuses a publication with no public function onto a public share", async () => {
+    const { auth, frame } = await setupPublicFrame();
+
+    const published = await publishFramePublication(auth, {
+      frame,
+      functionArtifacts,
+      manifest: manifestWithFunction,
+      sourceFiles: sourceFilesWithFunction,
+      uiBundleCode,
+      mode: "live",
+    });
+
+    assert(published.isErr(), "Expected the publication to be refused");
+    expect(published.error).toMatchObject({ code: "sharing_conflict" });
+    const fresh = await FileResource.fetchById(auth, frame.sId);
+    expect(fresh?.useCaseMetadata?.activePublicationId).toBeUndefined();
+  });
+
+  it("publishes a publication with a public function onto a public share", async () => {
+    const { auth, frame } = await setupPublicFrame();
+
+    const published = await publishFramePublication(auth, {
+      frame,
+      functionArtifacts: publicFunctionArtifacts,
+      manifest: manifestWithFastFunction,
+      sourceFiles: sourceFilesWithFunction,
+      uiBundleCode,
+      mode: "live",
+    });
+
+    assert(published.isOk(), "Expected the publication to be published");
+    const fresh = await FileResource.fetchById(auth, frame.sId);
+    expect(fresh?.useCaseMetadata?.activePublicationId).toBe(
+      published.value.publicationId
+    );
+  });
+});
+
 describe("publishFramePublication modes", () => {
   const publishBundle = (
     auth: Authenticator,

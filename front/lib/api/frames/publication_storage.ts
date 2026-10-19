@@ -18,6 +18,7 @@ import { withFramePublishTimingResult } from "@app/lib/api/frames/publish_timing
 import { seedFramePublicationFunctionsArchive } from "@app/lib/api/frames/seed_functions_archive";
 import { SANDBOX_HTTPS_SECRET_ENV_VAR_PREFIX } from "@app/lib/api/sandbox/env_vars";
 import { SandboxFunctionError } from "@app/lib/api/sandbox_functions/errors";
+import { getFramePublicFunctionSharingConflict } from "@app/lib/api/share/frame_sharing";
 import { computeAuthorizedFileAccessForShare } from "@app/lib/api/viz/authorized_file_access";
 import { emitFrameAuthorizedFilesUpdatedAuditLog } from "@app/lib/api/viz/frame_authorized_files_audit";
 import type { Authenticator } from "@app/lib/auth";
@@ -146,8 +147,7 @@ type CheckPublicFrameFunctionInput = {
 /**
  * @cc [owner:achilleburah,label:product] public-function-publish-requirements
  * A function declaring the `public` user identity policy MUST be refused with
- * `invalid_function_artifact` unless public Frame functions are enabled for the workspace (see
- * isFramesV2PublicFunctionsEnabled) and its manifest declares the `fast` execution mode. A function
+ * `invalid_function_artifact` unless its manifest declares the `fast` execution mode. A function
  * with any other policy MUST pass.
  */
 /**
@@ -911,6 +911,23 @@ export async function activateFramePublication(
   return new Ok(undefined);
 }
 
+/**
+ * When the Frame is shared publicly, refuses a publication whose functions are all private. The
+ * previous publication stays live.
+ */
+export async function checkFramePublicFunctionSharing(
+  frame: FileResource,
+  descriptor: FramePublicationDescriptor
+): Promise<Result<void, FramePublicationError>> {
+  const conflict = await getFramePublicFunctionSharingConflict(frame, {
+    userIdentities: descriptor.functions.map((fn) => fn.userIdentity),
+  });
+
+  return conflict
+    ? new Err(new FramePublicationError("sharing_conflict", conflict))
+    : new Ok(undefined);
+}
+
 export async function publishFramePublication(
   auth: Authenticator,
   {
@@ -974,6 +991,15 @@ export async function publishFramePublication(
       return stored;
     }
     const { publicationId, descriptor } = stored.value;
+
+    const publicSharing = await checkFramePublicFunctionSharing(
+      freshFrame,
+      descriptor
+    );
+    if (publicSharing.isErr()) {
+      return publicSharing;
+    }
+
     const livePublicationId = freshFrame.useCaseMetadata?.activePublicationId;
     // A Frame with nothing live has nothing to protect: its first publish always goes live.
     const publishesDraft = mode === "draft" && livePublicationId !== undefined;

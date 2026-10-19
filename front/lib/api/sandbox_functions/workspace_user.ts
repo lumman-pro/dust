@@ -58,18 +58,33 @@ export async function getAuthenticatedWorkspaceUser(
   return Authenticator.isMember(role) ? user : null;
 }
 
-type FrameServesPublicFunctionsInput = {
+type WorkspaceServesPublicFunctionsInput = {
   workspace: WorkspaceType;
   plan: PlanType | null;
+};
+
+export async function workspaceServesPublicFunctions({
+  workspace,
+  plan,
+}: WorkspaceServesPublicFunctionsInput): Promise<boolean> {
+  if (workspace.sharingPolicy !== "all_scopes") {
+    return false;
+  }
+
+  return isFramesV2PublicFunctionsEnabled(
+    await getFeatureFlagsForContext(workspace, { plan })
+  );
+}
+
+type FrameServesPublicFunctionsInput = WorkspaceServesPublicFunctionsInput & {
   frame: FileResource;
 };
 
 /**
  * @cc [owner:achilleburah,label:security;product] public-share-in-enabled-workspace
- * True MUST be returned only when the Frame's current share scope is `public`, the workspace
- * sharing policy is `all_scopes` and public Frame functions are enabled for it (see
- * isFramesV2PublicFunctionsEnabled). Every condition MUST be read when called, so a revoked share,
- * policy or flag refuses the next call.
+ * True MUST be returned only when the Frame's current share scope is `public` and the workspace
+ * sharing policy is `all_scopes`. Every condition MUST be read when called, so a revoked share or
+ * policy refuses the next call.
  */
 export async function frameServesPublicFunctions({
   workspace,
@@ -77,16 +92,11 @@ export async function frameServesPublicFunctions({
   frame,
 }: FrameServesPublicFunctionsInput): Promise<boolean> {
   const shareInfo = await frame.getShareInfo();
-  if (
-    shareInfo?.scope !== "public" ||
-    workspace.sharingPolicy !== "all_scopes"
-  ) {
+  if (shareInfo?.scope !== "public") {
     return false;
   }
 
-  return isFramesV2PublicFunctionsEnabled(
-    await getFeatureFlagsForContext(workspace, { plan })
-  );
+  return workspaceServesPublicFunctions({ workspace, plan });
 }
 
 type AuthorizePublicFrameFunctionCallInput = FrameServesPublicFunctionsInput & {
