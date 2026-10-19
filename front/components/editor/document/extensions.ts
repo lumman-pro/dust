@@ -75,25 +75,26 @@ const starterKitOptions: Partial<StarterKitOptions> = {
  */
 const DocumentCode = Code.extend({ excludes: COMMENT_MARK_NAME });
 
-// A line of at least as many backticks as the fence, indented by up to three spaces, closes it.
-const CLOSING_FENCE_CANDIDATE = /^ {0,3}(`{3,})/gm;
-
-/** The shortest backtick fence that the code it wraps cannot close. */
-const backtickFenceFor = (code: string) => {
+/**
+ * The shortest fence that the code it wraps cannot close: a line of at least as many of its
+ * characters, indented by up to three spaces, would. Backticks, unless the info string holds one,
+ * which only a tilde fence allows.
+ */
+const fenceFor = (code: string, language: string) => {
+  const char = language.includes("`") ? "~" : "`";
+  const closingFenceCandidate = new RegExp(`^ {0,3}(${char}{3,})`, "gm");
   const longestRun = Math.max(
     2,
-    ...Array.from(
-      code.matchAll(CLOSING_FENCE_CANDIDATE),
-      ([, run]) => run.length
-    )
+    ...Array.from(code.matchAll(closingFenceCandidate), ([, run]) => run.length)
   );
-  return "`".repeat(longestRun + 1);
+  return char.repeat(longestRun + 1);
 };
 
 /**
  * @cc [owner:avervaet,label:product] document-code-block-fences
  * Every code block marked reads MUST open with its code, whatever its fence. A save MUST fence it
- * with backticks, longer than any backtick line in the code, so it reads back the same.
+ * with backticks, or tildes when its info string holds a backtick, longer than any line of that
+ * character in the code, so it reads back the same.
  */
 const DocumentCodeBlock = CodeBlock.extend({
   parseMarkdown: (token, helpers) =>
@@ -105,7 +106,7 @@ const DocumentCodeBlock = CodeBlock.extend({
   renderMarkdown: (node, helpers) => {
     const language = node.attrs?.language || "";
     const code = node.content ? helpers.renderChildren(node.content) : "";
-    const fence = backtickFenceFor(code);
+    const fence = fenceFor(code, language);
     return `${fence}${language}\n${code}\n${fence}`;
   },
 });

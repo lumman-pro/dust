@@ -29,7 +29,8 @@ they hand it; a file opens for editing when it is valid DFM, its body is Markdow
 reproduces, and every comment anchor the codec reads is one the editor can highlight. Task lists, HTML and reference
 links are refused for now, since the TipTap Markdown parser cannot preserve them. Every code
 block opens, and saves fenced with backticks: a tilde or indented fence is rewritten, and the
-fence grows longer than any backtick line in the code. Inline code can sit in bold, italic, struck
+fence grows longer than any backtick line in the code. A fence whose info string holds a
+backtick saves with tildes instead, since a backtick fence cannot hold one. Inline code can sit in bold, italic, struck
 or linked text, but never in a comment. A refused file is shown as read-only source
 with the reason. Line endings are not preserved: a CRLF file opens and is written back with LF.
 
