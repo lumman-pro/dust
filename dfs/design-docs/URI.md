@@ -97,10 +97,10 @@ insufficient. `remove` likewise requires a path to resolve the object's parent.
 2. An agent writes a plan into the pod:
 
    ```text
-   create dfs://pod-acme--<pod-folder-id>/data/plan.md
+   create dfs://pod-acme--<pod-folder-id>/files/data/plan.md
    ```
 
-   The client creates `data/` if needed, then `plan.md`, and returns `dfs://plan.md--<plan-id>`.
+   The client creates `files/` and `data/` if needed, then `plan.md`, and returns `dfs://plan.md--<plan-id>`.
 3. If front needs to keep a reference to that file, such as an attachment or an agent output, it
    stores `<plan-id>`, not `data/plan.md`.
 4. A later edit uses `dfs://plan.md--<plan-id>`. It still targets the same file after a user renames
@@ -120,6 +120,7 @@ under its owner's user folder:
     <userSId>/
       pods/
         pod-<podSId>/
+          files/
       conversations/
         conv-<conversationSId>/
 ```
@@ -136,6 +137,8 @@ create dfs://<userSId>--<user-folder-id>/conversations/conv-<conversationSId>
 - **Layout:** namespace folders (`users/`, `pods/`, `conversations/`) keep listings small and leave
   room for grants per namespace. They are created the first time they are needed, like any missing
   intermediate directory.
+- **Pod files:** a pod's files live in `files/` in its folder, so they never collide with the
+  namespace folders front adds to a pod folder, such as `conversations/`.
 - **Stored reference:** front stores the returned folder ID on the user, the pod, or the
   conversation. All later access to that context's content uses this ID as the anchor, never a path
   from the root or from the user folder.

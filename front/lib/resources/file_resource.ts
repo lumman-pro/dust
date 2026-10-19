@@ -1,6 +1,7 @@
 import path from "node:path";
 
 import config from "@app/lib/api/config";
+import { doubleWriteUploadedFileToDfs } from "@app/lib/api/dfs/upload_double_write";
 import {
   SCOPED_PREFIX_CONVERSATION,
   SCOPED_PREFIX_POD,
@@ -1840,6 +1841,7 @@ export class FileResource extends BaseResource<FileModel> {
     // The DB row now owns a mount path. Copy the file's contents to it. This is idempotent, so it
     // is safe to re-run on a Temporal retry that committed the path but failed before the copy.
     await this.copyMountFiles(auth);
+    await doubleWriteUploadedFileToDfs(auth, this);
   }
 
   /**
