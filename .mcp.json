@@ -3,6 +3,10 @@
     "sparkle-storybook": {
       "type": "http",
       "url": "http://localhost:6006/mcp"
+    },
+    "carta": {
+      "type": "http",
+      "url": "https://mcp.app.carta.com/mcp"
     }
   }
 }
