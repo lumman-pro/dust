@@ -75,8 +75,26 @@ const starterKitOptions: Partial<StarterKitOptions> = {
  */
 const DocumentCode = Code.extend({ excludes: COMMENT_MARK_NAME });
 
-// marked reads tilde fences and fences indented by up to three spaces as code like any other, but
-// TipTap's handler drops their content.
+// A line of at least as many backticks as the fence, indented by up to three spaces, closes it.
+const CLOSING_FENCE_CANDIDATE = /^ {0,3}(`{3,})/gm;
+
+/** The shortest backtick fence that the code it wraps cannot close. */
+const backtickFenceFor = (code: string) => {
+  const longestRun = Math.max(
+    2,
+    ...Array.from(
+      code.matchAll(CLOSING_FENCE_CANDIDATE),
+      ([, run]) => run.length
+    )
+  );
+  return "`".repeat(longestRun + 1);
+};
+
+/**
+ * @cc [owner:avervaet,label:product] document-code-block-fences
+ * Every code block marked reads MUST open with its code, whatever its fence. A save MUST fence it
+ * with backticks, longer than any backtick line in the code, so it reads back the same.
+ */
 const DocumentCodeBlock = CodeBlock.extend({
   parseMarkdown: (token, helpers) =>
     helpers.createNode(
@@ -84,6 +102,12 @@ const DocumentCodeBlock = CodeBlock.extend({
       { language: token.lang || null },
       token.text ? [helpers.createTextNode(token.text)] : []
     ),
+  renderMarkdown: (node, helpers) => {
+    const language = node.attrs?.language || "";
+    const code = node.content ? helpers.renderChildren(node.content) : "";
+    const fence = backtickFenceFor(code);
+    return `${fence}${language}\n${code}\n${fence}`;
+  },
 });
 
 // TipTap builds each editor's parser from the extension's options, which every editor built from

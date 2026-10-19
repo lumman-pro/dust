@@ -334,12 +334,24 @@ describe("loadDfm", () => {
     expect(roundTrip(source)).toBe(saved);
   });
 
-  it("refuses a tilde fence holding a backtick fence, which a save would break", () => {
-    const loaded = loadDfm("~~~\n```\ncode\n```\n~~~\n");
-
-    expect(loaded.isErr() && loaded.error).toBe(
-      "The Markdown would not read back the same after editing."
-    );
+  it.each([
+    [
+      "a tilde fence holding a backtick fence",
+      "~~~md\n```js\ncode\n```\n~~~\n",
+      "````md\n```js\ncode\n```\n````\n",
+    ],
+    [
+      "a longer backtick fence holding a backtick fence",
+      "`````\n````\n```\ncode\n```\n````\n`````\n",
+      "`````\n````\n```\ncode\n```\n````\n`````\n",
+    ],
+    [
+      "a backtick fence holding indented backticks",
+      "````\n   ```\n````\n",
+      "````\n   ```\n````\n",
+    ],
+  ])("opens %s and saves it with a longer fence", (_, source, saved) => {
+    expect(roundTrip(source)).toBe(saved);
   });
 
   it("opens a comment with inline code inside it", () => {
