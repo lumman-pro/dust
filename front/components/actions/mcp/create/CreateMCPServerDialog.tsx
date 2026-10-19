@@ -302,7 +302,6 @@ export function CreateMCPServerDialog({
     }
   }, [internalMCPServer, isOpen]);
 
-  // Dynamic OAuth is excluded: its authorization comes from discovery on the first submit.
   useEffect(() => {
     if (
       isOpen &&
