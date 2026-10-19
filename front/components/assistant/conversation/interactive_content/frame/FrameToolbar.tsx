@@ -161,7 +161,7 @@ export function FrameToolbar({
               tooltip={t`More actions`}
             />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">{menuItems}</DropdownMenuContent>
+          <DropdownMenuContent>{menuItems}</DropdownMenuContent>
         </DropdownMenu>
       )}
     </div>

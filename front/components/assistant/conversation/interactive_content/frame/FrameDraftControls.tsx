@@ -62,7 +62,7 @@ export function FrameDraftControls({
       label={hideLabels ? undefined : t`Validate draft`}
       icon={Check}
       size="xs"
-      variant="primary"
+      variant="highlight"
       isLoading={isValidating}
       disabled={isValidating}
       onClick={() => {
