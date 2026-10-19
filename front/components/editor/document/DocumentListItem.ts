@@ -19,6 +19,9 @@ import type { ListItemOptions } from "@tiptap/extension-list";
 import { ListItem } from "@tiptap/extension-list";
 import type { Node as ProseMirrorNode, ResolvedPos } from "@tiptap/pm/model";
 import type { Transaction } from "@tiptap/pm/state";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
+import type { Decoration } from "@tiptap/pm/view";
+import { Decoration as NodeDecoration, DecorationSet } from "@tiptap/pm/view";
 
 export const LIST_ITEM_NODE_NAME = "listItem";
 
@@ -190,6 +193,66 @@ const selectedListItems = (tr: Transaction, type: ProseMirrorNode["type"]) => {
 };
 
 /**
+ * Sparkle's task step badge, spelled out: the collab server bundles this file and cannot import
+ * Sparkle's styles.
+ */
+const TASK_STEP_BADGE_CLASSES = {
+  badge:
+    "flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors duration-300 motion-reduce:transition-none",
+  open: "border-faint text-faint",
+  done: "border-highlight-50 bg-highlight-50 text-highlight-500",
+  check:
+    "animate-in fade-in zoom-in-50 duration-300 motion-reduce:animate-none shrink-0 h-3 w-3",
+  number: "text-xs font-medium leading-none",
+};
+
+const SPARKLE_CHECK_ICON_PATH =
+  "M19.269 5.269A1.034 1.034 0 1 1 20.73 6.73l-11 11a1.034 1.034 0 0 1-1.462 0l-5-5A1.034 1.034 0 1 1 4.73 11.27L9 15.537z";
+
+const checkIcon = () => {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", TASK_STEP_BADGE_CLASSES.check);
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("fill", "currentColor");
+  path.setAttribute("d", SPARKLE_CHECK_ICON_PATH);
+  svg.append(path);
+  return svg;
+};
+
+const stepNumber = (decorations: readonly Decoration[]) =>
+  decorations
+    .map((decoration): unknown => decoration.spec.taskStep)
+    .find(isNumber);
+
+/** A node decoration on each task of a numbered list, its spec holding the task's number. */
+const taskStepDecorations = (doc: ProseMirrorNode, orderedList: string) => {
+  const decorations: Decoration[] = [];
+  doc.descendants((node, pos) => {
+    if (node.type.name === orderedList) {
+      const start = isNumber(node.attrs.start) ? node.attrs.start : 1;
+      node.forEach((item, offset, index) => {
+        if (item.attrs.task) {
+          const from = pos + 1 + offset;
+          decorations.push(
+            NodeDecoration.node(
+              from,
+              from + item.nodeSize,
+              {},
+              { taskStep: start + index }
+            )
+          );
+        }
+      });
+    }
+    return !node.isTextblock;
+  });
+  return DecorationSet.create(doc, decorations);
+};
+
+/**
  * StarterKit's list item, which is a task when `task` is set, done when `checked` also is. A
  * task item is written `- [ ] ` or `1. [x] `, its content aligned with the list marker, and an
  * empty one as an empty item.
@@ -336,13 +399,38 @@ export const DocumentListItem = ListItem.extend<
   },
 
   /**
+   * @cc [owner:rfrenoy,label:product] document-task-step-number
+   * An open task of a numbered list MUST show the number its item has in the Markdown, the
+   * list's `start` plus the item's index, plain items counted, and MUST follow every change to
+   * the list. A task of a bulleted list MUST show no number.
+   */
+  addProseMirrorPlugins() {
+    const { orderedListTypeName } = this.options;
+    const key = new PluginKey<DecorationSet>("documentTaskSteps");
+    return [
+      ...(this.parent?.() ?? []),
+      new Plugin<DecorationSet>({
+        key,
+        state: {
+          init: (_, { doc }) => taskStepDecorations(doc, orderedListTypeName),
+          apply: (tr, steps) =>
+            tr.docChanged
+              ? taskStepDecorations(tr.doc, orderedListTypeName)
+              : steps,
+        },
+        props: { decorations: (state) => key.getState(state) },
+      }),
+    ];
+  },
+
+  /**
    * @cc [owner:rfrenoy,label:product] document-task-item-read-only
    * In an editor that is not editable, clicking or pressing Space on a task's checkbox MUST NOT
    * change the document nor the checkbox's state. In an editable one, it MUST toggle only that
    * item's `checked`.
    */
   addNodeView() {
-    return ({ node, getPos, editor, HTMLAttributes }) => {
+    return ({ node, getPos, editor, HTMLAttributes, decorations }) => {
       const item = document.createElement("li");
       Object.entries(
         mergeAttributes(this.options.HTMLAttributes, HTMLAttributes)
@@ -357,42 +445,58 @@ export const DocumentListItem = ListItem.extend<
         };
       }
 
-      item.classList.add("[ul>&]:list-none");
-      const box = document.createElement("label");
-      box.contentEditable = "false";
-      box.className =
-        "float-left flex h-[1.5em] items-center [ol>li>&]:mr-2 [ul>li>&]:-ml-6 [ul>li>&]:w-6 my-1";
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.className = "size-4 cursor-pointer accent-foreground";
-      box.append(checkbox);
+      item.classList.add("list-none");
+      const column = document.createElement("span");
+      column.contentEditable = "false";
+      column.className = "float-left my-1 -ml-7 flex h-7 w-7 items-center";
+      const badge = document.createElement("button");
+      badge.type = "button";
+      badge.setAttribute("role", "checkbox");
+      column.append(badge);
       const content = document.createElement("div");
       content.className = "flow-root [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1";
-      item.append(box, content);
+      item.append(column, content);
 
       let current = node;
+      let step = stepNumber(decorations);
+      let shown: string | null = null;
       const render = () => {
-        checkbox.checked = current.attrs.checked === true;
-        checkbox.setAttribute(
+        const checked = current.attrs.checked === true;
+        badge.className = [
+          TASK_STEP_BADGE_CLASSES.badge,
+          checked ? TASK_STEP_BADGE_CLASSES.done : TASK_STEP_BADGE_CLASSES.open,
+          "cursor-pointer ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-hidden",
+          "in-[.ProseMirror[contenteditable=false]]:cursor-default",
+        ].join(" ");
+        badge.setAttribute("aria-checked", String(checked));
+        badge.setAttribute(
           "aria-label",
           itemText(current) || this.options.emptyTaskLabel
         );
+        const next = checked ? "done" : step === undefined ? "" : String(step);
+        if (next !== shown) {
+          shown = next;
+          if (checked) {
+            badge.replaceChildren(checkIcon());
+          } else if (step !== undefined) {
+            const number = document.createElement("span");
+            number.className = TASK_STEP_BADGE_CLASSES.number;
+            number.textContent = String(step);
+            badge.replaceChildren(number);
+          } else {
+            badge.replaceChildren();
+          }
+        }
       };
       render();
 
-      checkbox.addEventListener("mousedown", (event) => event.preventDefault());
-      checkbox.addEventListener("click", (event) => {
-        if (!editor.isEditable) {
-          event.preventDefault();
-        }
-      });
-      checkbox.addEventListener("change", () => {
+      badge.addEventListener("mousedown", (event) => event.preventDefault());
+      badge.addEventListener("click", () => {
         const pos = getPos();
         if (!editor.isEditable || !isNumber(pos)) {
-          render();
           return;
         }
-        const { checked } = checkbox;
+        const checked = current.attrs.checked !== true;
         editor
           .chain()
           .focus(undefined, { scrollIntoView: false })
@@ -406,18 +510,19 @@ export const DocumentListItem = ListItem.extend<
       return {
         dom: item,
         contentDOM: content,
-        update: (updated) => {
+        update: (updated, updatedDecorations) => {
           if (updated.type !== node.type || !updated.attrs.task) {
             return false;
           }
           current = updated;
+          step = stepNumber(updatedDecorations);
           render();
           return true;
         },
         stopEvent: (event) =>
-          isNode(event.target) && box.contains(event.target),
+          isNode(event.target) && column.contains(event.target),
         ignoreMutation: (mutation) =>
-          mutation.type !== "selection" && box.contains(mutation.target),
+          mutation.type !== "selection" && column.contains(mutation.target),
       };
     };
   },

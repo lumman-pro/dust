@@ -62,7 +62,9 @@ GFM task items, `- [ ]` and `1. [x]`, are list items with `task` and `checked` a
 StarterKit's `listItem` (`DocumentListItem.ts`), so a list mixing tasks and plain items stays one
 list. marked's GFM lexer reads every list, numbered ones included (`DocumentOrderedList.ts`
 turns off TipTap's own numbered list tokenizer), so `a.` and `i.` numbering reads as text. A
-task shows a checkbox that editors tick and that does nothing in a read-only editor. Typing
+task shows Sparkle's task step badge, as the plan panel does: a circle in the marker's column,
+holding the task's number in a numbered list and a check when done, next to plain items that
+keep their bullet or number. Editors tick it; it does nothing in a read-only editor. Typing
 `[ ] ` or `[x] ` at the start of an item, or the Task list and Numbered task list entries of the
 `/` and list menus, makes it a task. GFM has no empty task: a task with no text on its first line
 saves as an empty item. `anchorComment` refuses an agent's comment anchor that would land on a
