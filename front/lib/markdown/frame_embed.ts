@@ -1,3 +1,4 @@
+import { isFileId } from "@app/lib/files";
 import { safeParseJSON } from "@app/types/shared/utils/json_utils";
 import escape from "lodash/escape";
 import unescape from "lodash/unescape";
@@ -7,6 +8,10 @@ export const FRAME_EMBED_DIRECTIVE_NAME = "embed_frame";
 export const FRAME_EMBED_COMPONENT_NAME = "frame_embed";
 
 export type FrameEmbedProps = Record<string, string>;
+
+export type FrameEmbedSource =
+  | { kind: "file_path"; path: string }
+  | { kind: "file_id"; fileId: string };
 
 const ESCAPED_ATTRIBUTE_CHARACTER = String.raw`(?:[^"&<>'\r\n]|&(?:amp|lt|gt|quot|#39);)`;
 
@@ -22,6 +27,7 @@ export const REACT_RESERVED_PROP_NAMES = new Set(["key", "ref"]);
 
 const FRAME_EMBED_RESERVED_ATTRIBUTES = new Set([
   "path",
+  "fileId",
   "height",
   ...REACT_RESERVED_PROP_NAMES,
 ]);
@@ -54,12 +60,13 @@ export function findFrameEmbedDirective(src: string): number {
 }
 
 function parseFrameEmbedAttributes(source: string): {
-  path: string;
+  source: FrameEmbedSource;
   height: number | null;
   props: FrameEmbedProps;
 } | null {
   const names = new Set<string>();
   let path: string | null = null;
+  let fileId: string | null = null;
   let height: number | null = null;
   const props: FrameEmbedProps = {};
   for (const [, name, value] of source.matchAll(FRAME_EMBED_ATTRIBUTE_REGEX)) {
@@ -72,6 +79,11 @@ function parseFrameEmbedAttributes(source: string): {
         return null;
       }
       path = unescape(value);
+    } else if (name === "fileId") {
+      if (!isFileId(value)) {
+        return null;
+      }
+      fileId = value;
     } else if (name === "height") {
       if (!FRAME_EMBED_HEIGHT_REGEX.test(value)) {
         return null;
@@ -81,25 +93,32 @@ function parseFrameEmbedAttributes(source: string): {
       props[name] = unescape(value);
     }
   }
-  return path === null ? null : { path, height, props };
+  if (path !== null && fileId === null) {
+    return { source: { kind: "file_path", path }, height, props };
+  }
+  if (fileId !== null && path === null) {
+    return { source: { kind: "file_id", fileId }, height, props };
+  }
+  return null;
 }
 
 /**
  * @cc [owner:tdraier,label:product] frame-embed-directive
  * A frame embed MUST be read only from a line holding exactly `::embed_frame{…}`, trailing spaces
  * aside, whose braces hold one or more ` `-separated `<name>="<value>"` attributes in any order,
- * each name at most once: a `path`, HTML-escaped and non-empty, an optional `height` in plain
- * digits that `parseFrameEmbedHeight` accepts, and props, each a name of a letter then letters,
- * digits or `_`, other than React's `key` and `ref`, with an HTML-escaped value; anything else MUST
+ * each name at most once: either a `path`, HTML-escaped and non-empty, or a `fileId` that
+ * `isFileId` accepts, never both, an optional `height` in plain digits that `parseFrameEmbedHeight`
+ * accepts, and props, each a name of a letter then letters, digits or `_`, other than React's
+ * `key` and `ref`, with an HTML-escaped value; anything else MUST
  * NOT parse, so a writer never drops what the directive does not define. HTML-escaped means each
  * `&`, `<`, `>`, `"` and `'` written as `&amp;`, `&lt;`, `&gt;`, `&quot;` and `&#39;`, the only
  * entities read. `serializeFrameEmbedDirective` MUST write a line this function reads back to the
- * same path, height and props, in order, for any path `isFrameEmbedPath`, height
+ * same source, height and props, in order, for any source `parseFrameEmbedSource`, height
  * `parseFrameEmbedHeight` and props `parseFrameEmbedProps` accept. The directive name MUST keep a `_`, which the editor writes escaped in text, so text
  * that reads as the directive saves as `::embed\_frame` and reopens as text.
  */
 export function parseFrameEmbedDirective(src: string): {
-  path: string;
+  source: FrameEmbedSource;
   height: number | null;
   props: FrameEmbedProps;
   raw: string;
@@ -113,14 +132,18 @@ export function parseFrameEmbedDirective(src: string): {
 }
 
 export function serializeFrameEmbedDirective(
-  path: string,
+  source: FrameEmbedSource,
   height: number | null = null,
   props: FrameEmbedProps = {}
 ): string {
   const propsSource = Object.entries(props)
     .map(([name, value]) => ` ${name}="${escape(value)}"`)
     .join("");
-  return `::${FRAME_EMBED_DIRECTIVE_NAME}{path="${escape(path)}"${
+  const sourceAttribute =
+    source.kind === "file_path"
+      ? `path="${escape(source.path)}"`
+      : `fileId="${source.fileId}"`;
+  return `::${FRAME_EMBED_DIRECTIVE_NAME}{${sourceAttribute}${
     height !== null ? ` height="${height}"` : ""
   }${propsSource}}`;
 }
@@ -137,6 +160,28 @@ export function parseFrameEmbedHeight(value: unknown): number | null {
 
 export function isFrameEmbedPath(path: string): boolean {
   return path.length > 0 && !/[\r\n]/.test(path);
+}
+
+/** The source a Frame embed's path or file id names, the path first, or null. */
+export function parseFrameEmbedSource({
+  path,
+  fileId,
+}: {
+  path: unknown;
+  fileId: unknown;
+}): FrameEmbedSource | null {
+  if (typeof path === "string" && isFrameEmbedPath(path)) {
+    return { kind: "file_path", path };
+  }
+  if (typeof fileId === "string" && isFileId(fileId)) {
+    return { kind: "file_id", fileId };
+  }
+  return null;
+}
+
+/** What a Frame embed shows in place of the Frame: its path or file id. */
+export function getFrameEmbedSourceLabel(source: FrameEmbedSource): string {
+  return source.kind === "file_path" ? source.path : source.fileId;
 }
 
 function isFrameEmbedPropName(name: string): boolean {

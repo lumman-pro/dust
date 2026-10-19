@@ -1,16 +1,19 @@
 import { DocumentEmbedsContext } from "@app/components/editor/document/DocumentEmbeds";
 import { asOwnUndoStep } from "@app/components/editor/document/undoSteps";
-import type { FrameEmbedProps } from "@app/lib/markdown/frame_embed";
+import type {
+  FrameEmbedProps,
+  FrameEmbedSource,
+} from "@app/lib/markdown/frame_embed";
 import {
   findFrameEmbedDirective,
-  isFrameEmbedPath,
+  getFrameEmbedSourceLabel,
   parseFrameEmbedDirective,
   parseFrameEmbedHeight,
   parseFrameEmbedProps,
   parseFrameEmbedPropsJson,
+  parseFrameEmbedSource,
   serializeFrameEmbedDirective,
 } from "@app/lib/markdown/frame_embed";
-import { isString } from "@app/types/shared/utils/general";
 import { Node } from "@tiptap/core";
 import type { NodeViewProps } from "@tiptap/react";
 import { NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
@@ -21,6 +24,7 @@ export const DOCUMENT_FRAME_NODE_NAME = "frameEmbed";
 const DEFAULT_FRAME_HEIGHT_PX = 600;
 
 const FRAME_PATH_ATTRIBUTE = "data-document-frame";
+const FRAME_FILE_ID_ATTRIBUTE = "data-document-frame-file-id";
 const FRAME_HEIGHT_ATTRIBUTE = "data-height";
 const FRAME_PROPS_ATTRIBUTE = "data-props";
 
@@ -29,34 +33,39 @@ const FRAME_PROPS_ATTRIBUTE = "data-props";
 const propsAttribute = (props: FrameEmbedProps): FrameEmbedProps | null =>
   Object.keys(props).length > 0 ? props : null;
 
-export interface DocumentFramePathProps {
-  path: string;
+interface DocumentFrameSourceProps {
+  source: FrameEmbedSource;
 }
 
-export const DocumentFrameFallback = ({ path }: DocumentFramePathProps) => (
+export const DocumentFrameFallback = ({ source }: DocumentFrameSourceProps) => (
   <p className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
-    {path}
+    {getFrameEmbedSourceLabel(source)}
   </p>
 );
 
-interface DocumentFrameDisplayProps extends DocumentFramePathProps {
+interface DocumentFrameDisplayProps extends DocumentFrameSourceProps {
   height: number | null;
   frameProps: FrameEmbedProps;
 }
 
 export const DocumentFrameDisplay = ({
-  path,
+  source,
   height,
   frameProps,
 }: DocumentFrameDisplayProps) => {
   const { renderFrame } = useContext(DocumentEmbedsContext);
 
   return renderFrame ? (
-    <>{renderFrame(path, height ?? DEFAULT_FRAME_HEIGHT_PX, frameProps)}</>
+    <>{renderFrame(source, height ?? DEFAULT_FRAME_HEIGHT_PX, frameProps)}</>
   ) : (
-    <DocumentFrameFallback path={path} />
+    <DocumentFrameFallback source={source} />
   );
 };
+
+const sourceAttributes = (source: FrameEmbedSource) => ({
+  path: source.kind === "file_path" ? source.path : null,
+  fileId: source.kind === "file_id" ? source.fileId : null,
+});
 
 /**
  * @cc [owner:tdraier,label:product] document-frame-menu
@@ -76,7 +85,14 @@ const DocumentFrameView = ({
   const { renderFrameMenu } = useContext(DocumentEmbedsContext);
   const [hovering, setHovering] = useState(false);
   const [draftHeight, setDraftHeight] = useState<number | null>(null);
-  const path = isString(node.attrs.path) ? node.attrs.path : null;
+  const source = useMemo(
+    () =>
+      parseFrameEmbedSource({
+        path: node.attrs.path,
+        fileId: node.attrs.fileId,
+      }),
+    [node.attrs.path, node.attrs.fileId]
+  );
   const height = draftHeight ?? parseFrameEmbedHeight(node.attrs.height);
   const frameProps = useMemo(
     () => parseFrameEmbedProps(node.attrs.props),
@@ -95,9 +111,9 @@ const DocumentFrameView = ({
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
     >
-      {path && (
+      {source && (
         <DocumentFrameDisplay
-          path={path}
+          source={source}
           height={height}
           frameProps={frameProps}
         />
@@ -121,11 +137,12 @@ const DocumentFrameView = ({
 /**
  * @cc [owner:tdraier,label:product;security] document-frame-embed
  * A frame embed MUST be read only from a `frame-embed-directive` line, never as a list item's
- * first block, which the schema holds only as a paragraph, and MUST keep its path, height and
- * props through load, save, copy and paste. Pasted content MUST NOT create one whose path
- * `isFrameEmbedPath` refuses, nor keep props `parseFrameEmbedProps` refuses. It MUST display only
- * through the host's `renderFrame`, given its props, at its height or 600px without one, and
- * without a renderer as its path, so the editor never loads a Frame the host did not resolve.
+ * first block, which the schema holds only as a paragraph, and MUST keep its path or file id,
+ * height and props through load, save, copy and paste. Pasted content MUST NOT create one with no
+ * source `parseFrameEmbedSource` accepts, nor keep props `parseFrameEmbedProps` refuses. It MUST
+ * display only through the host's `renderFrame`, given its source and props, at its height or
+ * 600px without one, and without a renderer as its path or file id, so the editor never loads a
+ * Frame the host did not resolve.
  * Events inside it MUST reach the Frame, not the editor.
  */
 export const DocumentFrame = Node.create({
@@ -138,6 +155,11 @@ export const DocumentFrame = Node.create({
       default: null,
       rendered: false,
       parseHTML: (element) => element.getAttribute(FRAME_PATH_ATTRIBUTE),
+    },
+    fileId: {
+      default: null,
+      rendered: false,
+      parseHTML: (element) => element.getAttribute(FRAME_FILE_ID_ATTRIBUTE),
     },
     height: {
       default: null,
@@ -156,30 +178,44 @@ export const DocumentFrame = Node.create({
   }),
   parseHTML: () => [
     {
-      tag: `div[${FRAME_PATH_ATTRIBUTE}]`,
-      getAttrs: (element) =>
-        isFrameEmbedPath(element.getAttribute(FRAME_PATH_ATTRIBUTE) ?? "")
-          ? null
-          : false,
+      tag: `div[${FRAME_PATH_ATTRIBUTE}], div[${FRAME_FILE_ID_ATTRIBUTE}]`,
+      getAttrs: (element) => {
+        const source = parseFrameEmbedSource({
+          path: element.getAttribute(FRAME_PATH_ATTRIBUTE),
+          fileId: element.getAttribute(FRAME_FILE_ID_ATTRIBUTE),
+        });
+        return source ? sourceAttributes(source) : false;
+      },
     },
   ],
   renderHTML: ({ node }) => {
-    const path = isString(node.attrs.path) ? node.attrs.path : "";
+    const source = parseFrameEmbedSource({
+      path: node.attrs.path,
+      fileId: node.attrs.fileId,
+    });
     const height = parseFrameEmbedHeight(node.attrs.height);
     const props = parseFrameEmbedProps(node.attrs.props);
     return [
       "div",
       {
-        [FRAME_PATH_ATTRIBUTE]: path,
+        ...(source?.kind === "file_id"
+          ? { [FRAME_FILE_ID_ATTRIBUTE]: source.fileId }
+          : { [FRAME_PATH_ATTRIBUTE]: source?.path ?? "" }),
         ...(height ? { [FRAME_HEIGHT_ATTRIBUTE]: String(height) } : {}),
         ...(Object.keys(props).length > 0
           ? { [FRAME_PROPS_ATTRIBUTE]: JSON.stringify(props) }
           : {}),
       },
-      path,
+      source ? getFrameEmbedSourceLabel(source) : "",
     ];
   },
-  renderText: ({ node }) => (isString(node.attrs.path) ? node.attrs.path : ""),
+  renderText: ({ node }) => {
+    const source = parseFrameEmbedSource({
+      path: node.attrs.path,
+      fileId: node.attrs.fileId,
+    });
+    return source ? getFrameEmbedSourceLabel(source) : "";
+  },
   addNodeView: () =>
     ReactNodeViewRenderer(DocumentFrameView, { stopEvent: () => true }),
   markdownTokenizer: {
@@ -193,7 +229,7 @@ export const DocumentFrame = Node.create({
             type: DOCUMENT_FRAME_NODE_NAME,
             raw: parsed.raw,
             attrs: {
-              path: parsed.path,
+              ...sourceAttributes(parsed.source),
               height: parsed.height,
               props: propsAttribute(parsed.props),
             },
@@ -205,16 +241,22 @@ export const DocumentFrame = Node.create({
     type: DOCUMENT_FRAME_NODE_NAME,
     attrs: {
       path: token.attrs?.path,
+      fileId: token.attrs?.fileId,
       height: token.attrs?.height,
       props: token.attrs?.props,
     },
   }),
-  renderMarkdown: (node) =>
-    isString(node.attrs?.path)
+  renderMarkdown: (node) => {
+    const source = parseFrameEmbedSource({
+      path: node.attrs?.path,
+      fileId: node.attrs?.fileId,
+    });
+    return source
       ? serializeFrameEmbedDirective(
-          node.attrs.path,
-          parseFrameEmbedHeight(node.attrs.height),
-          parseFrameEmbedProps(node.attrs.props)
+          source,
+          parseFrameEmbedHeight(node.attrs?.height),
+          parseFrameEmbedProps(node.attrs?.props)
         )
-      : "",
+      : "";
+  },
 });

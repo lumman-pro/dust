@@ -6,6 +6,7 @@ import {
   parseFrameEmbedHeight,
   parseFrameEmbedProps,
   parseFrameEmbedPropsJson,
+  parseFrameEmbedSource,
   REACT_RESERVED_PROP_NAMES,
   serializeFrameEmbedDirective,
 } from "@app/lib/markdown/frame_embed";
@@ -15,29 +16,40 @@ import {
   REACT_RESERVED_PROP_NAMES as VIZ_REACT_RESERVED_PROP_NAMES,
 } from "../../../viz/app/lib/frame-props";
 
+const atPath = (path: string) => ({ kind: "file_path" as const, path });
+const FILE_ID = "fil_Q8Ac4uf35L";
+
 describe("frame embed directive", () => {
-  it("reads back the path it writes", () => {
-    for (const path of [
-      "pod-abc/dashboards/revenue.tsx",
-      'conversation-c1/a "b" & c.tsx',
+  it("reads back the path or file id it writes", () => {
+    for (const source of [
+      atPath("pod-abc/dashboards/revenue.tsx"),
+      atPath('conversation-c1/a "b" & c.tsx'),
+      { kind: "file_id" as const, fileId: FILE_ID },
     ]) {
       expect(
-        parseFrameEmbedDirective(`${serializeFrameEmbedDirective(path)}\n`)
-          ?.path
-      ).toBe(path);
+        parseFrameEmbedDirective(`${serializeFrameEmbedDirective(source)}\n`)
+          ?.source
+      ).toEqual(source);
     }
+    expect(
+      serializeFrameEmbedDirective({ kind: "file_id", fileId: FILE_ID }, 400, {
+        form: "circle",
+      })
+    ).toBe(`::embed_frame{fileId="${FILE_ID}" height="400" form="circle"}`);
   });
 
   it("reads back the height it writes", () => {
     for (const height of [1, 400, 99999]) {
       expect(
         parseFrameEmbedDirective(
-          `${serializeFrameEmbedDirective("pod-abc/x.tsx", height)}\n`
+          `${serializeFrameEmbedDirective(atPath("pod-abc/x.tsx"), height)}\n`
         )
-      ).toMatchObject({ path: "pod-abc/x.tsx", height });
+      ).toMatchObject({ source: atPath("pod-abc/x.tsx"), height });
     }
     expect(
-      parseFrameEmbedDirective(serializeFrameEmbedDirective("pod-abc/x.tsx"))
+      parseFrameEmbedDirective(
+        serializeFrameEmbedDirective(atPath("pod-abc/x.tsx"))
+      )
     ).toMatchObject({ height: null });
   });
 
@@ -50,9 +62,13 @@ describe("frame embed directive", () => {
     };
     for (const height of [null, 400]) {
       const parsed = parseFrameEmbedDirective(
-        `${serializeFrameEmbedDirective("pod-abc/x.tsx", height, props)}\n`
+        `${serializeFrameEmbedDirective(atPath("pod-abc/x.tsx"), height, props)}\n`
       );
-      expect(parsed).toMatchObject({ path: "pod-abc/x.tsx", height, props });
+      expect(parsed).toMatchObject({
+        source: atPath("pod-abc/x.tsx"),
+        height,
+        props,
+      });
       expect(Object.keys(parsed?.props ?? {})).toEqual(Object.keys(props));
     }
     expect(
@@ -72,14 +88,35 @@ describe("frame embed directive", () => {
     ],
   ])("reads the attributes of %j in any order", (src, props) => {
     const parsed = parseFrameEmbedDirective(src);
-    expect(parsed).toMatchObject({ path: "pod-abc/x.tsx", height: 400 });
+    expect(parsed).toMatchObject({
+      source: atPath("pod-abc/x.tsx"),
+      height: 400,
+    });
     expect(parsed?.props).toEqual(props);
+  });
+
+  it("reads a file id in any position", () => {
+    expect(
+      parseFrameEmbedDirective(
+        `::embed_frame{form="circle" fileId="${FILE_ID}" height="400"}`
+      )
+    ).toMatchObject({
+      source: { kind: "file_id", fileId: FILE_ID },
+      height: 400,
+      props: { form: "circle" },
+    });
   });
 
   it.each([
     '::embed_frame{path="pod-abc/x.tsx" title=X}',
     '::embed_frame{path="pod-abc/x.tsx" a="1" a="2"}',
     '::embed_frame{path="pod-abc/x.tsx" path="pod-abc/y.tsx"}',
+    `::embed_frame{path="pod-abc/x.tsx" fileId="${FILE_ID}"}`,
+    `::embed_frame{fileId="${FILE_ID}" path="pod-abc/x.tsx"}`,
+    `::embed_frame{fileId="${FILE_ID}" fileId="${FILE_ID}"}`,
+    '::embed_frame{fileId="fil_short"}',
+    '::embed_frame{fileId="pod-abc/x.tsx"}',
+    '::embed_frame{fileId=""}',
     '::embed_frame{path="pod-abc/x.tsx" height="400" height="400"}',
     '::embed_frame{height="400" region="EU"}',
     "::embed_frame{}",
@@ -136,6 +173,7 @@ describe("frame embed directive", () => {
     });
     for (const invalid of [
       { path: "x" },
+      { fileId: FILE_ID },
       { height: "1" },
       { key: "x" },
       { ref: "x" },
@@ -154,6 +192,23 @@ describe("frame embed directive", () => {
     });
     for (const json of [null, undefined, "", "{", "[1]"]) {
       expect(parseFrameEmbedPropsJson(json)).toEqual({});
+    }
+  });
+
+  it("reads a source from a path, else a file id", () => {
+    expect(
+      parseFrameEmbedSource({ path: "pod-abc/x.tsx", fileId: FILE_ID })
+    ).toEqual(atPath("pod-abc/x.tsx"));
+    expect(parseFrameEmbedSource({ path: null, fileId: FILE_ID })).toEqual({
+      kind: "file_id",
+      fileId: FILE_ID,
+    });
+    for (const attrs of [
+      { path: "", fileId: null },
+      { path: null, fileId: "fil_short" },
+      { path: 1, fileId: undefined },
+    ]) {
+      expect(parseFrameEmbedSource(attrs)).toBeNull();
     }
   });
 

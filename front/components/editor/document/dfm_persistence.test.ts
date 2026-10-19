@@ -671,6 +671,8 @@ describe("saveDfm", () => {
       '::embed_frame{path="pod-abc/x.tsx" height="400"}\n',
       '::embed_frame{path="pod-abc/x.tsx" region="EU" label="a &amp; b"}\n',
       '::embed_frame{path="pod-abc/x.tsx" height="400" region="EU" year="2026"}\n',
+      '::embed_frame{fileId="fil_Q8Ac4uf35L"}\n',
+      '::embed_frame{fileId="fil_Q8Ac4uf35L" height="400" form="circle" color="#7c3aed"}\n',
     ]) {
       expect(roundTrip(source)).toBe(source);
       expect(() =>
@@ -714,18 +716,24 @@ describe("saveDfm", () => {
     ).toBe('::embed_frame{path="pod-abc/x.tsx" height="400" region="EU"}\n');
   });
 
-  it("saves a Frame inserted with only its path, as the / menu does", () => {
-    for (const attrs of [
-      { path: "pod-abc/x.tsx" },
-      { path: "pod-abc/x.tsx", props: { region: "EU" } },
-    ]) {
+  it("saves a Frame inserted with only its path or file id, as the / menu does", () => {
+    const atPath = { kind: "file_path" as const, path: "pod-abc/x.tsx" };
+    const byId = { kind: "file_id" as const, fileId: "fil_Q8Ac4uf35L" };
+    for (const [attrs, source, props] of [
+      [{ path: atPath.path }, atPath, {}],
+      [
+        { path: atPath.path, props: { region: "EU" } },
+        atPath,
+        { region: "EU" },
+      ],
+      [{ fileId: byId.fileId }, byId, {}],
+    ] as const) {
       const saved = saveDfm(
         { frontMatter: null, anchorOrder: [] },
         { type: "doc", content: [{ type: "frameEmbed", attrs }] }
       );
       expect(saved.isOk() && saved.value).toBe(
-        serializeFrameEmbedDirective("pod-abc/x.tsx", null, attrs.props ?? {}) +
-          "\n"
+        `${serializeFrameEmbedDirective(source, null, props)}\n`
       );
     }
   });
@@ -764,6 +772,9 @@ describe("saveDfm", () => {
     expect(
       roundTrip('- ::embed_frame{path="pod-abc/x.tsx" region="EU"}\n')
     ).toBe('- ::embed\\_frame{path="pod-abc/x.tsx" region="EU"}\n');
+    expect(roundTrip('- ::embed_frame{fileId="fil_Q8Ac4uf35L"}\n')).toBe(
+      '- ::embed\\_frame{fileId="fil\\_Q8Ac4uf35L"}\n'
+    );
   });
 
   it("reads an image's width after its alt text, and keeps alt text ending like one", () => {

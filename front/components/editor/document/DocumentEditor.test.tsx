@@ -14,6 +14,7 @@ import { dfmToYDoc, yDocToDfm } from "@app/lib/api/collab/ydoc";
 import type { CommentChannel } from "@app/lib/client/collab/comments";
 import type { DfmMessageVerifier } from "@app/lib/client/dfm_signatures";
 import type { DfmAuthor, DfmComment, DfmMessage } from "@app/lib/markdown/dfm";
+import { getFrameEmbedSourceLabel } from "@app/lib/markdown/frame_embed";
 import datadogLogger from "@app/logger/datadogLogger";
 import { CollabAgentFactory } from "@app/tests/utils/CollabAgentFactory";
 import { CollabParticipantFactory } from "@app/tests/utils/CollabParticipantFactory";
@@ -1814,6 +1815,10 @@ describe("Document tables", () => {
   });
 });
 
+const renderFrameTitled: DocumentProps["renderFrame"] = (source) => (
+  <iframe title={`Frame ${getFrameEmbedSourceLabel(source)}`} />
+);
+
 describe("Document Frame embeds", () => {
   const SOURCE_WITH_FRAME =
     'Intro\n\n::embed_frame{path="pod-abc/dashboards/revenue.tsx"}\n\nOutro\n';
@@ -1838,9 +1843,7 @@ describe("Document Frame embeds", () => {
   };
 
   it("shows a Frame through the host's renderer", async () => {
-    const dom = await renderFrames((path) => (
-      <iframe title={`Frame ${path}`} />
-    ));
+    const dom = await renderFrames(renderFrameTitled);
 
     expect(
       await within(dom).findByTitle("Frame pod-abc/dashboards/revenue.tsx")
@@ -1851,10 +1854,14 @@ describe("Document Frame embeds", () => {
     const source =
       'Intro\n\n::embed_frame{path="pod-abc/a.tsx" region="EU" year="2026"}\n\nOutro\n';
     const renderFrame: DocumentProps["renderFrame"] = (
-      path,
+      frameSource,
       _height,
       props
-    ) => <iframe title={`Frame ${path} ${JSON.stringify(props)}`} />;
+    ) => (
+      <iframe
+        title={`Frame ${getFrameEmbedSourceLabel(frameSource)} ${JSON.stringify(props)}`}
+      />
+    );
     const title = 'Frame pod-abc/a.tsx {"region":"EU","year":"2026"}';
 
     const { dom } = await renderDocument(source, { renderFrame });
@@ -1895,6 +1902,63 @@ describe("Document Frame embeds", () => {
       dom.editor
         .getMarkdown()
         .match(/::embed_frame\{path="pod-abc\/a\.tsx" region="EU"\}/g)
+    ).toHaveLength(2);
+  });
+
+  it("shows a Frame embedded by file id through the host's renderer, in the editor and the read-only preview", async () => {
+    const source =
+      'Intro\n\n::embed_frame{fileId="fil_Q8Ac4uf35L" form="circle"}\n\nOutro\n';
+    const renderFrame: DocumentProps["renderFrame"] = (
+      frameSource,
+      _height,
+      props
+    ) => (
+      <iframe
+        title={`Frame ${JSON.stringify(frameSource)} ${JSON.stringify(props)}`}
+      />
+    );
+    const title =
+      'Frame {"kind":"file_id","fileId":"fil_Q8Ac4uf35L"} {"form":"circle"}';
+
+    const { dom } = await renderDocument(source, { renderFrame });
+    expect(await within(dom).findByTitle(title)).toBeDefined();
+    expect(dom.editor.getMarkdown()).toContain(
+      '::embed_frame{fileId="fil_Q8Ac4uf35L" form="circle"}'
+    );
+
+    const preview = render(
+      <DocumentEditor
+        initialContent={`${source}\n<div>Preview</div>\n`}
+        renderCommentAuthorAvatar={() => null}
+        renderCommentBody={(body) => <p>{body}</p>}
+        resolveImageSource={NO_IMAGE_SOURCE}
+        renderFrame={renderFrame}
+      />
+    );
+    expect(await within(preview.container).findByTitle(title)).toBeDefined();
+  });
+
+  it("keeps a Frame's file id when its HTML is pasted back", async () => {
+    const { dom } = await renderDocument(
+      'Intro\n\n::embed_frame{fileId="fil_Q8Ac4uf35L" height="400"}\n',
+      {}
+    );
+    const html = dom.editor.getHTML();
+
+    act(() => {
+      dom.editor.commands.insertContentAt(
+        dom.editor.state.doc.content.size,
+        `${html}<div data-document-frame-file-id="fil_short"></div>`
+      );
+    });
+
+    expect(
+      dom.editor
+        .getMarkdown()
+        .match(/::embed_frame\{fileId="fil_Q8Ac4uf35L" height="400"\}/g)
+    ).toHaveLength(2);
+    expect(
+      dom.editor.getJSON().content?.filter((node) => node.type === "frameEmbed")
     ).toHaveLength(2);
   });
 
@@ -1945,7 +2009,7 @@ describe("Document Frame embeds", () => {
         renderCommentAuthorAvatar={() => null}
         renderCommentBody={(body) => <p>{body}</p>}
         resolveImageSource={NO_IMAGE_SOURCE}
-        renderFrame={(path) => <iframe title={`Frame ${path}`} />}
+        renderFrame={renderFrameTitled}
       />
     );
     const { rerender } = render(renderPreview());
@@ -1976,7 +2040,7 @@ describe("Document Frame embeds", () => {
         renderCommentAuthorAvatar={() => null}
         renderCommentBody={(body) => <p>{body}</p>}
         resolveImageSource={NO_IMAGE_SOURCE}
-        renderFrame={(path) => <iframe title={`Frame ${path}`} />}
+        renderFrame={renderFrameTitled}
       />
     );
 
@@ -2018,8 +2082,11 @@ describe("Document Frame menu", () => {
   const renderFrames = async ({ readOnly = false } = {}) => {
     const { dom } = await renderDocument(SOURCE_WITH_FRAMES, {
       readOnly,
-      renderFrame: (path, height) => (
-        <iframe title={`Frame ${path}`} style={{ height }} />
+      renderFrame: (source, height) => (
+        <iframe
+          title={`Frame ${getFrameEmbedSourceLabel(source)}`}
+          style={{ height }}
+        />
       ),
     });
     return dom;

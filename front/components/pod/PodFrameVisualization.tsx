@@ -18,6 +18,8 @@ interface PodFrameVisualizationProps {
   frameFileId?: string | null;
   /** Canonical path of the Frame file or manifest. */
   framePath?: string | null;
+  /** The Frame's package directory, for a Frame shown without its path. */
+  framePackageRoot?: string | null;
 }
 
 /**
@@ -37,6 +39,7 @@ export function PodFrameVisualization({
   frameId,
   frameFileId,
   framePath,
+  framePackageRoot,
 }: PodFrameVisualizationProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -55,7 +58,7 @@ export function PodFrameVisualization({
       framePackageRoot={
         framePath && framePath.includes("/")
           ? framePath.slice(0, framePath.lastIndexOf("/"))
-          : null
+          : (framePackageRoot ?? null)
       }
       frameId={frameId}
       frameFileId={frameFileId}

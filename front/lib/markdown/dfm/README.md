@@ -63,7 +63,7 @@ examples would survive inside a DFM file. Everything the codec does not define p
 untouched. Images are ordinary Markdown too: a document shows a file of its conversation or pod
 with its path as the destination, `![Revenue](pod-<id>/charts/revenue.png)`, or a file by its id,
 `![Chart](fil_<id>)`. A Frame is embedded on a line of its own, `::embed_frame{path="pod-<id>/dashboards/revenue.tsx"}`,
-with an optional height in pixels, `height="400"`, and any props its component renders with,
+or by its id, `::embed_frame{fileId="fil_<id>"}`, with an optional height in pixels, `height="400"`, and any props its component renders with,
 `region="EU"`, in any order (`lib/markdown/frame_embed.ts`). A file of the conversation or pod is referenced inline with the
 `:preview_file` directive agents also write in messages,
 `:preview_file{path="pod-<id>/reports/q3.pdf" title="Q3 report"}`, which the codec passes through

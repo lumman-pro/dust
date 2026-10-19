@@ -66,6 +66,7 @@ describe("markdownDocumentsSkill", () => {
       expect(instructions).toContain(
         '::embed_frame{path="pod-<id>/dashboards/revenue.tsx"}'
       );
+      expect(instructions).toContain('::embed_frame{fileId="fil_<id>"}');
       expect(instructions).toContain(
         ':preview_file{path="pod-<id>/reports/q3.pdf" title="Q3 report"}'
       );

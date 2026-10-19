@@ -29,11 +29,11 @@ import { createDocumentMarked } from "@app/components/editor/document/marked_ins
 import {
   parseFrameEmbedHeight,
   parseFrameEmbedProps,
+  parseFrameEmbedSource,
   serializeFrameEmbedDirective,
 } from "@app/lib/markdown/frame_embed";
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
-import { isString } from "@app/types/shared/utils/general";
 import type {
   ExtendableConfig,
   JSONContent,
@@ -315,20 +315,23 @@ const framesOpeningListItemsAsText = (node: JSONContent): JSONContent => {
   }
   const content = node.content.map(framesOpeningListItemsAsText);
   const [first] = content;
-  if (
-    node.type === "listItem" &&
-    first?.type === DOCUMENT_FRAME_NODE_NAME &&
-    isString(first.attrs?.path)
-  ) {
+  const source =
+    node.type === "listItem" && first?.type === DOCUMENT_FRAME_NODE_NAME
+      ? parseFrameEmbedSource({
+          path: first.attrs?.path,
+          fileId: first.attrs?.fileId,
+        })
+      : null;
+  if (first && source) {
     content[0] = {
       type: "paragraph",
       content: [
         {
           type: "text",
           text: serializeFrameEmbedDirective(
-            first.attrs.path,
-            parseFrameEmbedHeight(first.attrs.height),
-            parseFrameEmbedProps(first.attrs.props)
+            source,
+            parseFrameEmbedHeight(first.attrs?.height),
+            parseFrameEmbedProps(first.attrs?.props)
           ),
         },
       ],

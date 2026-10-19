@@ -1,7 +1,10 @@
 // Shared by Document and its hook to avoid circular type imports.
 import type { DfmMessageVerifier } from "@app/lib/client/dfm_signatures";
 import type { DfmAuthor } from "@app/lib/markdown/dfm";
-import type { FrameEmbedProps } from "@app/lib/markdown/frame_embed";
+import type {
+  FrameEmbedProps,
+  FrameEmbedSource,
+} from "@app/lib/markdown/frame_embed";
 import type { Extensions } from "@tiptap/core";
 import type { ReactNode } from "react";
 
@@ -60,11 +63,12 @@ export interface DocumentProps {
   /** Files the `/` menu offers to embed. Without them, it offers no Frame or image. */
   embeddableFiles?: DocumentEmbeddableFiles;
   /**
-   * Renders the Frame a `::embed_frame` line embeds, from its path, filling the height in pixels the
-   * document gives it, its component given the line's props. Without it, the embed shows its path.
+   * Renders the Frame a `::embed_frame` line embeds, from its path or file id, filling the height in
+   * pixels the document gives it, its component given the line's props. Without it, the embed shows
+   * its path or file id.
    */
   renderFrame?: (
-    path: string,
+    source: FrameEmbedSource,
     height: number,
     frameProps: FrameEmbedProps
   ) => ReactNode;
