@@ -638,12 +638,37 @@ async fn replies_are_served_until_the_cache_ttl(channel: &Channel, tenant: &Tena
     let short = Budget::new(Duration::from_millis(400));
     let expiring = mount(short)?;
     let uncached = mount(Budget::new(Duration::ZERO))?;
+    let sized = create_children(
+        &tenant_id,
+        tenant.root_id,
+        ObjectKind::File,
+        &["sized.txt".to_owned()],
+    )
+    .await?
+    .remove(0)
+    .object_id;
     let mut workspaces = Vec::new();
+    let mut sized_inos = Vec::new();
     for fs in [&cached, &expiring, &uncached] {
         let workspace = fs.lookup(ROOT_INO, "workspace").await?.ino;
         assert_eq!(fs.lookup(workspace, "later.txt").await, Err(Errno::ENOENT));
+        sized_inos.push(fs.lookup(workspace, "sized.txt").await?.ino);
         workspaces.push(workspace);
     }
+
+    // The attributes are served from the cache until they expire.
+    let tx = fdb::database()?.create_trx()?;
+    let resource = TenantResource::fetch(&tx, &tenant_id)
+        .await?
+        .context("missing tenant")?;
+    let mut file = ObjectResource::fetch(&tx, &resource, &sized)
+        .await?
+        .context("missing file")?;
+    file.size = 7;
+    file.record_content_change(&tx, clock::now_ms()?);
+    tx.commit().await?;
+    assert_eq!(cached.getattr(sized_inos[0]).await?.size, 0);
+    assert_eq!(uncached.getattr(sized_inos[2]).await?.size, 7);
 
     create_children(
         &tenant_id,
@@ -666,5 +691,6 @@ async fn replies_are_served_until_the_cache_ttl(channel: &Channel, tenant: &Tena
         expiring.lookup(workspaces[1], "later.txt").await?.kind,
         Kind::File
     );
+    assert_eq!(expiring.getattr(sized_inos[1]).await?.size, 7);
     Ok(())
 }

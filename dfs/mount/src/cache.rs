@@ -96,6 +96,10 @@ impl<K: Eq + std::hash::Hash, V> Stamped<K, V> {
      * pile up and pruning stays amortized constant time.
      */
     fn install(&mut self, key: K, value: V, sent: Instant, ttl: Duration) {
+        // Nothing would ever be served.
+        if ttl.is_zero() {
+            return;
+        }
         if let Some((_, current)) = self.entries.get(&key)
             && *current > sent
         {
@@ -175,8 +179,9 @@ mod tests {
 
     #[test]
     fn expired_entries_are_dropped_as_the_cache_grows() {
-        let mut cache = Cache::new(Duration::ZERO);
-        let sent = Instant::now();
+        let ttl = Duration::from_millis(1);
+        let mut cache = Cache::new(ttl);
+        let sent = Instant::now() - ttl;
         for _ in 0..PRUNE_MIN_ENTRIES * 3 {
             cache.install_attr(ObjectId::new_v7(), attr(0), sent);
         }

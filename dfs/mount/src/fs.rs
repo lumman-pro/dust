@@ -74,6 +74,11 @@ impl Fs {
      * `new` MUST fail with `EINVAL` unless every folder name is a valid object name, no name appears
      * twice, and no folder ID appears twice.
      */
+    /**
+     * @cc [owner:fontanierh,label:product] cache-within-budget
+     * The `Fs` MUST serve a cached server reply only until `budget.cache_ttl()` has passed since its
+     * request was sent.
+     */
     pub fn new(remote: Remote, folders: Vec<Folder>, budget: Budget) -> Result<Self, Errno> {
         let mut names = HashSet::new();
         let mut ids = HashSet::new();
