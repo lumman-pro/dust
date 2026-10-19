@@ -85,7 +85,7 @@ function OptionPreviewPane({ option }: { option: UserQuestionOption }) {
   }
 
   return (
-    <div className="flex min-w-0 flex-col gap-2 rounded-2xl bg-muted-background px-4 py-3">
+    <div className="flex min-w-0 flex-col gap-2 rounded-2xl bg-muted-background p-3">
       {option.description && (
         <div className="text-sm text-muted-foreground">
           {option.description}

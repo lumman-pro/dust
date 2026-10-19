@@ -203,7 +203,7 @@ export function OptionCard(props: OptionCardProps) {
       </div>
       {selectionIndicatorPosition === "end" && indicator}
       {preview !== null && (
-        <div className="max-h-64 basis-full overflow-y-auto rounded-xl bg-muted-background px-3 py-2">
+        <div className="max-h-64 basis-full overflow-y-auto rounded-xl bg-muted-background p-3">
           {preview}
         </div>
       )}
