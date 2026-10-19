@@ -3231,7 +3231,7 @@ export const DEFAULT_REMOTE_MCP_SERVERS: DefaultRemoteMCPServerConfig[] = [
     id: 10032,
     name: "StackOne",
     description:
-      "StackOne unified MCP gateway — discover and run actions across your organization's connected HR, ATS, CRM, finance, and IT systems (Workday, Greenhouse, Salesforce, NetSuite, and 500+ more) from one integration, scoped to each user's own linked accounts.",
+      "StackOne MCP gateway — connect Dust agents to 500+ enterprise systems, and growing daily, across sales, support, marketing, engineering, finance, knowledge and much more.",
     url: "https://mcp.stackone.com/mcp",
     icon: "StackOneLogo",
     documentationUrl: "https://docs.stackone.com/mcp",

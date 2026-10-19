@@ -2250,6 +2250,10 @@ export const tailoredEnrichments: Record<
   },
   // [generic] StackOne — 3 real tools
   stackone: {
+    seoSubtitle:
+      "StackOne is the Tool Gateway for successful AI rollouts: MCP gateway, managed connectors, token optimization, prompt-injection defense and secure execution.",
+    longDescription:
+      "Connect Dust agents to 500+ enterprise systems through StackOne's MCP gateway. Actions run with each user's own permissions or shared credentials, matching how your Dust agent is set up.",
     chatStoryline: {
       userPrompt:
         "Chase our invoices that are 60+ days past due, and loop in the account owner in Salesforce for each one.",
@@ -2296,9 +2300,9 @@ export const tailoredEnrichments: Record<
       {
         icon: "ActionMagnifyingGlassIcon",
         color: "blue",
-        title: "One prompt, any connected system",
+        title: "Three tools, 500+ systems",
         description:
-          "StackOne discovers the right action across your organization's connected HR, ATS, CRM, finance, and IT tools and runs it — so agents can act on Workday, Greenhouse, Salesforce, NetSuite, and 500+ others without a dedicated integration for each one.",
+          "StackOne gives Dust agents three tools. Search Actions finds the right action in any connected system, Execute Action runs it, and List Accounts shows which systems you have linked.",
         toolMatches: [
           "stackone_list_accounts",
           "stackone_search_actions",
@@ -2308,9 +2312,9 @@ export const tailoredEnrichments: Record<
       {
         icon: "ActionLockIcon",
         color: "green",
-        title: "Runs under each person's own access",
+        title: "Per-user or shared credentials",
         description:
-          "Actions execute against the requesting user's own linked accounts and whatever your IT team has approved — not a shared service account — so agents stay inside existing permission boundaries.",
+          "StackOne supports both per-user and shared auth, just as Dust agents can run with private or shared credentials — actions run with each user's own permissions or shared credentials, matching how your Dust agent is set up.",
         toolMatches: ["stackone_list_accounts", "stackone_execute_action"],
       },
       {
@@ -2326,17 +2330,27 @@ export const tailoredEnrichments: Record<
       {
         question: "What can Dust agents do with StackOne?",
         answer:
-          "Dust agents can discover and run actions across whatever HR, ATS, CRM, finance, or IT systems your organization has connected to StackOne — for example creating a candidate in an ATS, posting a job to your HRIS, or chasing overdue invoices in NetSuite — without a dedicated integration for each app.",
+          "StackOne gives Dust agents three tools. Search Actions finds the right action in any connected system, Execute Action runs it, and List Accounts shows which systems you have linked.",
       },
       {
         question: "Which systems does StackOne connect to?",
         answer:
-          "StackOne connects to 500+ SaaS tools spanning HRIS/HCM (Workday, BambooHR, Personio), ATS (Greenhouse, Lever, Ashby), CRM (Salesforce, HubSpot), finance (NetSuite, QuickBooks, Xero), and IT/support (Zendesk, Okta) — the exact set available to an agent depends on what your organization has linked.",
+          "500+ enterprise systems, and growing daily, across sales, support, marketing, engineering, finance, knowledge and much more. See the full list at stackone.com/connectors.",
       },
       {
         question: "How does authentication work?",
         answer:
-          "StackOne uses OAuth with dynamic client registration. Once connected, actions run scoped to your own linked accounts and your IT team's approved permissions, not a shared service account.",
+          "StackOne supports both per-user and shared auth, just as Dust agents can run with private or shared credentials. You'll be prompted to sign in with your StackOne account in a browser window to authorize access.",
+      },
+      {
+        question: "Why use StackOne if an app already has its own MCP server?",
+        answer:
+          "First-party MCP servers usually expose only a subset of what the app can do. StackOne builds each connector on the app's underlying API, so agents can reach far more actions and go deeper than a first-party server allows. Teams can also bring their existing MCP servers under StackOne's gateway, so every tool their agents use gets the same governance and security: permissions, policy enforcement and a full audit trail.",
+      },
+      {
+        question: "How is StackOne different from Zapier or n8n?",
+        answer:
+          "Zapier and n8n are workflow automation platforms that have added MCP access, while a gateway for AI tools is StackOne's core business. That shows in three places: deep, agent-optimised actions on every connector, rather than a handful of pre-built actions per app; the AI Connector Builder, which lets teams extend and customise connectors or build new ones for any system, including in-house tools; and governance centralised under a single gateway, across every system and every AI tool like Dust.",
       },
     ],
     relatedIntegrations: ["salesforce", "hubspot", "netsuite"],
