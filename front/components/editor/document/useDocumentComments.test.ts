@@ -192,6 +192,16 @@ function acceptingSession(getEditor: () => Editor | null) {
                 ],
               },
             ];
+          case "edit":
+            return [
+              {
+                ...thread,
+                messages: [
+                  ...thread.messages.slice(0, -1),
+                  sessionThread(thread.id, command.body).messages[0],
+                ],
+              },
+            ];
           default:
             return assertNever(command);
         }
@@ -423,6 +433,36 @@ describe("useDocumentComments", () => {
     });
 
     expect(saved()).toBe("Hi there\n");
+  });
+
+  it("edits the author's last message through the thread in the file", async () => {
+    const { result, saved } = await renderCommentedEditor(SOURCE);
+
+    await act(async () => {
+      await result.current.comments.reply("c1", "Not at all.");
+    });
+    await act(async () => {
+      expect(
+        (await result.current.comments.edit("c1", "Not really.")).isOk()
+      ).toBe(true);
+    });
+
+    const edited = parseDfm(saved());
+    expect(
+      edited.isOk() && edited.value.comments[0].messages.map((m) => m.body)
+    ).toEqual(["Note.", "Not really."]);
+  });
+
+  it("refuses to edit a thread whose last message is someone else's", async () => {
+    const { result, isUnchanged } = await renderCommentedEditor(SOURCE);
+
+    await act(async () => {
+      expect(
+        (await result.current.comments.edit("c1", "Mine now.")).isErr()
+      ).toBe(true);
+    });
+
+    expect(isUnchanged()).toBe(true);
   });
 
   it("opens the requested thread once its text is in the document", async () => {

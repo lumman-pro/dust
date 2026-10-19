@@ -98,6 +98,7 @@ const UNSUGGESTABLE_MESSAGE = msg`Suggestions can only replace text within one p
 const UNAPPLICABLE_MESSAGE = msg`This suggestion can't replace the commented text. Another comment may cover part of it.`;
 const DELETED_MESSAGE = msg`This comment was deleted.`;
 const THREAD_CHANGED_MESSAGE = msg`This thread changed while sending. Send again.`;
+const EDIT_THREAD_CHANGED_MESSAGE = msg`Someone replied, so this message can no longer be edited.`;
 
 const ED25519_BASE64URL_SIGNATURE_PLACEHOLDER = "A".repeat(86);
 
@@ -116,6 +117,26 @@ const localMessage = (writer: DfmAuthor, body: string): DfmMessage => ({
   body,
 });
 
+/**
+ * @cc [owner:louisjc,label:product] document-comment-editable-message
+ * A message MUST read as editable only when it is the last message of an open thread and its
+ * author has `author`'s kind and id; without `author`, no message is editable.
+ */
+export const isEditableMessage = (
+  author: DfmAuthor | undefined,
+  comment: DfmComment,
+  index: number
+): boolean => {
+  const message = comment.messages[index];
+  return (
+    !!author &&
+    comment.status === "open" &&
+    index === comment.messages.length - 1 &&
+    message.author.kind === author.kind &&
+    message.author.id === author.id
+  );
+};
+
 /** What a message's signature covers besides the file: its thread, place and previous message. */
 const verificationKey = (comment: DfmComment, index: number) =>
   JSON.stringify([
@@ -129,6 +150,8 @@ const verificationKey = (comment: DfmComment, index: number) =>
 interface CommentCommands {
   add: (id: string, body: string) => Promise<Result<DfmComment, string>>;
   reply: (thread: DfmComment, body: string) => Promise<Result<void, string>>;
+  /** Replaces the thread's last message with `body`. */
+  edit: (thread: DfmComment, body: string) => Promise<Result<void, string>>;
   setResolved: (id: string, resolved: boolean) => Promise<Result<void, string>>;
   remove: (id: string) => Promise<Result<void, string>>;
   /** Drops a thread `add` created that the draft could no longer anchor. */
@@ -167,11 +190,12 @@ export interface CommentsFocusRequest {
 
 /**
  * @cc [owner:flvndvd;tdraier,label:product] document-comment-authoring
- * Starting, submitting, replying to, resolving and deleting comments MUST require canComment,
+ * Starting, submitting, replying to, editing, resolving and deleting comments MUST require canComment,
  * an author and a live session. A pending draft MUST be cancelled when commenting becomes unavailable. New
- * comments and replies MUST carry the current author and creation time, and MUST be refused
+ * comments, replies and edited messages MUST carry the current author and creation time, and MUST be refused
  * with a reason, leaving the document unchanged, when the codec cannot write the thread or the
- * document would no longer save with it.
+ * document would no longer save with it. Editing MUST be refused with a reason unless the thread's
+ * last message is editable (`document-comment-editable-message`).
  */
 /**
  * @cc [owner:flvndvd;tdraier,label:react] document-comment-navigation
@@ -209,14 +233,14 @@ export interface CommentsFocusRequest {
  */
 /**
  * @cc [owner:tdraier,label:product] collab-editor-comment-requests
- * With `live`, posting, replying to, resolving and deleting comments MUST go through the session
+ * With `live`, posting, replying to, editing, resolving and deleting comments MUST go through the session
  * and MUST NOT change the threads in the document, which only the session sends, with two
  * exceptions: a new thread MUST be anchored to the draft once the session created it, and deleting
  * MUST remove the comment's marks once the session deleted the thread or answered that it has none,
  * never before. A new thread MUST be deleted from the session instead when it can no longer be
  * anchored, or when the session accepted it without returning it or returned a thread the codec
- * cannot write. A new comment or reply the codec could not write, or the document would no longer
- * save with, MUST be refused before the session sees it, checked with the current author and a
+ * cannot write. A new comment, reply or edited message the codec could not write, or the document
+ * would no longer save with, MUST be refused before the session sees it, checked with the current author and a
  * full-length signature, and without the comment marks that have no thread, which the session drops
  * when it writes the file. Every refusal from the session, and a command that could not be sent,
  * MUST be returned with a reason, never thrown; applying a suggestion whose resolution the session
@@ -468,6 +492,36 @@ export const useDocumentComments = ({
     return wouldSave(next) ? new Ok(undefined) : new Err(t(UNSAVABLE_MESSAGE));
   };
 
+  /** Refuses an edit of `thread`'s last message before anyone writes it, as `checkNewMessage`. */
+  const checkEditedMessage = (
+    editor: Editor,
+    writer: DfmAuthor,
+    thread: DfmComment,
+    body: string
+  ): Result<void, string> => {
+    const message = {
+      ...localMessage(writer, body),
+      signature: ED25519_BASE64URL_SIGNATURE_PLACEHOLDER,
+    };
+    const edited = {
+      ...thread,
+      messages: [...thread.messages.slice(0, -1), message],
+    };
+    if (!isWritableThread(edited)) {
+      return new Err(t(UNSAVABLE_MESSAGE));
+    }
+    const next = previewDocument(editor, (chain) =>
+      chain.setCommentThreads(
+        getDocumentComments(editor.state.doc).map((comment) =>
+          comment.id === thread.id ? edited : comment
+        )
+      )
+    );
+    return next && wouldSave(next)
+      ? new Ok(undefined)
+      : new Err(t(UNSAVABLE_MESSAGE));
+  };
+
   const sessionCommands = (
     editor: Editor,
     channel: CommentChannel
@@ -515,6 +569,23 @@ export const useDocumentComments = ({
           position: thread.messages.length,
           body,
         }),
+      // The session refuses the edit once a reply follows the message.
+      edit: async (thread, body) => {
+        const sent = await channel.send({
+          type: "edit",
+          commentId: thread.id,
+          position: thread.messages.length - 1,
+          body,
+        });
+        if (sent.isErr()) {
+          return new Err(
+            sent.error === "thread_changed"
+              ? t(EDIT_THREAD_CHANGED_MESSAGE)
+              : liveErrorMessage(sent.error)
+          );
+        }
+        return new Ok(undefined);
+      },
       setResolved: (id, resolved) =>
         sendForReason({ type: "resolve", commentId: id, resolved }),
       // A thread already gone is what a delete asks for.
@@ -733,6 +804,21 @@ export const useDocumentComments = ({
         return checked;
       }
       return sessionCommands(editor, live).reply(thread, body);
+    },
+    /** Replaces the current author's last message of an open thread with `body`. */
+    edit: async (id: string, body: string): Promise<Result<void, string>> => {
+      const thread = comments.find((comment) => comment.id === id);
+      if (!canWrite || !editor || !author || !live || !thread) {
+        return new Err(t(UNAVAILABLE_MESSAGE));
+      }
+      if (!isEditableMessage(author, thread, thread.messages.length - 1)) {
+        return new Err(t(EDIT_THREAD_CHANGED_MESSAGE));
+      }
+      const checked = checkEditedMessage(editor, author, thread, body);
+      if (checked.isErr()) {
+        return checked;
+      }
+      return sessionCommands(editor, live).edit(thread, body);
     },
     /** Resolves or reopens, then focuses the given thread or the list heading. */
     setResolved: async (

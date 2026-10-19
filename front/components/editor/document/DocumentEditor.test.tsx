@@ -95,6 +95,18 @@ function commentSession(initialThreads: DfmComment[], answer?: SessionAnswer) {
           )
         );
         return new Ok(null);
+      case "edit":
+        broadcast(
+          threads.map((t) =>
+            t === thread
+              ? {
+                  ...t,
+                  messages: [...t.messages.slice(0, -1), message(command.body)],
+                }
+              : t
+          )
+        );
+        return new Ok(null);
       case "resolve":
         broadcast(
           threads.map((t) =>

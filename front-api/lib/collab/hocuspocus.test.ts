@@ -654,6 +654,7 @@ describe("comment threads in a live session", () => {
               comments: [...comments, CREATED],
               created: CREATED,
               added: CREATED.messages[0],
+              replaced: null,
             })
           : new Err("thread_changed")
     );
@@ -723,6 +724,7 @@ describe("comment threads in a live session", () => {
       expect.anything(),
       expect.objectContaining({ type: "add", commentId: "c2" }),
       CREATED.messages[0],
+      null,
     ]);
 
     const invalid = await mine.send({
@@ -753,6 +755,7 @@ describe("comment threads in a live session", () => {
           comments: [...comments, CREATED],
           created: CREATED,
           added: CREATED.messages[0],
+          replaced: null,
         })
     );
     const hocuspocus = createCollabHocuspocus();
@@ -882,6 +885,7 @@ describe("comment threads in a live session", () => {
                       comments: [...comments, CREATED],
                       created: CREATED,
                       added: CREATED.messages[0],
+                      replaced: null,
                     })
                   : new Err("thread_changed")
               );

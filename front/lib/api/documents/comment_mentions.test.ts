@@ -224,6 +224,20 @@ describe("postCommentMention", () => {
     ]);
   });
 
+  it("runs no agent an edited comment's previous text already mentioned", async () => {
+    const conversation = await ConversationFactory.create(auth, {
+      agentConfigurationId: GLOBAL_AGENTS_SID.DUST,
+      messagesCreatedAt: [],
+    });
+
+    await postCommentMention(auth, {
+      documentPath: `conversation-${conversation.sId}/plan.md`,
+      newMessage: { ...comment(`${DUST} again?`), previousBody: `${DUST} ok?` },
+    });
+
+    expect(postMock).not.toHaveBeenCalled();
+  });
+
   it("posts nothing, nor creates a conversation, for a comment mentioning only users", async () => {
     const { pod, memberAuth } = await podMemberAuth();
     const documentPath = `pod-${pod.sId}/notes.md`;
@@ -319,6 +333,17 @@ describe("dispatchCommentMentions", () => {
     await dispatchCommentMentions(auth, {
       scopedPath: "pod-abc/notes.md",
       newMessages: [comment("Looks good.")],
+    });
+
+    expect(launched).not.toHaveBeenCalled();
+  });
+
+  it("hands nothing over for an edit that adds no mentions", async () => {
+    await dispatchCommentMentions(auth, {
+      scopedPath: "pod-abc/notes.md",
+      newMessages: [
+        { ...MENTIONING, previousBody: `${YUKA} and ${DUST}, thoughts?` },
+      ],
     });
 
     expect(launched).not.toHaveBeenCalled();

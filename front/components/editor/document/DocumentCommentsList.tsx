@@ -137,6 +137,8 @@ export const DocumentCommentsList = ({
         quote={quotes.get(comment.id)}
         active={comment.id === activeId}
         canWrite={canWrite}
+        author={comments.author}
+        onEdit={(body) => comments.edit(comment.id, body)}
         busy={busyThreadIds.has(comment.id)}
         error={threadError(comment)}
         isVerified={(index) => isVerified(comment.id, index)}

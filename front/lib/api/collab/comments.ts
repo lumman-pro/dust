@@ -4,7 +4,7 @@ import { dispatchCommentMentions } from "@app/lib/api/documents/comment_mentions
 import { signDfmCommentMessage } from "@app/lib/api/documents/comment_signatures";
 import type { DfmCommentSignatureError } from "@app/lib/api/documents/comment_signatures";
 import type { DfmComment, DfmMessage } from "@app/lib/markdown/dfm";
-import { extractFromString } from "@app/lib/mentions/format";
+import { extractNewMentions } from "@app/lib/mentions/format";
 import type {
   CommentRequest,
   CommentRequestErrorCode,
@@ -23,12 +23,15 @@ const signatureRefusal = ({
  * @cc [owner:tdraier,label:security;product] collab-comment-requests
  * A command MUST be refused as `unavailable` when `file` cannot write. `add` and `reply` MUST
  * store the message `signDfmCommentMessage` writes for `file`'s user and path after the thread's
- * last message, never a message, author or time from the command, and return it as `added`, which
- * other commands MUST leave null; when it refuses, the command MUST be refused as `unwritable` if
- * the codec cannot write the message, otherwise as `unavailable`. `add` MUST be refused as
- * `unavailable` for an id that already has a thread; `reply`, `resolve` and `delete` as
- * `not_found` for one that has none; `reply` as `thread_changed` unless its position is the
- * thread's length. A refused command MUST leave the threads unchanged; an accepted one MUST change
+ * last message, and `edit` the one it writes in place of the thread's last message, never a
+ * message, author or time from the command, and return it as `added`, which other commands MUST
+ * leave null; `edit` MUST also return the message it replaced as `replaced`, which other commands
+ * MUST leave null. When signing refuses, the command MUST be refused as `unwritable` if the codec
+ * cannot write the message, otherwise as `unavailable`. `add` MUST be refused as `unavailable` for
+ * an id that already has a thread; `reply`, `edit`, `resolve` and `delete` as `not_found` for one
+ * that has none; `reply` as `thread_changed` unless its position is the thread's length, and
+ * `edit` unless its position is the thread's last message; `edit` as `unavailable` unless that
+ * message's author is `file`'s user. A refused command MUST leave the threads unchanged; an accepted one MUST change
  * only its own thread.
  *
  * Callers MUST apply a session's commands one at a time, each to the threads the previous one
@@ -44,6 +47,7 @@ export async function applyCommentRequest(
       comments: DfmComment[];
       created: DfmComment | null;
       added: DfmMessage | null;
+      replaced: DfmMessage | null;
     },
     CommentRequestErrorCode
   >
@@ -81,6 +85,7 @@ export async function applyCommentRequest(
         comments: [...comments, created],
         created,
         added: signed.value,
+        replaced: null,
       });
     }
     case "reply": {
@@ -107,6 +112,42 @@ export async function applyCommentRequest(
         }),
         created: null,
         added: signed.value,
+        replaced: null,
+      });
+    }
+    case "edit": {
+      if (!thread) {
+        return new Err("not_found");
+      }
+      const last = thread.messages.length - 1;
+      if (command.position !== last) {
+        return new Err("thread_changed");
+      }
+      const edited = thread.messages[last];
+      if (
+        edited.author.kind !== "user" ||
+        edited.author.id !== file.auth.user()?.sId
+      ) {
+        return new Err("unavailable");
+      }
+      const signed = await signDfmCommentMessage(file.auth, {
+        filePath: file.canonicalPath,
+        commentId: thread.id,
+        position: last,
+        previous: thread.messages[last - 1] ?? null,
+        body: command.body,
+      });
+      if (signed.isErr()) {
+        return new Err(signatureRefusal(signed.error));
+      }
+      return new Ok({
+        comments: replace({
+          ...thread,
+          messages: [...thread.messages.slice(0, last), signed.value],
+        }),
+        created: null,
+        added: signed.value,
+        replaced: edited,
       });
     }
     case "resolve":
@@ -120,12 +161,18 @@ export async function applyCommentRequest(
         }),
         created: null,
         added: null,
+        replaced: null,
       });
     case "delete":
       if (!thread) {
         return new Err("not_found");
       }
-      return new Ok({ comments: replace(null), created: null, added: null });
+      return new Ok({
+        comments: replace(null),
+        created: null,
+        added: null,
+        replaced: null,
+      });
     default:
       assertNever(command);
   }
@@ -134,19 +181,22 @@ export async function applyCommentRequest(
 /**
  * @cc [owner:tdraier,label:product] collab-comment-mentions
  * `message`, the one `applyCommentRequest` stored for an accepted `command`, MUST be handed
- * to `dispatchCommentMentions` for `file`'s user and path. Its quote MUST be the one an `add`
- * carries, as the browser anchors its thread only once it is accepted, and for a `reply` the
- * text its thread's anchors cover in `doc` as `yDocCommentedTexts` gives it, so agents get the
- * editor's text either way, and none only when the body cannot be read. A message without
- * mentions MUST NOT read `doc`, as that converts the whole document.
+ * to `dispatchCommentMentions` for `file`'s user and path, with the body of the message an `edit`
+ * replaced as its `previousBody`. Its quote MUST be the one an `add` carries, as the browser
+ * anchors its thread only once it is accepted, and for a `reply` or an `edit` the text its
+ * thread's anchors cover in `doc` as `yDocCommentedTexts` gives it, so agents get the editor's
+ * text either way, and none only when the body cannot be read. A message without new mentions
+ * (`extractNewMentions`) MUST NOT read `doc`, as that converts the whole document.
  */
 export async function dispatchSessionCommentMentions(
   file: CollabAccess,
   doc: Y.Doc,
   command: CommentRequest,
-  message: DfmMessage
+  message: DfmMessage,
+  replaced: DfmMessage | null
 ): Promise<void> {
-  if (extractFromString(message.body).length === 0) {
+  const previousBody = replaced?.body;
+  if (extractNewMentions(message.body, previousBody).length === 0) {
     return;
   }
   const quote =
@@ -155,6 +205,8 @@ export async function dispatchSessionCommentMentions(
       : (yDocCommentedTexts(doc).get(command.commentId) ?? null);
   await dispatchCommentMentions(file.auth, {
     scopedPath: file.canonicalPath,
-    newMessages: [{ commentId: command.commentId, quote, message }],
+    newMessages: [
+      { commentId: command.commentId, quote, message, previousBody },
+    ],
   });
 }

@@ -1,9 +1,19 @@
+import {
+  commentInputExtensions,
+  commentMarkdown,
+} from "@app/components/editor/document/commentInputExtensions";
 import { parseInlineMarkdown } from "@app/components/editor/document/content";
-import { DocumentCommentInput } from "@app/components/editor/document/DocumentCommentInput";
+import {
+  DocumentCommentInput,
+  hasContent,
+  hasOpenSuggestionList,
+} from "@app/components/editor/document/DocumentCommentInput";
 import type { DocumentProps } from "@app/components/editor/document/types";
+import { isEditableMessage } from "@app/components/editor/document/useDocumentComments";
+import { EditorContent } from "@app/components/editor/EditorContent";
 import { formatRelativeTime } from "@app/lib/client/relative_time";
 import { formatDateTime } from "@app/lib/i18n/format";
-import type { DfmComment, DfmMessage } from "@app/lib/markdown/dfm";
+import type { DfmAuthor, DfmComment, DfmMessage } from "@app/lib/markdown/dfm";
 import { readMessageSuggestions } from "@app/lib/markdown/dfm";
 import type { Result } from "@app/types/shared/result";
 import {
@@ -17,15 +27,24 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   Icon,
+  Pencil01,
   ReverseLeft,
   Tooltip,
   Trash01,
 } from "@dust-tt/sparkle";
 import { plural } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { Extensions } from "@tiptap/core";
+import type { Editor, Extensions } from "@tiptap/core";
+import { useEditor } from "@tiptap/react";
 import type { ReactNode } from "react";
-import { Fragment, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 export type RenderAuthorAvatar = DocumentProps["renderCommentAuthorAvatar"];
 
@@ -266,6 +285,123 @@ const MessageBody = ({
   );
 };
 
+interface MessageEdit {
+  /** The index of the message in its thread. */
+  index: number;
+  pending: boolean;
+  /** Whether the field holds content that would save. */
+  filled: boolean;
+  /** The reason the last save was refused. */
+  error: string | null;
+}
+
+interface MessageEditFieldProps {
+  body: string;
+  pending: boolean;
+  /** The reason the last save was refused. */
+  error: string | null;
+  /** Receives the field's editor once it exists, and null when it unmounts. */
+  onEditor: (editor: Editor | null) => void;
+  /** Told whether the field holds content that would save, each time its content changes. */
+  onChange: (filled: boolean) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  extensions?: Extensions;
+}
+
+const NO_EXTENSIONS: Extensions = [];
+
+/** The message's text in a comment field, in place of its body while editing it. */
+const MessageEditField = ({
+  body,
+  pending,
+  error,
+  onEditor,
+  onChange,
+  onSave,
+  onCancel,
+  extensions = NO_EXTENSIONS,
+}: MessageEditFieldProps) => {
+  const { t } = useLingui();
+  const saveRef = useRef(onSave);
+  const escapeClosesListRef = useRef(false);
+  useLayoutEffect(() => {
+    saveRef.current = onSave;
+  });
+
+  // Captured at mount, as in the comment input.
+  const [options] = useState(() => ({
+    extensions: commentInputExtensions({
+      placeholder: t`Edit comment…`,
+      suggestionLabel: t`Suggested change`,
+      hostExtensions: extensions,
+      onSubmit: saveRef,
+    }),
+    content: body,
+    contentType: "markdown" as const,
+    editorProps: {
+      attributes: {
+        role: "textbox",
+        "aria-label": t`Edit comment`,
+        "aria-multiline": "true",
+        class:
+          "max-h-60 min-h-6 overflow-y-auto py-0.5 text-sm leading-5 wrap-anywhere outline-none",
+      },
+    },
+  }));
+  const editor = useEditor({
+    ...options,
+    immediatelyRender: false,
+    onUpdate: ({ editor }) => onChange(hasContent(editor)),
+  });
+
+  useEffect(() => {
+    onEditor(editor);
+    editor?.commands.focus("end");
+    return () => onEditor(null);
+  }, [editor, onEditor]);
+
+  useLayoutEffect(() => {
+    if (editor && !editor.isDestroyed) {
+      editor.setEditable(!pending, false);
+      editor.view.dom.setAttribute("aria-busy", String(pending));
+    }
+  }, [editor, pending]);
+
+  return (
+    <div
+      role="group"
+      className={cn(COMMENT_FIELD_CLASS, "mt-1")}
+      onClick={(event) => event.stopPropagation()}
+      onKeyDownCapture={(event) => {
+        escapeClosesListRef.current =
+          event.key === "Escape" && hasOpenSuggestionList(editor);
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") {
+          return;
+        }
+        event.stopPropagation();
+        if (
+          !pending &&
+          !escapeClosesListRef.current &&
+          !event.nativeEvent.isComposing
+        ) {
+          event.preventDefault();
+          onCancel();
+        }
+      }}
+    >
+      <EditorContent editor={editor} />
+      {error && (
+        <p role="alert" className="pb-1 text-xs text-warning-500">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+};
+
 interface DocumentCommentDraftCardProps {
   onSubmit: (body: string) => Promise<Result<void, string>>;
   onCancel: () => void;
@@ -304,17 +440,23 @@ export const DocumentCommentDraftCard = ({
 };
 
 interface ThreadActionsProps {
+  /** Offers Resolve or Reopen and Delete, which act on the whole thread, from its first message. */
+  first: boolean;
   resolved: boolean;
   busy: boolean;
   onSetResolved: (resolved: boolean) => void;
+  /** Offers Edit, for the current author's own messages. */
+  onEdit?: () => void;
   onDelete: () => void;
   mountPortalContainer?: HTMLElement;
 }
 
 const ThreadActions = ({
+  first,
   resolved,
   busy,
   onSetResolved,
+  onEdit,
   onDelete,
   mountPortalContainer,
 }: ThreadActionsProps) => {
@@ -328,18 +470,20 @@ const ThreadActions = ({
           "opacity-0 group-focus-within/message:opacity-100 group-hover/message:opacity-100"
       )}
     >
-      <Button
-        type="button"
-        size="xs"
-        variant="ghost-secondary"
-        icon={resolved ? ReverseLeft : Check}
-        tooltip={resolved ? t`Reopen` : t`Resolve`}
-        disabled={busy}
-        onClick={(event) => {
-          event.stopPropagation();
-          onSetResolved(!resolved);
-        }}
-      />
+      {first && (
+        <Button
+          type="button"
+          size="xs"
+          variant="ghost-secondary"
+          icon={resolved ? ReverseLeft : Check}
+          tooltip={resolved ? t`Reopen` : t`Resolve`}
+          disabled={busy}
+          onClick={(event) => {
+            event.stopPropagation();
+            onSetResolved(!resolved);
+          }}
+        />
+      )}
       {/* The menu renders in a portal, whose events still bubble to the thread. */}
       <span
         role="presentation"
@@ -373,13 +517,23 @@ const ThreadActions = ({
             preventAutoFocusOnClose={false}
             mountPortalContainer={mountPortalContainer}
           >
-            <DropdownMenuItem
-              icon={Trash01}
-              label={t`Delete`}
-              variant="warning"
-              disabled={busy}
-              onClick={onDelete}
-            />
+            {onEdit && (
+              <DropdownMenuItem
+                icon={Pencil01}
+                label={t`Edit`}
+                disabled={busy}
+                onClick={onEdit}
+              />
+            )}
+            {first && (
+              <DropdownMenuItem
+                icon={Trash01}
+                label={t`Delete`}
+                variant="warning"
+                disabled={busy}
+                onClick={onDelete}
+              />
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </span>
@@ -392,7 +546,9 @@ interface ThreadRepliesProps {
   folded: boolean;
   isVerified: (index: number) => boolean | null;
   renderAuthorAvatar: RenderAuthorAvatar;
-  renderMessageBody: (body: string) => ReactNode;
+  /** Each takes the message's index in the thread, the first message being 0. */
+  renderMessageBody: (message: DfmMessage, index: number) => ReactNode;
+  renderActions: (index: number) => ReactNode;
   mountPortalContainer?: HTMLElement;
 }
 
@@ -403,6 +559,7 @@ const ThreadReplies = ({
   isVerified,
   renderAuthorAvatar,
   renderMessageBody,
+  renderActions,
   mountPortalContainer,
 }: ThreadRepliesProps) => {
   const { t } = useLingui();
@@ -420,8 +577,9 @@ const ThreadReplies = ({
       verified={isVerified(index + 1)}
       renderAuthorAvatar={renderAuthorAvatar}
       mountPortalContainer={mountPortalContainer}
+      actions={renderActions(index + 1)}
     >
-      {renderMessageBody(reply.body)}
+      {renderMessageBody(reply, index + 1)}
     </ThreadMessage>
   ));
 };
@@ -436,6 +594,10 @@ interface DocumentCommentThreadProps {
   variant: "card" | "list";
   active: boolean;
   canWrite: boolean;
+  /** The current author, who can edit their own messages. */
+  author: DfmAuthor | undefined;
+  /** Replaces the thread's last message with `body`. */
+  onEdit: (body: string) => Promise<Result<void, string>>;
   /** Whether a resolve, reopen, delete or suggestion is pending on the thread. */
   busy: boolean;
   /** The reason the thread's last action was refused. */
@@ -454,12 +616,26 @@ interface DocumentCommentThreadProps {
   renderAuthorAvatar: RenderAuthorAvatar;
 }
 
+/**
+ * @cc [owner:louisjc,label:product;react] document-comment-edit-own-message
+ * Edit MUST be offered only when canWrite and the message is editable
+ * (`document-comment-editable-message`). While a message is edited, its text MUST show in an
+ * editable field in place of its body, and a Save button MUST replace its Resolve and actions
+ * menu. Save MUST send the field's trimmed Markdown to onEdit, unless it is unchanged, which
+ * stops editing without sending, or holds no content, which disables Save. While a save is
+ * pending, the field MUST NOT change and Save MUST show progress; an accepted save MUST stop
+ * editing, and a refused one MUST keep the field with the reason. Escape in the field MUST stop
+ * editing without reaching the thread, unless a save is pending or it closes a shown mention
+ * list.
+ */
 export const DocumentCommentThread = ({
   comment,
   quote,
   variant,
   active,
   canWrite,
+  author,
+  onEdit,
   busy,
   error,
   isVerified,
@@ -481,24 +657,92 @@ export const DocumentCommentThread = ({
   const resolved = comment.status === "resolved";
   const authorName = first.author.name;
   const folded = variant === "list" && !active;
-  const renderMessageBody = (body: string) => (
-    <MessageBody
-      body={body}
-      quote={quote}
-      renderBody={renderBody}
-      onApplySuggestion={onApplySuggestion}
-      busy={busy}
-    />
-  );
-  const actions = canWrite && (
-    <ThreadActions
-      resolved={resolved}
-      busy={busy}
-      onSetResolved={onSetResolved}
-      onDelete={onDelete}
-      mountPortalContainer={mountPortalContainer}
-    />
-  );
+  /** The index of the message being edited, if any. */
+  const [editing, setEditing] = useState<MessageEdit | null>(null);
+  const [editField, setEditField] = useState<Editor | null>(null);
+  const saveEdit = async () => {
+    if (!editing || editing.pending || !hasContent(editField)) {
+      return;
+    }
+    const body = editField ? commentMarkdown(editField) : "";
+    if (body === comment.messages[editing.index]?.body) {
+      setEditing(null);
+      return;
+    }
+    setEditing({ ...editing, pending: true, error: null });
+    const done = await onEdit(body);
+    setEditing((current) =>
+      done.isOk() || !current
+        ? null
+        : { ...current, pending: false, error: done.error }
+    );
+  };
+  const renderMessageBody = (message: DfmMessage, index: number) =>
+    editing?.index === index ? (
+      <MessageEditField
+        body={message.body}
+        pending={editing.pending}
+        error={editing.error}
+        onEditor={setEditField}
+        onChange={(filled) =>
+          setEditing(
+            (current) => current && { ...current, filled, error: null }
+          )
+        }
+        onSave={() => void saveEdit()}
+        onCancel={() => setEditing(null)}
+        extensions={inputExtensions}
+      />
+    ) : (
+      <MessageBody
+        body={message.body}
+        quote={quote}
+        renderBody={renderBody}
+        onApplySuggestion={onApplySuggestion}
+        busy={busy}
+      />
+    );
+  const renderActions = (index: number) => {
+    if (!canWrite) {
+      return null;
+    }
+    if (editing?.index === index) {
+      return (
+        <Button
+          type="button"
+          size="xs"
+          variant="ghost"
+          label={t`Save`}
+          isLoading={editing.pending}
+          disabled={!editing.filled}
+          onClick={(event) => {
+            event.stopPropagation();
+            void saveEdit();
+          }}
+        />
+      );
+    }
+    const editable = isEditableMessage(author, comment, index);
+    if (index > 0 && !editable) {
+      return null;
+    }
+    return (
+      <ThreadActions
+        first={index === 0}
+        resolved={resolved}
+        busy={busy}
+        onSetResolved={onSetResolved}
+        onEdit={
+          editable
+            ? () =>
+                setEditing({ index, pending: false, filled: true, error: null })
+            : undefined
+        }
+        onDelete={onDelete}
+        mountPortalContainer={mountPortalContainer}
+      />
+    );
+  };
 
   return (
     <article
@@ -553,9 +797,9 @@ export const DocumentCommentThread = ({
           renderAuthorAvatar={renderAuthorAvatar}
           clamped={folded}
           mountPortalContainer={mountPortalContainer}
-          actions={actions}
+          actions={renderActions(0)}
         >
-          {renderMessageBody(first.body)}
+          {renderMessageBody(first, 0)}
         </ThreadMessage>
         <ThreadReplies
           replies={replies}
@@ -563,6 +807,7 @@ export const DocumentCommentThread = ({
           isVerified={isVerified}
           renderAuthorAvatar={renderAuthorAvatar}
           renderMessageBody={renderMessageBody}
+          renderActions={renderActions}
           mountPortalContainer={mountPortalContainer}
         />
         {canWrite && !folded && !resolved && (

@@ -52,6 +52,13 @@ export const commentRequestSchema = z.discriminatedUnion("type", [
     body: z.string().min(1),
   }),
   z.object({
+    // Replaces the thread's last message, which `position` names, with `body`.
+    type: z.literal("edit"),
+    commentId: commentIdSchema,
+    position: z.number().int().min(0),
+    body: z.string().min(1),
+  }),
+  z.object({
     type: z.literal("resolve"),
     commentId: commentIdSchema,
     resolved: z.boolean(),

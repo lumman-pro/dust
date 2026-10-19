@@ -304,6 +304,8 @@ export interface NewCommentMessage {
   commentId: string;
   quote: string | null;
   message: DfmMessage;
+  /** The message's text before an edit replaced it; absent for a new message. */
+  previousBody?: string;
 }
 
 interface ValidationContext {

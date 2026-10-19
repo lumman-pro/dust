@@ -10,7 +10,7 @@ import {
 import type { Authenticator } from "@app/lib/auth";
 import { executeWithLockResult } from "@app/lib/lock";
 import { getFileNameFromScopedPath } from "@app/lib/markdown/file_preview";
-import { extractFromString } from "@app/lib/mentions/format";
+import { extractNewMentions } from "@app/lib/mentions/format";
 import { notifyNewProjectConversation } from "@app/lib/notifications/triggers/project-new-conversation";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { SpaceResource } from "@app/lib/resources/space_resource";
@@ -85,14 +85,18 @@ async function getDocumentConversation(
 
 /**
  * The agent a comment runs. A conversation message runs at most one agent, so only the first agent
- * mentioned is kept; users are notified apart from the conversation.
+ * mentioned is kept; users are notified apart from the conversation. An edited message runs only an
+ * agent its previous text did not mention.
  */
-function getAgentMentionFromComment(body: string): {
+function getAgentMentionFromComment({
+  message,
+  previousBody,
+}: NewCommentMessage): {
   agent: AgentMention | undefined;
   skippedAgents: number;
 } {
   const agentIds = new Set(
-    extractFromString(body)
+    extractNewMentions(message.body, previousBody)
       .filter(isAgentMention)
       .map((mention) => mention.configurationId)
   );
@@ -121,7 +125,8 @@ function commentMessageContent(
  * Each new message that mentions agents or users MUST be handed to a durable job keyed by the
  * normalized document path and the message, so however often it is handed over, its mentioned
  * users are notified once and, when it mentions an agent, it is posted once. The caller MUST NOT
- * wait for that job. Messages without mentions MUST NOT be handed over. A failure MUST be logged
+ * wait for that job. Messages without mentions MUST NOT be handed over, nor edited messages
+ * mentioning only agents and users their `previousBody` already mentions (`extractNewMentions`). A failure MUST be logged
  * and MUST NOT fail the caller.
  */
 export async function dispatchCommentMentions(
@@ -132,7 +137,8 @@ export async function dispatchCommentMentions(
   }: { scopedPath: string; newMessages: NewCommentMessage[] }
 ): Promise<void> {
   const mentioning = newMessages.filter(
-    ({ message }) => extractFromString(message.body).length > 0
+    ({ message, previousBody }) =>
+      extractNewMentions(message.body, previousBody).length > 0
   );
   const resolvedPath = DustFileSystem.resolveScopedPath(scopedPath);
   if (!auth.user() || mentioning.length === 0 || resolvedPath.isErr()) {
@@ -176,7 +182,8 @@ export class DocumentConversationBusyError extends Error {
  * A dispatched message that mentions an agent MUST be posted as the saving user, as a user
  * message with the `document_comment` origin in the document's conversation, so the mentioned
  * agent runs as in a conversation. As in a conversation, a message runs at most one agent: only
- * the first agent mentioned is kept, and the others are logged. The message MUST NOT carry any
+ * the first agent mentioned is kept, and the others are logged; for an edited message, only among
+ * the agents its `previousBody` does not mention. The message MUST NOT carry any
  * user mention, and a message mentioning no agent MUST NOT be posted, nor its conversation
  * created. It MUST be posted with `onlyWhenIdle`, and while an agent or a compaction runs in that conversation, or the document's
  * lock cannot be taken, it MUST return a `DocumentConversationBusyError` having posted nothing, so
@@ -197,9 +204,7 @@ export async function postCommentMention(
     return new Ok(undefined);
   }
 
-  const { agent, skippedAgents } = getAgentMentionFromComment(
-    newMessage.message.body
-  );
+  const { agent, skippedAgents } = getAgentMentionFromComment(newMessage);
   if (skippedAgents > 0) {
     logger.warn(
       {

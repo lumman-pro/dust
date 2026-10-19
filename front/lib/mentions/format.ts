@@ -22,6 +22,7 @@ import type {
   RichMention,
   UserMention,
 } from "@app/types/assistant/mentions";
+import { isAgentMention } from "@app/types/assistant/mentions";
 import type { DataSourceViewContentNode } from "@app/types/data_source_view";
 import { assertNever } from "@app/types/shared/utils/assert_never";
 import { isString } from "@app/types/shared/utils/general";
@@ -64,6 +65,28 @@ export function extractFromString(content: string): MentionType[] {
 
   // Return the mentions
   return [...agentMentions, ...userMentions];
+}
+
+const mentionKey = (mention: MentionType) =>
+  isAgentMention(mention)
+    ? `agent:${mention.configurationId}`
+    : `user:${mention.userId}`;
+
+/**
+ * @cc [owner:louisjc,label:product] extract-new-mentions
+ * MUST return the mentions of `content`, as `extractFromString` gives them, except the agents and
+ * users `previous` already mentions. Without `previous`, every mention of `content` is new.
+ */
+export function extractNewMentions(
+  content: string,
+  previous: string | undefined
+): MentionType[] {
+  const mentions = extractFromString(content);
+  if (previous === undefined) {
+    return mentions;
+  }
+  const known = new Set(extractFromString(previous).map(mentionKey));
+  return mentions.filter((mention) => !known.has(mentionKey(mention)));
 }
 
 /**

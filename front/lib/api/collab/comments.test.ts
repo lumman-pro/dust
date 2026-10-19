@@ -153,6 +153,65 @@ describe("applyCommentRequest", () => {
     expect(missing.isErr() && missing.error).toBe("not_found");
   });
 
+  it("replaces the file's user's last message with one signed in its place", async () => {
+    const user = file.auth.getNonNullableUser();
+    const own = {
+      author: { kind: "user", id: user.sId, name: user.fullName() },
+      createdAt: "2026-10-05T12:01:00.000Z",
+      body: "Because.",
+    } as const;
+    const thread = { ...THREAD, messages: [...THREAD.messages, own] };
+
+    const result = await applyCommentRequest(file, [thread, OTHER], {
+      type: "edit",
+      commentId: "c1",
+      position: 1,
+      body: "Because of the release.",
+    });
+
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) {
+      return;
+    }
+    const [edited, other] = result.value.comments;
+    expect(edited.messages).toEqual([
+      THREAD.messages[0],
+      expect.objectContaining({
+        author: own.author,
+        body: "Because of the release.",
+        signature: expect.any(String),
+      }),
+    ]);
+    expect(other).toBe(OTHER);
+    expect(result.value.added).toBe(edited.messages[1]);
+    expect(result.value.replaced).toBe(own);
+  });
+
+  it("refuses to edit a message that is not the last, not the user's, or gone", async () => {
+    const notLast = await applyCommentRequest(file, [THREAD], {
+      type: "edit",
+      commentId: "c1",
+      position: 1,
+      body: "Late.",
+    });
+    const foreign = await applyCommentRequest(file, [THREAD], {
+      type: "edit",
+      commentId: "c1",
+      position: 0,
+      body: "Not mine.",
+    });
+    const missing = await applyCommentRequest(file, [THREAD], {
+      type: "edit",
+      commentId: "c-gone",
+      position: 0,
+      body: "Lost.",
+    });
+
+    expect(notLast.isErr() && notLast.error).toBe("thread_changed");
+    expect(foreign.isErr() && foreign.error).toBe("unavailable");
+    expect(missing.isErr() && missing.error).toBe("not_found");
+  });
+
   it("resolves and deletes only the given thread", async () => {
     const resolved = await applyCommentRequest(file, [THREAD, OTHER], {
       type: "resolve",
@@ -243,7 +302,8 @@ describe("dispatchSessionCommentMentions", () => {
       file,
       live.doc,
       { type: "reply", commentId: "c1", position: 1, body: message.body },
-      message
+      message,
+      null
     );
 
     expect(dispatchCommentMentions).toHaveBeenCalledWith(file.auth, {
@@ -260,12 +320,54 @@ describe("dispatchSessionCommentMentions", () => {
       file,
       live.doc,
       { type: "add", commentId: "c2", body: message.body, quote: "Ship it" },
-      message
+      message,
+      null
     );
 
     expect(
       vi.mocked(dispatchCommentMentions).mock.calls[0][1].newMessages
     ).toEqual([{ commentId: "c2", quote: "Ship it", message }]);
+  });
+
+  it("dispatches an edit's message with the text it replaced", async () => {
+    const live = loadLive();
+    const message = live.comments[0].messages[1];
+    const replaced = { ...message, body: "Any idea?" };
+
+    await dispatchSessionCommentMentions(
+      file,
+      live.doc,
+      { type: "edit", commentId: "c1", position: 1, body: message.body },
+      message,
+      replaced
+    );
+
+    expect(dispatchCommentMentions).toHaveBeenCalledWith(file.auth, {
+      scopedPath: file.canonicalPath,
+      newMessages: [
+        {
+          commentId: "c1",
+          quote: "on Friday",
+          message,
+          previousBody: "Any idea?",
+        },
+      ],
+    });
+  });
+
+  it("dispatches nothing for an edit whose mentions were all there before", async () => {
+    const live = loadLive();
+    const message = live.comments[0].messages[1];
+
+    await dispatchSessionCommentMentions(
+      file,
+      live.doc,
+      { type: "edit", commentId: "c1", position: 1, body: message.body },
+      message,
+      { ...message, body: `${MENTION} thoughts?` }
+    );
+
+    expect(dispatchCommentMentions).not.toHaveBeenCalled();
   });
 
   it("dispatches nothing for a message without mentions", async () => {
@@ -276,7 +378,8 @@ describe("dispatchSessionCommentMentions", () => {
       file,
       live.doc,
       { type: "reply", commentId: "c1", position: 1, body: message.body },
-      message
+      message,
+      null
     );
 
     expect(dispatchCommentMentions).not.toHaveBeenCalled();

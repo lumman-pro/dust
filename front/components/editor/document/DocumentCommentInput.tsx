@@ -39,7 +39,7 @@ interface DocumentCommentInputProps {
 const NO_EXTENSIONS: Extensions = [];
 
 /** Text, a mention or a code block: line breaks and empty blocks alone are blank. */
-const hasContent = (editor: Editor | null) => {
+export const hasContent = (editor: Editor | null) => {
   let found = false;
   editor?.state.doc.descendants((node) => {
     found ||= node.isText
@@ -56,7 +56,7 @@ const hasContent = (editor: Editor | null) => {
  * active and the host's list for it is on the page. An active suggestion with nothing to list
  * shows nothing.
  */
-const hasOpenSuggestionList = (editor: Editor | null) =>
+export const hasOpenSuggestionList = (editor: Editor | null) =>
   !!editor &&
   editor.view.dom.ownerDocument.querySelector("[data-suggestion-list]") !==
     null &&

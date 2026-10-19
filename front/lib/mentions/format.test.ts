@@ -7,6 +7,7 @@ import {
   AGENT_MENTION_REGEX,
   extractFromEditorJSON,
   extractFromString,
+  extractNewMentions,
   replaceMentionsWithAt,
   serializeMention,
   USER_MENTION_REGEX,
@@ -27,6 +28,27 @@ const userMention = {
   pictureUrl: "",
   description: "",
 } satisfies RichMention;
+
+describe("extractNewMentions", () => {
+  const AGENT = ":mention[helper]{sId=agt_1}";
+  const USER = ":mention_user[Ana]{sId=usr_1}";
+  const OTHER_USER = ":mention_user[Bo]{sId=usr_2}";
+
+  it("keeps only the agents and users the previous text did not mention", () => {
+    expect(
+      extractNewMentions(`${AGENT} ${USER} ${OTHER_USER}`, `${USER} hi`)
+    ).toEqual([
+      { configurationId: "agt_1" },
+      { type: "user", userId: "usr_2" },
+    ]);
+  });
+
+  it("returns every mention without a previous text", () => {
+    expect(extractNewMentions(`${AGENT} ${USER}`, undefined)).toEqual(
+      extractFromString(`${AGENT} ${USER}`)
+    );
+  });
+});
 
 describe("serializeMention", () => {
   it("mentions an agent [deprecated]", () => {

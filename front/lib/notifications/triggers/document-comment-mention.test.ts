@@ -116,6 +116,22 @@ describe("document comment mention notifications", () => {
     });
   });
 
+  it("notifies no one an edited message's previous text already mentioned", async () => {
+    const result = await triggerDocumentCommentMentionNotifications(
+      authorAuth,
+      {
+        documentPath,
+        newMessage: {
+          ...newMessage(`${mention(member)} please look`),
+          previousBody: `${mention(member)} look`,
+        },
+      }
+    );
+
+    expect(result.isOk()).toBe(true);
+    expect(triggerBulk).not.toHaveBeenCalled();
+  });
+
   it("keys each recipient's notification to the comment message", async () => {
     const message = newMessage(mention(member));
 

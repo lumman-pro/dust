@@ -143,6 +143,8 @@ const FloatingThread = ({
       quote={quotes.get(thread.id)}
       active
       canWrite={canWrite}
+      author={comments.author}
+      onEdit={(body) => comments.edit(thread.id, body)}
       busy={busyThreadIds.has(thread.id)}
       error={threadError(thread)}
       isVerified={(index) => isVerified(thread.id, index)}
