@@ -462,7 +462,10 @@ The three-primary probe verifies routing and isolation, not production capacity.
 **Deployment settings are selected by cell only.** `cell-00000` and `cell-00001` require
 `workload=filesystem`. `cell-00002` has no workload allocation requirement. `--cell` / `CELL` has no
 region fallback. Three primaries, one replica, and five-second refresh remain provisional production
-settings. Capacity tests must use realistic extracted sizes, language mix, vocabulary, short-prefix
+settings. The [GCS inventory script](gcs-corpus-stats.md) measures counts and stored bytes by MIME,
+storage role, and workspace or core project. It keeps original files, derived copies, and stored
+core versions separate. These are storage measurements, not extracted-text size estimates.
+Capacity tests must use realistic extracted sizes, language mix, vocabulary, short-prefix
 traffic, refresh/indexing rates, concurrent queries, and reindex headroom. The local fixture does not
 establish p95 latency, final boosts, production ACL correctness, extraction completeness, or real
 query relevance.
