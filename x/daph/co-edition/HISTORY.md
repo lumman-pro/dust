@@ -178,6 +178,11 @@ accept the leftovers at first, since they're small Markdown files.
 - **No way to erase a version.** If someone pastes a secret and then deletes it, it stays in
   history for good, readable by everyone with access. Should editors be able to
   delete a single version or clear a doc's history?
+- **History outlives deletion.** `.history/` sits at the tenant root, outside the doc's context
+  folder, so conversation retention, conversation deletion, and user or workspace deletion all
+  miss it. Deleted content would live on in history. Should each of those flows also delete the
+  doc's history, or should history move under the doc's own context folder
+  (`conv-<sId>/.history/<objectId>/`), where it goes away with the conversation?
 - **Agents and history.** Should agents be able to read a doc's history?
 - **Comments.** Restoring a version brings back the comments as they were then: threads resolved
   or deleted since come back, and newer threads disappear from the doc (they remain in "Before
