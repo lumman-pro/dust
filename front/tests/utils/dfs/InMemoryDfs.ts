@@ -223,6 +223,13 @@ export class InMemoryDfs implements DfsFileSystemClient {
     return id;
   }
 
+  /** The ID of the object at the full path `path`, if any. */
+  idAt(path: string): DfsObjectId | undefined {
+    return [...this.nodes.values()].find(
+      (n) => n.parentId && this.fullPath(n) === path
+    )?.id;
+  }
+
   /** All names currently in the tree, as full paths. */
   paths(): string[] {
     return [...this.nodes.values()]

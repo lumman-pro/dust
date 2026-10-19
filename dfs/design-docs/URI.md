@@ -92,7 +92,7 @@ insufficient. `remove` likewise requires a path to resolve the object's parent.
 
 ## Example: front and a pod
 
-1. When a pod is created, front creates its folder under its owner's user folder (see
+1. When a pod is created, front creates its folder under `pods/` (see
    [Folder layout](#folder-layout)) and stores the folder's ID on the pod.
 2. An agent writes a plan into the pod:
 
@@ -111,29 +111,31 @@ Conversations work the same way, with the conversation's folder ID as the anchor
 ## Folder layout
 
 `CreateTenant` returns the stored tenant root's real `ObjectId`; front stores it as
-`dfs_tenants.rootId`. Front chooses the parent of each context's folder. Today everything lives
-under its owner's user folder:
+`dfs_tenants.rootId`. Front chooses the parent of each context's folder: user and pod folders live
+at the top level, a conversation in its pod's folder, or else in its owner's user folder:
 
 ```text
 <tenant-root>/
   users/
-    <userSId>/
-      pods/
-        <podName>/                     application/vnd.dust.pod
+    <userSId>/                         DENY rw, ALLOW u:<userSId> rw
+      .conversations/
+        conv-<conversationSId>/        application/vnd.dust.conversation
+  pods/                                ALLOW g:<globalGroupSId> r
+    <sanitizedPodName>/                application/vnd.dust.pod
                                        xattr dust.display_name = <pod's actual name>
-          .conversations/
-            conv-<conversationSId>/    application/vnd.dust.conversation
+                                       DENY rw + ALLOW reader and writer groups, see Access
       .conversations/
         conv-<conversationSId>/        application/vnd.dust.conversation
 ```
 
-Only user folders are created from the tenant root. Pod and conversation folders are created from
-their owner's user folder ID, which front already stores:
+User and pod folders are created from the tenant root. Conversation folders are created from their
+parent folder's ID, which front already stores:
 
 ```text
 create dfs://<tenant-root-id>/users/<userSId>
-create dfs://<userSId>--<user-folder-id>/pods/<podName>
+create dfs://<tenant-root-id>/pods/<podName>
 create dfs://<userSId>--<user-folder-id>/.conversations/conv-<conversationSId>
+create dfs://<podName>--<pod-folder-id>/.conversations/conv-<conversationSId>
 ```
 
 - **Layout:** namespace folders (`users/`, `pods/`, `.conversations/`) keep listings small and leave
@@ -152,12 +154,12 @@ create dfs://<userSId>--<user-folder-id>/.conversations/conv-<conversationSId>
 - **Stored reference:** front stores the returned folder ID on the user, the pod, or the
   conversation. All later access to that context's content uses this ID as the anchor, never a path
   from the root or from the user folder.
-- **Moves:** this layout reflects ownership today and may change, for instance when a pod is shared
-  or transferred. Moving a folder keeps its object ID, so references front stores stay valid.
+- **Moves:** this layout may change. Moving a folder keeps its object ID, so references front stores
+  stay valid.
 - **User folders:** a user's folder holds their personal data in this workspace. The tenant is the
   workspace, so a user who belongs to several workspaces has one folder per workspace, and its ID is
-  stored per user and workspace, not on the global user. Deleting a user's folder deletes the pods
-  and conversations it contains.
+  stored per user and workspace, not on the global user. Deleting a user's folder deletes the
+  conversations it contains, but not the pods, which live under `pods/`.
 - **Names:** user and conversation folders are named after their sId. An sId never changes, so
   these folders never need renaming, and it needs no percent-encoding in URIs. Two of them can
   therefore never claim the same name.
@@ -165,9 +167,19 @@ create dfs://<userSId>--<user-folder-id>/.conversations/conv-<conversationSId>
   retry that fails with `ALREADY_EXISTS` looks the name up under the same parent folder and uses the
   existing folder's ID. This recovery is the only case where front resolves an existing context
   folder by name.
-- **Access:** creating these folders requires a session with `w` on their parent folder. User and
-  agent sessions only receive grants on the context folders they work in. Each context folder is
-  where that context's grants attach: sharing a pod means granting access on its folder.
+- **Access:** front creates these folders with a `superuser` session, since no grant gives it `w` on
+  the tenant root or on `pods/`. Grants are attached right after a folder is created:
+  - `users/<userSId>/`: DENY `rw`, then ALLOW `u:<userSId> rw`, so only that user can access it.
+  - `pods/`: ALLOW `r` for the workspace global group, so every member can list pods. Nobody gets
+    `w` on it: only front creates pods.
+  - A pod folder mirrors the pod's access: DENY `rw`, which removes the `r` inherited from
+    `pods/`, then an ALLOW for each group of the pod: `rw` for its members and editors, `r` for the
+    workspace global group on an open pod. So an open pod is readable by every member and writable
+    by its members only, like in front, where anyone can join an open pod to write. A restricted pod
+    is only accessible to its groups, and listings of `pods/` leave it out for everyone else.
+
+  Grants are set when the folder is created only: changes to a pod's groups or restriction are not
+  reflected yet. Conversation folders have no grants of their own and inherit their parent's.
 
 ## Virtual references
 

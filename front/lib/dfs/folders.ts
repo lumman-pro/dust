@@ -3,24 +3,28 @@ import type { DfsObjectId } from "@app/types/dfs";
 
 /**
  * URIs of the context folders of `dfs/design-docs/URI.md`, each anchored at the folder that holds
- * it: user folders at the tenant root, pod folders and conversations outside pods at their owner's
- * user folder, conversations of a pod at the pod folder.
+ * it: user and pod folders at the tenant root, conversations outside pods at their owner's user
+ * folder, conversations of a pod at the pod folder.
  */
 /**
  * @cc [owner:fabiencelier,label:product] folder-layout
- * The URIs MUST follow the layout of `dfs/design-docs/URI.md`: `users/<userSId>` under the tenant
- * root, `pods/<podFolderName(podName)>` and `.conversations/conv-<conversationSId>` under their
- * parent folder. Changing a name orphans the folders already created under the previous one.
+ * The URIs MUST follow the layout of `dfs/design-docs/URI.md`: `users/<userSId>` and
+ * `pods/<podFolderName(pod)>` under the tenant root, `.conversations/conv-<conversationSId>` under
+ * their parent folder. Changing a name orphans the folders already created under the previous one.
  */
 export function userFolderUri(rootId: DfsObjectId, userId: string): string {
   return formatDfsUri(rootId, { path: ["users", userId] });
 }
 
+export function podsFolderUri(rootId: DfsObjectId): string {
+  return formatDfsUri(rootId, { path: ["pods"] });
+}
+
 export function podFolderUri(
-  userFolderId: DfsObjectId,
+  rootId: DfsObjectId,
   pod: { sId: string; name: string }
 ): string {
-  return formatDfsUri(userFolderId, { path: ["pods", podFolderName(pod)] });
+  return formatDfsUri(rootId, { path: ["pods", podFolderName(pod)] });
 }
 
 // See "Stored basenames" in `dfs/design-docs/API.md`.

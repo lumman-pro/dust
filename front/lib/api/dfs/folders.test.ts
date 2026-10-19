@@ -50,6 +50,14 @@ async function metadataOf(
   return folder.isOk() ? folder.value?.attr.metadata : undefined;
 }
 
+function idAt(dfs: InMemoryDfs, path: string): string {
+  const id = dfs.idAt(path);
+  if (!id) {
+    throw new Error(`Nothing at ${path}.`);
+  }
+  return id;
+}
+
 async function createConversation(
   auth: Authenticator,
   { spaceModelId }: { spaceModelId?: number } = {}
@@ -121,19 +129,20 @@ describe("getOrCreateUserFolder", () => {
 });
 
 describe("getOrCreatePodFolder", () => {
-  it("creates the pod folder, named after the pod, under the given user's folder", async () => {
-    const { authenticator, workspace, user } = await createResourceTest({});
-    const { dfs, context } = setup();
+  it("creates a restricted pod's folder under pods/, readable by the workspace and restricted to the pod's groups", async () => {
+    const { authenticator, workspace, globalGroup } = await createResourceTest(
+      {}
+    );
+    const { dfs, transport, context } = setup();
     const pod = await SpaceFactory.project(workspace, undefined, {
       name: "Q3/Q4 plan",
     });
+    const groups = await pod.fetchGrantReferences();
 
-    const res = await getOrCreatePodFolder(authenticator, context, pod, {
-      user,
-    });
+    const res = await getOrCreatePodFolder(authenticator, context, pod);
 
     expect(res.isOk()).toBe(true);
-    expect(dfs.paths()).toContain(`/users/${user.sId}/pods/Q3-Q4 plan`);
+    expect(dfs.paths()).toEqual(["/pods", "/pods/Q3-Q4 plan"]);
     const stored = await SpaceResource.fetchById(authenticator, pod.sId);
     expect(res.isOk() && res.value).toBe(stored?.dfsObjectId);
     const metadata = await metadataOf(context, stored?.dfsObjectId);
@@ -141,25 +150,86 @@ describe("getOrCreatePodFolder", () => {
     expect(
       Buffer.from(metadata?.xattrs[DFS_DISPLAY_NAME_XATTR] ?? []).toString()
     ).toBe("Q3/Q4 plan");
+    const [podsGrants, podGrants] = transport.calls.map((c) => c.request);
+    expect(podsGrants).toEqual({
+      objectId: { value: Buffer.from(idAt(dfs, "/pods"), "hex") },
+      changes: [
+        {
+          grant: { allow: { subject: `g:${globalGroup.sId}`, mode: 4 } },
+          remove: false,
+        },
+      ],
+    });
+    expect(podGrants).toEqual({
+      objectId: { value: Buffer.from(stored?.dfsObjectId ?? "", "hex") },
+      changes: [
+        { grant: { deny: { mode: 6 } }, remove: false },
+        ...groups.map((group) => ({
+          grant: { allow: { subject: `g:${group.groupSId}`, mode: 6 } },
+          remove: false,
+        })),
+      ],
+    });
+    // The pod's member and editor groups.
+    expect(groups).toHaveLength(2);
   });
 
-  it("uses the first editor of the pod when no user is given", async () => {
-    const { authenticator, workspace } = await createResourceTest({});
-    const { dfs, context } = setup();
-    const editor = await UserFactory.basic();
-    await MembershipFactory.associate(workspace, editor, { role: "user" });
-    const pod = await SpaceFactory.project(workspace, editor.id);
+  it("lets every workspace member read an open pod's folder, and only its groups write it", async () => {
+    const { authenticator, workspace, globalGroup } = await createResourceTest(
+      {}
+    );
+    const { transport, context } = setup();
+    const pod = await SpaceFactory.project(workspace);
+    await SpaceFactory.attachGroup(pod, globalGroup, "project_viewer");
+    const groups = await pod.fetchGrantReferences();
 
     const res = await getOrCreatePodFolder(authenticator, context, pod);
 
     expect(res.isOk()).toBe(true);
-    expect(dfs.paths()).toContain(`/users/${editor.sId}/pods/${pod.name}`);
+    const changes = transport.calls[1]?.request.changes;
+    expect(changes).toEqual([
+      { grant: { deny: { mode: 6 } }, remove: false },
+      ...groups.map((group) => ({
+        grant: {
+          allow: {
+            subject: `g:${group.groupSId}`,
+            mode: group.groupId === globalGroup.id ? 4 : 6,
+          },
+        },
+        remove: false,
+      })),
+    ]);
+    expect(changes).toContainEqual({
+      grant: { allow: { subject: `g:${globalGroup.sId}`, mode: 4 } },
+      remove: false,
+    });
+  });
+
+  it("returns the stored folder without calling dfs", async () => {
+    const { authenticator, workspace } = await createResourceTest({});
+    const { dfs, transport, context } = setup();
+    const pod = await SpaceFactory.project(workspace);
+    const first = await getOrCreatePodFolder(authenticator, context, pod);
+    const stored = await SpaceResource.fetchById(authenticator, pod.sId);
+    const calls = transport.calls.length;
+    const applies = dfs.applyCalls.length;
+
+    const res = await getOrCreatePodFolder(
+      authenticator,
+      context,
+      stored ?? pod
+    );
+
+    expect(res.isOk() && first.isOk() && res.value).toBe(
+      first.isOk() && first.value
+    );
+    expect(transport.calls).toHaveLength(calls);
+    expect(dfs.applyCalls).toHaveLength(applies);
   });
 
   it("returns the folder stored by a concurrent call", async () => {
-    const { authenticator, workspace, user } = await createResourceTest({});
+    const { authenticator, workspace } = await createResourceTest({});
     const { context } = setup();
-    const other = await UserFactory.basic();
     const pod = await SpaceFactory.project(workspace);
     // Two snapshots fetched before either call stored a folder.
     const [first] = await SpaceResource.fetchByModelIds(authenticator, [
@@ -169,12 +239,8 @@ describe("getOrCreatePodFolder", () => {
       pod.id,
     ]);
 
-    const stored = await getOrCreatePodFolder(authenticator, context, first, {
-      user,
-    });
-    const res = await getOrCreatePodFolder(authenticator, context, second, {
-      user: other,
-    });
+    const stored = await getOrCreatePodFolder(authenticator, context, first);
+    const res = await getOrCreatePodFolder(authenticator, context, second);
 
     expect(stored.isOk()).toBe(true);
     expect(res.isOk() && stored.isOk() && res.value).toBe(
@@ -246,7 +312,7 @@ describe("getOrCreateConversationFolder", () => {
 
     expect(res.isOk()).toBe(true);
     expect(dfs.paths()).toContain(
-      `/users/${user.sId}/pods/${pod.name}/.conversations/conv-${conversation.sId}`
+      `/pods/${pod.name}/.conversations/conv-${conversation.sId}`
     );
   });
 });

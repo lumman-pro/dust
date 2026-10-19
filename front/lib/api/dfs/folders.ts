@@ -1,17 +1,22 @@
-import { createUserSubject } from "@app/lib/api/dfs/sessions";
+import {
+  createGroupSubject,
+  createUserSubject,
+} from "@app/lib/api/dfs/sessions";
 import type { Authenticator } from "@app/lib/auth";
 import type { DfsClient } from "@app/lib/dfs/client";
 import type { DfsFileSystem } from "@app/lib/dfs/file_system";
 import {
   conversationFolderUri,
   podFolderUri,
+  podsFolderUri,
   userFolderUri,
 } from "@app/lib/dfs/folders";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { DfsUserFolderResource } from "@app/lib/resources/dfs_user_folder_resource";
+import { GroupResource } from "@app/lib/resources/group_resource";
 import { SpaceResource } from "@app/lib/resources/space_resource";
 import { UserResource } from "@app/lib/resources/user_resource";
-import type { DfsObjectId } from "@app/types/dfs";
+import type { DfsGrantUpdate, DfsObjectId } from "@app/types/dfs";
 import { DfsError, isDfsObjectId } from "@app/types/dfs";
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
@@ -30,7 +35,8 @@ export const DFS_CONVERSATION_FOLDER_MIME_TYPE =
   "application/vnd.dust.conversation";
 
 export interface DfsFolderContext {
-  // The file system the folders are created with.
+  // The file system the folders are created with, from a superuser session (see
+  // `createDfsSuperuserSession`): folders are created where no grant gives front write access.
   fs: DfsFileSystem;
   // Authenticated with the tenant key of the authenticated workspace, to set grants.
   tenantClient: Pick<DfsClient, "updateGrants">;
@@ -128,14 +134,20 @@ export async function getOrCreateUserFolder(
 }
 
 /**
- * The folder of the pod `space`, under the folder of `user`, or of its first editor when no user is
- * given (backfill).
+ * The folder of the pod `space` (`pods/<podFolderName(space)>` under the tenant root).
+ */
+/**
+ * @cc [owner:fabiencelier,label:security] pod-folder-grants
+ * `pods/` MUST have an ALLOW `r` grant for the workspace global group, and no other grant. A pod
+ * folder created here MUST get a DENY `rw`, then, for each group of the pod's grants, an ALLOW with
+ * `r` for a `reader` grant and `rw` for any other, mirroring the pod's own access: an open pod's
+ * folder is readable by every member (the global group's `reader` grant) and writable by its
+ * members and editors only.
  */
 export async function getOrCreatePodFolder(
   auth: Authenticator,
   context: DfsFolderContext,
-  space: SpaceResource,
-  { user }: { user?: UserResource } = {}
+  space: SpaceResource
 ): Promise<Result<DfsObjectId, DfsError>> {
   if (!space.isProject()) {
     return new Err(new DfsError("invalid_input", "Only pods have a folder."));
@@ -143,20 +155,35 @@ export async function getOrCreatePodFolder(
   if (space.dfsObjectId) {
     return new Ok(space.dfsObjectId);
   }
-  const owner = user ?? (await getFirstEditor(auth, space));
-  if (!owner) {
-    return new Err(
-      new DfsError("invalid_input", `Pod ${space.sId} has no editor.`)
-    );
+  const globalGroup = await GroupResource.fetchWorkspaceGlobalGroup(auth);
+  if (globalGroup.isErr()) {
+    return new Err(new DfsError("internal", globalGroup.error.message));
   }
-  // TODO(dfs): grant access to every member of the pod.
-  const userFolderId = await getOrCreateUserFolder(auth, context, owner);
-  if (userFolderId.isErr()) {
-    return userFolderId;
+  const globalSubject = createGroupSubject(globalGroup.value.sId);
+  const podsFolder = await ensureFolder(
+    context.fs,
+    podsFolderUri(context.rootId)
+  );
+  if (podsFolder.isErr()) {
+    return podsFolder;
+  }
+  // Attached on every pod folder creation rather than only when `pods/` is created, so that a
+  // failure after creating it is repaired by the next call. Attaching an existing grant is a no-op.
+  const podsGranted = await context.tenantClient.updateGrants({
+    objectId: podsFolder.value.id,
+    changes: [
+      {
+        grant: { type: "allow", subject: globalSubject, mode: 0o4 },
+        remove: false,
+      },
+    ],
+  });
+  if (podsGranted.isErr()) {
+    return podsGranted;
   }
   const folder = await ensureFolder(
     context.fs,
-    podFolderUri(userFolderId.value, space),
+    podFolderUri(context.rootId, space),
     {
       mimeType: DFS_POD_FOLDER_MIME_TYPE,
       xattrs: { [DFS_DISPLAY_NAME_XATTR]: Buffer.from(space.name, "utf8") },
@@ -164,6 +191,16 @@ export async function getOrCreatePodFolder(
   );
   if (folder.isErr()) {
     return folder;
+  }
+  if (folder.value.created) {
+    // TODO(dfs): keep the grants in sync when the pod's groups or its restriction change.
+    const granted = await context.tenantClient.updateGrants({
+      objectId: folder.value.id,
+      changes: await getPodFolderGrants(space),
+    });
+    if (granted.isErr()) {
+      return granted;
+    }
   }
   // A concurrent call may have stored another folder first: return the stored one.
   const stored = await space.setDfsObjectId(auth, folder.value.id);
@@ -175,12 +212,23 @@ export async function getOrCreatePodFolder(
   return new Ok(stored);
 }
 
-async function getFirstEditor(
-  auth: Authenticator,
+async function getPodFolderGrants(
   space: SpaceResource
-): Promise<UserResource | null> {
-  const editors = await space.fetchActiveEditorUsers(auth);
-  return editors.sort((a, b) => a.id - b.id)[0] ?? null;
+): Promise<DfsGrantUpdate[]> {
+  const references = await space.fetchGrantReferences();
+  return [
+    // Grants only come from the pod's own groups, not from `pods/`.
+    { grant: { type: "deny", mode: 0o6 }, remove: false },
+    ...references.map((reference) => ({
+      grant: {
+        type: "allow" as const,
+        subject: createGroupSubject(reference.groupSId),
+        // A `reader` grant is only held by the workspace global group, on open pods.
+        mode: reference.isReader() ? 0o4 : 0o6,
+      },
+      remove: false,
+    })),
+  ];
 }
 
 /**
@@ -237,7 +285,7 @@ async function getOrCreateConversationParentFolder(
       conversation.spaceId,
     ]);
     if (space?.isProject()) {
-      return getOrCreatePodFolder(auth, context, space, { user });
+      return getOrCreatePodFolder(auth, context, space);
     }
   }
   const owner = user ?? (await getFirstParticipant(auth, conversation));
