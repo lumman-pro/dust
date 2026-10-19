@@ -1,13 +1,13 @@
-**Proposal: `dfs.objects` — one search document per stored DFS object.**
+**Proposal: one search document per stored DFS object in `dfs.objects`.**
 
 **Revision notice:** the lexical mapping, analyzers, and query recommendations below are superseded
 by the [tested bilingual search design](dfs-object-search-revised-design.md). Storage, identity,
 authorization, and publication analysis below remains supporting context. Use the JSON files linked
 from the revised design for the current proposed mapping.
 
-Reviewed on 2026-10-19. This is a design proposal, with a concrete mapping and candidate settings;
-it does not create a production index or change application behavior. Source code establishes the
-stored schema here; no production records, corpus statistics, or deployed cluster state were
+Reviewed on 2026-10-19. This is a design proposal, with a concrete mapping and candidate settings.
+It does not create a production index or change application behavior. Source code establishes the
+stored schema here. No production records, corpus statistics, or deployed cluster state were
 inspected. Keyword behavior was checked in a disposable local Elasticsearch 8.16.0 instance.
 
 The inputs are [infrastructure PR #1174 at `5331b86`](https://github.com/dust-tt/dust-infra/pull/1174),
@@ -20,7 +20,7 @@ including a separate `grants_version` and superuser semantics. The current Searc
 **Names and ownership.**
 
 The `object` terminology and `dfs.objects` naming are agreed. Mapping and relevance choices below
-remain proposals; the intended experience is full keyword search for people and LLMs, with a
+remain proposals. The intended experience is full keyword search for people and LLMs, with a
 Google Drive-like object search experience. The existing Search API is not a constraint on the
 query semantics proposed here. The [full keyword-search analysis](dfs-full-keyword-search-design.md)
 explains the retrieval design and its local evidence.
@@ -36,26 +36,26 @@ explains the retrieval design and its local evidence.
 | Physical ancestry | `ancestor_ids` | All ancestors from tenant root to immediate parent, excluding the indexed object. |
 | Read-grant eligibility | `read_grant_scope_ids` | Object IDs where a direct READ grant could authorize this object, including self and the closest read-DENY node. Defined below. |
 | Extracted or native searchable text | `content_text` | Text belonging to the original object's search result. |
-| Infrastructure placement | Per-cell settings | `cell-00000` / `cell-00001` require `workload=filesystem`; `cell-00002` uses its shared pool. |
+| Infrastructure placement | Per-cell settings | `cell-00000` / `cell-00001` require `workload=filesystem`. `cell-00002` uses its shared pool. |
 
 `ObjectResource` is the common stored entity for files and directories. Keep `kind` as the field
 that distinguishes `file` and `directory`. Reserve “node” for an explicitly named context such as
-an ES data node or the existing core data-source nodes. Reserve `root_id` for the tenant's real root;
-there is no per-object, user-independent “highest accessible parent” in storage.
+an ES data node or the existing core data-source nodes. Reserve `root_id` for the tenant's real root.
+There is no per-object, user-independent “highest accessible parent” in storage.
 [ObjectResource](https://github.com/dust-tt/dust/blob/7f5fba70710c3e1cf7866aeeae97a8c40fa0a4fd/dfs/server/src/storage/resources/object.rs#L152),
 [TenantResource](https://github.com/dust-tt/dust/blob/7f5fba70710c3e1cf7866aeeae97a8c40fa0a4fd/dfs/server/src/storage/resources/tenant.rs#L51),
 [ObjectId encoding](https://github.com/dust-tt/dust/blob/7f5fba70710c3e1cf7866aeeae97a8c40fa0a4fd/dfs/protocol/src/id.rs#L10)
 
 The alias follows the existing owner/collection convention used by `front.agents`, `front.skills`,
 and `core.data_sources_nodes`. DFS should own its mapping, serializer, and creation command. A future
-implementation can place versioned JSON files under `dfs/server/src/search/indices/`; it should not
+implementation can place versioned JSON files under `dfs/server/src/search/indices/`. It should not
 register this as a front-owned index. [Front registry](../../../front/lib/api/elasticsearch.ts),
 [core index creation](../../../core/bin/elasticsearch/create_index.rs)
 
 Use the same production alias in separate cell clusters. Each alias must target exactly one
 FDB environment. If test and production share ES, give test a separate namespace such as
 `dfs.test.objects`. FDB already separates environments, but its implementation currently hardcodes
-the `test` namespace; deployment configuration must resolve this explicitly.
+the `test` namespace. Deployment configuration must resolve this explicitly.
 [FDB namespace](https://github.com/dust-tt/dust/blob/7f5fba70710c3e1cf7866aeeae97a8c40fa0a4fd/dfs/server/src/storage/resources/keys.rs)
 
 **What storage actually contains.**
@@ -68,9 +68,9 @@ the future queue/extraction records proposed by #35070.
 | `object/<objectId>` | Parent, basename, kind, size, optional access/modification/change times, attribute/content/grant versions | Identity, hierarchy inputs, name, kind, size, timestamps, freshness versions |
 | `metadata/<objectId>` | Creation time, optional MIME string | `created_at_ms`, normalized `mime_type` |
 | `metadata/<objectId>/xattr/<name>` | Original value bytes, including empty values | Exact key existence and exact key/value candidate filters |
-| `child/<parentId>/<name>` | Child ID | Traversal and subtree rebuilding; no separate ES document |
+| `child/<parentId>/<name>` | Child ID | Traversal and subtree rebuilding. No separate ES document |
 | `block/<objectId>/<blockIndex>` | Up to 64 KiB of file bytes | Eligible text reconstructed from the logical file |
-| `object-grant/<objectId>/...` | Local ALLOW and DENY rules | Read-inheritance boundaries; authoritative permission checks stay in FDB |
+| `object-grant/<objectId>/...` | Local ALLOW and DENY rules | Read-inheritance boundaries. Authoritative permission checks stay in FDB |
 | `grant-object/ALLOW/<subject>/<objectId>/<mode>` | Reverse ALLOW membership | Request-time set of direct read-grant locations |
 
 The actual tuple encoding and metadata writes are in
@@ -80,7 +80,7 @@ describes directory bindings and blocks. File reads zero-fill missing blocks and
 EOF, so concatenating only physically present blocks would produce the wrong content for sparse
 files. [File read contract](https://github.com/dust-tt/dust/blob/7f5fba70710c3e1cf7866aeeae97a8c40fa0a4fd/dfs/server/src/storage/resources/file.rs#L193)
 
-Virtual `root` and `shared` are access projections; `shared` has no object record. Index the real
+Virtual `root` and `shared` are access projections. `shared` has no object record. Index the real
 tenant root once, with its stored empty basename. Never serialize a session's `Attr.mode` as a
 shared permission field: it is computed for that session. `store_version` is also computed for a
 read or mutation response. [Stat serialization](https://github.com/dust-tt/dust/blob/7f5fba70710c3e1cf7866aeeae97a8c40fa0a4fd/dfs/server/src/storage/resources/object/stat.rs)
@@ -100,7 +100,7 @@ tenant root        ALLOW engineering read
     └── budget.pdf
 ```
 
-Engineering can read the file through the tenant root; finance can read it through `reports`.
+Engineering can read the file through the tenant root. Finance can read it through `reports`.
 A scalar “highest accessible parent” differs between these users. Filtering one fixed scalar
 against each user's direct grant locations loses one valid access path. Calling it an ACL scope
 would require an additional scope model and rules for splitting scopes when grants change.
@@ -108,7 +108,7 @@ would require an additional scope model and rules for splitting scopes when gran
 Proposed representation: build `read_grant_scope_ids` from the indexed object toward the tenant
 root, stopping after including the closest ancestor-or-self carrying a DENY with the read bit.
 Without such a DENY, include the tenant root. Include every object on that chain, even when it has
-no ALLOW today; otherwise adding a grant would require descendant rewrites. The DENY object is
+no ALLOW today. Otherwise adding a grant would require descendant rewrites. The DENY object is
 included because its own ALLOW applies after its DENY.
 
 For the example above, the set is `[tenant_root, reports, budget]`. With a read-DENY directory
@@ -124,7 +124,7 @@ write-only grants, so it cannot be reused unchanged as a read-grant resolver.
 
 This representation follows directly from the implemented read-bit recurrence. An exhaustive
 model check covered 69,904 paths of one to four objects across all valid read/write ALLOW and DENY
-bit combinations; set intersection matched effective read in every case. This checks the algebra,
+bit combinations. Set intersection matched effective read in every case. This checks the algebra,
 not a production indexer or concurrent revocation behavior.
 
 Ordinary ALLOW changes update the request's grant set and need no descendant ES changes. Changes
@@ -135,43 +135,43 @@ prefilter while retaining tenant filtering and existence checks.
 Always recheck current FDB permissions before releasing names or excerpts. Also recheck scope
 and inherited search exclusion, if adopted: an ancestor move or exclusion can invalidate an ES
 candidate without changing the candidate's own versions. This prefilter can have temporary false
-negatives while hierarchy updates propagate; final checks prevent stale candidates from being
+negatives while hierarchy updates propagate. Final checks prevent stale candidates from being
 disclosed. Never interpret an empty or truncated grant set as permission to omit the filter.
 
 The number of direct grants per subject is not bounded by the 512-grants-per-object limit. Handle
 grant sets exceeding Elasticsearch's default 65,536-term limit explicitly. Options include bounded
 complete query decomposition or a bounded candidate/post-check fallback with truthful partial
-results; silently taking the first 65,536 IDs is incorrect.
+results. Silently taking the first 65,536 IDs is incorrect.
 [Terms limit](https://www.elastic.co/guide/en/elasticsearch/reference/8.16/query-dsl-terms-query.html)
 
 **Field choices.**
 
 | Field | Mapping / meaning |
 | --- | --- |
-| `tenant_id`, `object_id` | Exact `keyword`; no case folding or normalizer |
+| `tenant_id`, `object_id` | Exact `keyword`. No case folding or normalizer |
 | `ancestor_ids` | `keyword` array, all physical ancestors excluding self for recursive scope |
 | `read_grant_scope_ids` | `keyword` array, eligible direct READ-grant object IDs including self, as above |
-| `kind` | `keyword`, serialized as `file` or `directory`; symlinks remain unsupported |
+| `kind` | `keyword`, serialized as `file` or `directory`. Symlinks remain unsupported |
 | `name` / `name.keyword` | Analyzed basename / exact case-sensitive basename and prefix filtering |
 | `name.parts` | Filename components for separators and case transitions that ordinary text tokenization can miss |
 | `name.folded` | Whole basename normalized with lowercase and ASCII folding, for a strong exact-name ranking signal |
 | `name.edge` | Separate filename-token prefixes for interactive partial-name search |
-| `mime_type` | `keyword`, normalized lowercase type/subtype without parameters; omitted when absent |
-| `size_bytes` | `unsigned_long`, original logical file size; zero for directories |
+| `mime_type` | `keyword`, normalized lowercase type/subtype without parameters. Omitted when absent |
+| `size_bytes` | `unsigned_long`, original logical file size. Zero for directories |
 | `mtime_ms` | `unsigned_long`, source modification time, supports the current range predicates |
 | `atime_ms`, `ctime_ms`, `created_at_ms` | `unsigned_long`, kept in `_source` for the result projection |
 | `xattr_names` | `keyword` array of exact present names, including binary and empty values |
 | `xattr_pair_hashes` | `keyword` array of digests of complete name/value pairs |
-| `content_text` | Analyzed text of the original file or its current extraction; omitted when unavailable |
+| `content_text` | Analyzed text of the original file or its current extraction. Omitted when unavailable |
 | `attr_version`, `content_version` | Original object's `u64` versions, retained in `_source` for freshness checks |
 | `text_source_object_id`, `text_source_content_version` | Optional source-only provenance for the exact bytes used as text |
-| `is_deleted` | `boolean`; live records explicitly use false, retained tombstones use true |
-| `projected_at` | `date`, server-generated time this projection payload was built; independent of ES refresh visibility |
+| `is_deleted` | `boolean`. Live records explicitly use false, retained tombstones use true |
+| `projected_at` | `date`, server-generated time this projection payload was built. Independent of ES refresh visibility |
 
 The source stores `u64` sizes, versions, and Unix-millisecond timestamps. Keeping `*_ms` as
-`unsigned_long` preserves its full accepted domain; `date` would introduce a signed-range
+`unsigned_long` preserves its full accepted domain. `date` would introduce a signed-range
 restriction that the current API does not impose. Preserve integer precision in serialization.
-`ctime_ms` is attribute-change time; creation time is the separate `created_at_ms`.
+`ctime_ms` is attribute-change time. Creation time is the separate `created_at_ms`.
 [Source types](https://github.com/dust-tt/dust/blob/7f5fba70710c3e1cf7866aeeae97a8c40fa0a4fd/dfs/server/src/storage/resources/object.rs#L152),
 [version semantics](https://github.com/dust-tt/dust/blob/7f5fba70710c3e1cf7866aeeae97a8c40fa0a4fd/dfs/design-docs/VERSIONS.md),
 [ES 8.16 numeric types](https://github.com/elastic/elasticsearch/blob/v8.16.0/docs/reference/mapping/types/numeric.asciidoc)
@@ -182,21 +182,21 @@ from authorized FDB metadata when populating `SearchAttr.metadata`.
 Do not copy arbitrary xattr names into dynamic mapping properties. The current API defines
 byte-exact equality, while the DD changes that to truncated UTF-8 equality. Preserve the existing
 semantics with `SHA-256(u32_be(name_utf8_length) || name_utf8 || raw_value)`, represented as
-lowercase hex, plus the independent name-existence field. A present empty value has a digest;
-an absent value does not. Hashing the pair preserves the relationship between name and value
+lowercase hex, plus the independent name-existence field. A present empty value has a digest.
+An absent value does not. Hashing the pair preserves the relationship between name and value
 without `nested` documents. Verify requested predicates against current FDB bytes before returning
 hits, making hash collisions false candidates rather than false equality results.
 [Existing search contract](https://github.com/dust-tt/dust/blob/7f5fba70710c3e1cf7866aeeae97a8c40fa0a4fd/dfs/design-docs/API.md#search)
 
 This also handles the boundary where FDB permits 32,768 total xattr bytes but Lucene permits
-32,766 bytes per keyword term. Truncating creates deliberate false equalities; `ignore_above`
+32,766 bytes per keyword term. Truncating creates deliberate false equalities. `ignore_above`
 silently loses matches. The bounded tenant IDs, UUID encodings, and basenames fit comfortably
 without such truncation. Return raw xattr values from authorized FDB metadata when needed.
 [Stored xattr validation](https://github.com/dust-tt/dust/blob/7f5fba70710c3e1cf7866aeeae97a8c40fa0a4fd/dfs/server/src/storage/resources/object.rs#L386),
 [keyword limit](https://www.elastic.co/guide/en/elasticsearch/reference/8.16/ignore-above.html)
 
 Use ICU tokenization and folding for ordinary name/content search, with a separate filename-parts
-representation. Exact basename and prefix predicates use `name.keyword`; the normalized and
+representation. Exact basename and prefix predicates use `name.keyword`. The normalized and
 token-prefix fields serve relevance and interactive search. The infrastructure template installs
 `analysis-icu` for both node sets. Keep default BM25 initially.
 [Infra template](https://github.com/dust-tt/dust-infra/blob/5331b869c113c69864c612ae4522e6209530584a/helm/infra/values/gcp/shared/elasticsearch.yaml.gotmpl),
@@ -217,21 +217,21 @@ Do not use a scored catch-all as the initial backbone. In the local 215-object d
 weighted `combined_fields` score to 16.6% of the short-body score. Independent field scoring left
 the filename score unchanged. This demonstrates shared length normalization, not a production
 relevance benchmark. A copied retrieval field remains an option if a measured query bottleneck
-justifies it; keep independent scoring and source-field highlighting if adopted.
+justifies it. Keep independent scoring and source-field highlighting if adopted.
 [Diagnostic and interpretation](dfs-full-keyword-search-design.md#why-the-catch-all-is-not-the-default)
 
 The local analyzer checks also showed that ICU alone misses `budget` in
 `Q4_budget-final_v2.pdf`. Keep `name.parts` to retrieve filename components, alongside ordinary
 `name` for multilingual segmentation. Keep original whole-name identity in `name.keyword` and
 normalized whole-name matching in `name.folded`. Neither ordinary analysis nor filename splitting
-preserves every meaningful technical symbol; `C++`/`C#` distinctions need additional targeted
+preserves every meaningful technical symbol. `C++`/`C#` distinctions need additional targeted
 normalization if required by the corpus.
 
 Light stemming improves body recall, but requires a deliberate language profile. English KStem
 recovered `employee request` against `Employees requested increases` in the diagnostic. Retain
 unstemmed text for precise analyzed phrases and add supported-language stemmed alternatives to
 candidate eligibility, not only to optional boosts. The concrete JSON below is the multilingual,
-unstemmed baseline; language-specific body representations must be chosen before finalizing that
+unstemmed baseline. Language-specific body representations must be chosen before finalizing that
 extension. Keep stop-word policy explicit and preserve phrase positions.
 
 Keep edge n-grams on `name.edge` for an explicit prefix mode. They are indexed prefixes, not
@@ -244,14 +244,14 @@ exclusions, and tenant/scope/permission predicates.
 Start with independently normalized BM25 plus whole-name and phrase signals. A bounded query
 rescore can add expensive relevance signals after measuring candidate recall. Learned LTR needs
 judgments and cannot recover candidates omitted by retrieval. The current stored data supplies
-neither popularity nor per-user recent views; `atime_ms` is not updated automatically on reads.
-PR #1174 reports ES 8.16.0 with Basic; native LTR requires Enterprise model creation, while ordinary
+neither popularity nor per-user recent views. `atime_ms` is not updated automatically on reads.
+PR #1174 reports ES 8.16.0 with Basic. Native LTR requires Enterprise model creation, while ordinary
 query rescore is independent of that feature. The deployed license was not inspected.
 [Ranking and licensing evidence](dfs-search-ranking-evidence.md)
 
 **Concrete mapping for `objects_1.mappings.json`.**
 
-Strict mapping rejects unknown fields; the serializer must additionally enforce required values,
+Strict mapping rejects unknown fields. The serializer must additionally enforce required values,
 valid enum values, ID formats, optionality, and array cardinality. Keep ordinary `_source` enabled.
 Offsets on `content_text` support efficient unified highlighting with a modest indexing/storage
 cost. Fields used only for freshness or provenance disable both indexing and doc values.
@@ -319,8 +319,8 @@ cost. Fields used only for freshness or provenance disable both indexing and doc
 }
 ```
 
-No full textual pathname is materialized. A directory rename therefore changes its own document;
-a move changes descendant ancestry. `ancestor_ids` supports strict-descendant search. To include
+No full textual pathname is materialized. A directory rename therefore changes its own document.
+A move changes descendant ancestry. `ancestor_ids` supports strict-descendant search. To include
 the scoped object itself, match either `ancestor_ids` or `object_id`, while retaining the separate
 grant filter. These are useful filesystem scope operations independently of how a future API
 exposes them.
@@ -330,7 +330,7 @@ exposes them.
 The following historical candidate describes the dedicated pools in `cell-00000` and `cell-00001`,
 not `cell-00002`. Use the current proposal and per-cell service definitions for deployment. These
 values are benchmark inputs, not measured production sizing. Start comparisons with three and six primaries, one replica, and the actual tenant/text
-distribution. A five-second refresh is an explicit initial freshness tradeoff; measure it under
+distribution. A five-second refresh is an explicit initial freshness tradeoff. Measure it under
 concurrent ingestion and search.
 
 ```json
@@ -382,29 +382,29 @@ concurrent ingestion and search.
 }
 ```
 
-This is the body of `settings`; the allocation setting's fully qualified name is
+This is the body of `settings`. The allocation setting's fully qualified name is
 `index.routing.allocation.require.workload`. Regional files can initially share this candidate.
 Local settings use one primary, zero replicas, the same analysis, and omit the workload constraint
 unless the local node is explicitly labeled.
 
 PR #1174 adds three data-only nodes in each of `cell-00000` and `cell-00001`, with `node.attr.workload=filesystem`
-and zone awareness; it retains the existing ES endpoint. Its volumes are 300 Gi per node in US
-and 250 Gi in EU. The node pool supplies capacity; the index's allocation filter selects that
+and zone awareness. It retains the existing ES endpoint. Its volumes are 300 Gi per node in US
+and 250 Gi in EU. The node pool supplies capacity. The index's allocation filter selects that
 capacity. Keep the existing zone awareness for primary/replica placement.
 [Pool settings](https://github.com/dust-tt/dust-infra/blob/5331b869c113c69864c612ae4522e6209530584a/helm/infra/helmfile.yaml.gotmpl),
 [node configuration](https://github.com/dust-tt/dust-infra/blob/5331b869c113c69864c612ae4522e6209530584a/helm/infra/values/gcp/shared/elasticsearch.yaml.gotmpl)
 
 Before enabling allocation, every unrelated index and its template/creation path must exclude
 `workload=filesystem`. The temporary cluster-wide filesystem exclusion from #1174 must then be
-removed while preserving other exclusions. An index requirement cannot override that guard;
-leaving both in place makes the new index unallocatable. `_tier_preference` cannot express this
+removed while preserving other exclusions. An index requirement cannot override that guard.
+Leaving both in place makes the new index unallocatable. `_tier_preference` cannot express this
 custom workload. This is a deployment dependency, not an action performed by this proposal.
 [ES 8.16 allocation rules](https://github.com/elastic/elasticsearch/blob/v8.16.0/docs/reference/index-modules/allocation/filtering.asciidoc)
 
 Use normal `_id` routing for the initial benchmark. With three primaries, a tenant search fans out
 to three shards while a large tenant's documents can use the whole pool. Tenant routing is a
 separate decision: it reduces fanout but can concentrate a large tenant on one shard. Adopt
-partitioned tenant routing only after measuring skew; enforce `_routing.required` and identical
+partitioned tenant routing only after measuring skew. Enforce `_routing.required` and identical
 routing on every operation if chosen. Changing that policy requires rebuilding the index.
 [8.16 routing](https://www.elastic.co/guide/en/elasticsearch/reference/8.16/mapping-routing-field.html)
 
@@ -416,22 +416,22 @@ most 375 ASCII bytes given the current 256-byte tenant limit. Keep `object_id` a
 keyword for deterministic ordering. [Tenant bounds](https://github.com/dust-tt/dust/blob/7f5fba70710c3e1cf7866aeeae97a8c40fa0a4fd/dfs/protocol/proto/dfs.proto#L180),
 [ES `_id` limit and sort restriction](https://www.elastic.co/guide/en/elasticsearch/reference/8.16/mapping-id-field.html)
 
-`attr_version` validates indexed name/metadata; `content_version` validates the original file's
+`attr_version` validates indexed name/metadata. `content_version` validates the original file's
 content. They serve different checks and neither is an all-purpose publication sequence.
 `grants_version` changes only on the object where a grant changes, so it does not summarize
 inherited authorization and is omitted from the search projection. The index suffix and mapping
-`_meta.schema_version` identify the schema; avoid a redundant schema field on every document.
+`_meta.schema_version` identify the schema. Avoid a redundant schema field on every document.
 
 For native text, provenance points to the original object's ID/content version. For extraction,
 it points to the text object's ID/content version, while the document's identity, metadata, and
 `content_version` remain those of the original. A published extraction also needs an authoritative
-association with the original content version; the mapping alone cannot establish this. A name
+association with the original content version. The mapping alone cannot establish this. A name
 such as `dfs.search.source_object_id` on an extraction correctly names the original, whereas the
 DD's `dfs.search.text_object_id = original.id` reverses what the name suggests. Extraction records
 and this reserved xattr are still proposed work.
 
 The asynchronous writer needs a durable, monotonic publication revision covering metadata,
-content, ancestry, read boundaries, and deletion. Publish it using ES external versioning; it must
+content, ancestry, read boundaries, and deletion. Publish it using ES external versioning. It must
 fit a nonnegative signed 64-bit value, so a full FDB versionstamp cannot be copied unchecked. Bind
 each revision to a validated source snapshot and immutable payload, and reuse it on retries.
 Assigning a higher revision after reading stale data would defeat the ordering guarantee.
@@ -442,7 +442,7 @@ Retain deletion as a minimal document with `tenant_id`, `object_id`, `is_deleted
 `is_deleted=false`. Keep revisions across object deletion/recreation and keep tombstones until
 all older writers, retries, and rebuilds are fenced out. A hard delete alone forgets its version
 after ES's default 60-second delete retention and can allow a delayed old write to recreate it.
-These records/revisions require implementation in the durable publication path; they are not
+These records/revisions require implementation in the durable publication path. They are not
 already supplied by the object versions. [Delete retention](https://www.elastic.co/guide/en/elasticsearch/reference/8.16/docs-delete.html)
 
 **Query shape.**
@@ -503,14 +503,14 @@ fields. An explicit any-term option or visible partial-match fallback can relax 
 ```
 
 The example uses plain positive terms. For operator-bearing input, derive phrase/equality boosts
-and highlighting from the positive clauses of the parsed query; do not feed the raw operator string
+and highlighting from the positive clauses of the parsed query. Do not feed the raw operator string
 to a phrase or exact-name boost. Whole-name equality is a preference, not a guaranteed ordering
 rule under these illustrative numeric boosts.
 
 For interactive prefix mode, admit a prefix alternative for the unfinished positive term in the
 parsed query, using `name.edge`. Preserve the other required terms, all phrase/exclusion clauses,
 and all hard filters. Merely adding an optional prefix clause under a mandatory whole-token query
-would exclude prefix-only hits; replacing the complete query with a loose prefix OR could discard
+would exclude prefix-only hits. Replacing the complete query with a loose prefix OR could discard
 its Boolean meaning. Define whether the product supports a final-token prefix or prefix matching
 on every positive term, and test the chosen behavior explicitly.
 
@@ -521,11 +521,11 @@ additionally requires `window_size >= from + size`.
 [Rescore constraints](dfs-search-ranking-evidence.md)
 
 Use `match_all` for an explicit filter-only browse. Field-restricted searches can select the
-appropriate lexical fields; content searches return files. Exact name and name-prefix predicates
-target `name.keyword`; subtree scope targets `ancestor_ids`, with an `object_id` alternative when
-including the selected object; modification predicates target `mtime_ms`; size/MIME predicates
+appropriate lexical fields. Content searches return files. Exact name and name-prefix predicates
+target `name.keyword`. Subtree scope targets `ancestor_ids`, with an `object_id` alternative when
+including the selected object. Modification predicates target `mtime_ms`. Size/MIME predicates
 select files. Combine independent metadata predicates with AND.
-Enforce an application excerpt budget after highlighting; `fragment_size` is not a strict output
+Enforce an application excerpt budget after highlighting. `fragment_size` is not a strict output
 length guarantee. Names, snippets, and metadata are emitted only after current authorization and
 the relevant source-version/predicate checks. Pagination, total counts, result limits, and query
 budgets are explicit product/operational decisions, not inherited from the previous Search API.
@@ -538,9 +538,9 @@ Include replica recovery and a simultaneous old/new index during rebuild in disk
 nodes establish the deployment shape, not a capacity result.
 
 Define a bounded maximum text payload and explicit behavior for oversized or unsupported files
-before concatenating content. The current file domain permits large and sparse files; an unbounded
+before concatenating content. The current file domain permits large and sparse files. An unbounded
 whole-file buffer is unsafe. Preserve metadata search while making incomplete content indexing
-observable. Binary content requires extraction and freshness tracking; an ES text field does not
+observable. Binary content requires extraction and freshness tracking. An ES text field does not
 perform extraction. Passage indexing remains a separate decision if corpus measurements show
 that one text field per object is unsuitable.
 

@@ -54,7 +54,7 @@ def bulk(index, documents):
     assert not result["errors"], result
 
 
-# Representations of the same logical field compete; their scores are not added.
+# Representations of the same logical field compete. Their scores are not added.
 # These weights are illustrative, not relevance-calibrated production constants.
 GROUPS = [
     (4.0, ["name", "name.parts"], ["stemmed.en.name", "stemmed.fr.name"]),
@@ -233,7 +233,7 @@ documents = {
     "length_long": document("Quasar budget", "unrelated " * 10000),
 }
 # Language assignments are explicit fixtures, not predictions from a detector. This
-# harness tests the ES projection; detector accuracy and confidence policy are separate.
+# harness tests the ES projection. Detector accuracy and confidence policy are separate.
 FIELD_LANGUAGES = {
     "name_prefix": {"name": "en"},
     "name_components": {"name": "en"},

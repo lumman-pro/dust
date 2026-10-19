@@ -6,7 +6,7 @@ explain the object projection, analysis, and intended query behavior.
 
 Neutral name, content, and selected attribute fields always retain the original searchable text.
 Only classified text populates the explicit `stemmed.en` / `stemmed.fr` fields. Language detection
-and confidence policy belong to the projection work; this command does not run a detector.
+and confidence policy belong to the projection work. This command does not run a detector.
 `ancestor_ids` stores all physical ancestors, excluding the object itself. `read_grant_scope_ids`
 stores the object IDs where a direct READ grant could authorize the object, including itself and
 ancestors through the closest read-DENY, inclusive. Without a read-DENY, it includes all ancestors
@@ -17,7 +17,7 @@ distinct object before returning its title or content.
 The versioned JSON files in `indices/` are embedded in the Rust bootstrap command. All cells
 share the same mapping and analysis. Local settings use one primary and no replica. Production
 settings use three primaries, one replica, and a five-second refresh. Each cell has its own settings
-file: `cell-00000` and `cell-00001` require nodes labeled `workload=filesystem`; `cell-00002` uses
+file: `cell-00000` and `cell-00001` require nodes labeled `workload=filesystem`. `cell-00002` uses
 the shared pool without a workload allocation constraint. These operational values still need
 validation against the real corpus.
 Elasticsearch 8.16 with `analysis-icu` is required.
@@ -38,7 +38,7 @@ ELASTICSEARCH_URL=http://127.0.0.1:9200 \
 For production, select `--cell cell-00000`, `--cell cell-00001`, or `--cell cell-00002`
 (or set `CELL`) and provide
 `ELASTICSEARCH_URL`, `ELASTICSEARCH_USERNAME`, and `ELASTICSEARCH_PASSWORD`. Credentials are
-optional for a local cluster with security disabled; username and password must be supplied
+optional for a local cluster with security disabled. Username and password must be supplied
 together. `ELASTICSEARCH_CA_CERT` may point to a PEM CA certificate for a private cluster.
 TLS certificate and hostname verification remain enabled.
 

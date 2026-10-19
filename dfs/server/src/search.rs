@@ -34,7 +34,7 @@ pub enum IndexCell {
  * multi-fields or copy_to.
  */
 /**
- * @cc [owner:flvndvd,label:backend;security] objects-index-hierarchy-fields
+ * @cc [owner:flvndvd,label:backend,label:security] objects-index-hierarchy-fields
  * The mapping MUST distinguish physical ancestry in ancestor_ids (self excluded) from eligible
  * direct READ-grant object IDs in read_grant_scope_ids (self included, bounded by the nearest
  * read-DENY inclusively). Both fields MUST be keywords, independent of current grant attachments.
@@ -66,13 +66,13 @@ pub fn objects_index_body(cell: IndexCell) -> Result<Value> {
 }
 
 /**
- * @cc [owner:flvndvd,label:backend;error-handling] objects-index-bootstrap-preflight
+ * @cc [owner:flvndvd,label:backend,label:error-handling] objects-index-bootstrap-preflight
  * Bootstrap MUST fail without a mutation if preflight finds the physical index or alias already
  * exists, or if either existence check returns any status other than 404. Bootstrap MUST NOT
  * delete an index, change an existing mapping, or issue a separate alias-update request.
  */
 /**
- * @cc [owner:flvndvd,label:backend;error-handling] objects-index-bootstrap-acknowledgement
+ * @cc [owner:flvndvd,label:backend,label:error-handling] objects-index-bootstrap-acknowledgement
  * Bootstrap MUST create the index and write alias in one request and return success only when
  * Elasticsearch reports both acknowledged=true and shards_acknowledged=true. An unacknowledged
  * or timed-out operation MUST NOT trigger automatic deletion or retry of the creation request.
@@ -106,7 +106,7 @@ pub async fn create_objects_index(client: &Elasticsearch, cell: IndexCell) -> Re
     let result: Value = response.json().await?;
     ensure!(
         result["acknowledged"] == true && result["shards_acknowledged"] == true,
-        "object index creation was not fully acknowledged; inspect {OBJECTS_INDEX_NAME} and \
+        "object index creation was not fully acknowledged: inspect {OBJECTS_INDEX_NAME} and \
          {OBJECTS_INDEX_ALIAS} before retrying"
     );
     Ok(())
@@ -116,7 +116,7 @@ fn require_missing(response: Response, name: &str) -> Result<()> {
     match response.status_code() {
         StatusCode::NOT_FOUND => Ok(()),
         StatusCode::OK => {
-            bail!("{name} already exists; bootstrap does not migrate an existing index")
+            bail!("{name} already exists: bootstrap does not migrate an existing index")
         }
         status => bail!("could not check whether {name} exists: HTTP {status}"),
     }

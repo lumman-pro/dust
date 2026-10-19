@@ -7,10 +7,10 @@
       "en",
       "fr"
     ],
-    "language_stemming_policy": "populate explicit stemmed fields only for reliably identified text; keep all original text in neutral fields",
+    "language_stemming_policy": "populate explicit stemmed fields only for reliably identified text. Keep all original text in neutral fields",
     "hierarchy": {
-      "ancestor_ids": "physical ancestors from tenant root to immediate parent, excluding self; empty for the tenant root",
-      "read_grant_scope_ids": "object IDs where a direct READ grant can authorize this object: self and ancestors through the nearest read-DENY, inclusive; all ancestors plus self if no read-DENY, regardless of current grants"
+      "ancestor_ids": "physical ancestors from tenant root to immediate parent, excluding self. Empty for the tenant root",
+      "read_grant_scope_ids": "object IDs where a direct READ grant can authorize this object: self and ancestors through the nearest read-DENY, inclusive. All ancestors plus self if no read-DENY, regardless of current grants"
     }
   },
   "properties": {

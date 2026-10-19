@@ -7,11 +7,11 @@ It does not introduce a detector dependency or an ingestion implementation.
 **Recommendation: detect language before populating optional stemmed fields, while keeping
 every searchable value in its universal, unstemmed field.** One Elasticsearch document still
 represents one original DFS object. Language is a property of text, not necessarily of the
-whole object: an English filename can accompany a French body. Unknown text remains searchable;
-it simply has no language-specific inflection expansion until we can classify it adequately.
+whole object: an English filename can accompany a French body. Unknown text remains searchable.
+It simply has no language-specific inflection expansion until we can classify it adequately.
 
 **Detection and elision do different jobs.** A detector chooses the appropriate analysis chain.
-French elision makes `l'avion` searchable as `avion` within the French chain; it neither detects
+French elision makes `l'avion` searchable as `avion` within the French chain. It neither detects
 French nor replaces stemming. The current hand-copied article list is the standard Elastic/Lucene
 French list, not an application-specific heuristic. Remove that duplication by referring to the
 built-in `elision` filter. The Elasticsearch 8.16 preconfigured filter delegates to
@@ -28,7 +28,7 @@ folding pipeline. It is not a drop-in substitution for the current analyzer.
 [language analyzers](https://www.elastic.co/guide/en/elasticsearch/reference/8.16/analysis-lang-analyzer.html#french-analyzer).
 
 The recorded ES validation does show `L’avion des sociétés` becoming `avion`, `des`, `societ` in
-`dfs_text_fr`; no nondeterministic failure of that chain was demonstrated. Lucene's elision filter
+`dfs_text_fr`. No nondeterministic failure of that chain was demonstrated. Lucene's elision filter
 recognizes straight apostrophe U+0027 and right apostrophe U+2019, not every Unicode quote-like
 character. An upstream detector cannot repair such token normalization gaps. Any change to order
 ICU folding before elision should be checked on uppercase, straight/right/left apostrophes, NFC/NFD,
@@ -38,7 +38,7 @@ prefix semantics. [Recorded analyzer results](dfs-object-search-validation-resul
 
 **Google CLD3 is feasible, but it is not a maintained dependency to adopt blindly.** Google's
 CLD3 repository was archived on June 15, 2024. Its C++ model supports English and French and runs
-locally; model inference uses character n-grams. Google's package also includes Python bindings.
+locally. Model inference uses character n-grams. Google's package also includes Python bindings.
 The reviewed Rust `cld3` crate is a community C++ bridge, not an official Google Rust API.
 [Google CLD3](https://github.com/google/cld3),
 [Google Python binding/build](https://github.com/google/cld3/blob/master/setup.py),
@@ -48,7 +48,7 @@ The Rust crate's latest published version observed was 0.1.1 from June 2023. It 
 C++ through `cxx`, links `libprotobuf`, and its published documentation build failed. That does
 not prove the crate unusable, but Linux/macOS builds, protobuf compatibility, and the FFI boundary
 need verification before adopting it. The reviewed bridge exposes language, probability,
-reliability, and proportion; it does not expose upstream byte ranges.
+reliability, and proportion. It does not expose upstream byte ranges.
 [Published crate](https://docs.rs/crate/cld3/0.1.1),
 [build script](https://github.com/ttys3/cld3-rs/blob/main/build.rs),
 [result bridge](https://github.com/ttys3/cld3-rs/blob/main/cld3_wrapper.cc).
@@ -57,11 +57,11 @@ CLD3's defaults and result meanings impose concrete constraints:
 
 | Property | Verified behavior and consequence |
 | --- | --- |
-| Minimum text | The default minimum is 140 processed bytes; most filenames fall below it. Setting the minimum to zero permits a prediction, not a guarantee of short-text accuracy. |
+| Minimum text | The default minimum is 140 processed bytes. Most filenames fall below it. Setting the minimum to zero permits a prediction, not a guarantee of short-text accuracy. |
 | Sampling | Defaults consider up to 700 selected bytes from at most the first 10,000 input bytes. A long document's later language changes can be missed. |
-| `probability` | Model output confidence; it is not a measured error probability on DFS filenames, OCR, or queries. |
+| `probability` | Model output confidence. It is not a measured error probability on DFS filenames, OCR, or queries. |
 | `is_reliable` | For English/French, a fixed probability threshold of 0.7. Upstream reports tuning on Wikipedia segments, not filenames. |
-| `proportion` | `FindLanguage` sets it to 1 for a prediction; that does not establish monolingual content. The top-N API computes byte shares over classified script spans. |
+| `proportion` | `FindLanguage` sets it to 1 for a prediction. That does not establish monolingual content. The top-N API computes byte shares over classified script spans. |
 | Top-N segmentation | It splits by script. English and French are both Latin, so top-N is not a general English/French language-span segmenter. |
 
 [CLD3 implementation](https://github.com/google/cld3/blob/master/src/nnet_language_identifier.cc#L85),
@@ -90,7 +90,7 @@ handwritten inputs were passed to both `FindLanguage` and `FindTopNMostFreqLangs
 | French paragraph below | French (`fr`) | 1.0000 rounded | true |
 | Both paragraphs together | French (`fr`) only | 0.8652 | true |
 
-With the default minimum, every listed short input returned `und`; paragraph results were
+With the default minimum, every listed short input returned `und`. Paragraph results were
 unchanged. The combined paragraphs produced only French with `proportion=1.0` in the top-N result,
 whether separated by a space or a blank line. Exact reproduction inputs:
 
@@ -165,7 +165,7 @@ stemmed.fr.attributes.title / description / tags
 
 The first group retains every original value and the existing unstemmed phrase/prefix analysis.
 The `stemmed` fields contain original text selected by the projection, analyzed with the relevant
-language chain; the application should not send pre-stemmed tokens. Name fields retain their
+language chain. The application should not send pre-stemmed tokens. Name fields retain their
 filename-component tokenization. Language groups are ordinary objects, not `nested` documents.
 Separating each logical field preserves independent boosts and future LTR signals.
 
@@ -181,14 +181,14 @@ Recommended projection policy, to implement with ingestion:
    some stemming recall, including potentially a short `Reports.pdf` title, while preserving
    literal/prefix recall. Do not describe that tradeoff as unchanged stemming coverage.
 4. For a mixed body, route independently classified paragraphs or extraction blocks only after
-   validating segmentation and thresholds. Each accepted segment goes to one language field;
-   uncertain segments stay neutral. Until then, use the complete neutral body instead of stamping
+   validating segmentation and thresholds. Each accepted segment goes to one language field.
+   Uncertain segments stay neutral. Until then, use the complete neutral body instead of stamping
    one winner's language on all text. Code switching within a paragraph remains a limitation.
 5. Keep model/version and projection-policy provenance with indexing diagnostics so classification
    can be reproduced and changed by reindexing. A detector failure should retain neutral search.
 
 Explicit fields duplicate their selected text in `_source`, unlike automatic multi-fields. This
-is an intentional storage tradeoff; measure it with representative extraction sizes. Avoid
+is an intentional storage tradeoff. Measure it with representative extraction sizes. Avoid
 excluding derived source fields merely to hide the cost without a reindex and highlighting plan.
 
 **Query language must not become a hard recall gate.** Completed word clauses can use `dis_max`
@@ -196,25 +196,25 @@ over the universal representation and both supported language fields, with each 
 analyzer. Require each clause once, not a whole-query AND within each language or field. An
 English name and French body can then jointly satisfy `report société`. Query-time guesses on
 short or incomplete words must not exclude one branch. Prefix expansion remains on the universal
-fields; `report an` can match `report année 2026` without language detection. Quotes remain
+fields. `report an` can match `report année 2026` without language detection. Quotes remain
 unstemmed, ordered, same-field/value phrases. These are proposed query rules consistent with the
 existing requirements, not a parser implementation.
 
 If body language fields contain selected segments, their offsets and lengths differ from the
 complete universal body. Do not merge such fields into the root highlighter's `matched_fields`
-as though they held byte-identical text. Neutral highlighting can serve the baseline; highlighting
+as though they held byte-identical text. Neutral highlighting can serve the baseline. Highlighting
 stem-only matches in partial language segments requires an explicit source-offset mapping or a
 separate segment highlight path. Likewise, partial-field BM25 lengths are not whole-body length
 features for LTR. Elastic explicitly warns that combining differently sourced strings can produce
 nonsensical highlights or fail the query. [Highlighting documentation](https://www.elastic.co/guide/en/elasticsearch/reference/8.16/highlighting.html#combine-matches-on-multiple-fields).
 
 [Full isolated probe results](dfs-language-detection-probe-results.json) preserve every input,
-minimum-length setting, and detector output. These synthetic cases demonstrate failure modes;
-they are not an accuracy benchmark on the DFS corpus.
+minimum-length setting, and detector output. These synthetic cases demonstrate failure modes.
+They are not an accuracy benchmark on the DFS corpus.
 
-**What remains unproven:** detector quality on real English/French filenames and documents;
-thresholds for short fields, OCR, and multilingual paragraphs; deployment build compatibility;
-language-change recall; indexing size/cost; and relevance after selective stemming. The schema can
+**What remains unproven:** detector quality on real English/French filenames and documents,
+thresholds for short fields, OCR, and multilingual paragraphs, deployment build compatibility,
+language-change recall, indexing size/cost, and relevance after selective stemming. The schema can
 support the policy now. Selecting and integrating a detector belongs with the projection work and
 must include labeled routing cases and search-recall evaluation. Neither Google's brand nor the
 existing synthetic Elasticsearch checks establishes those properties.
