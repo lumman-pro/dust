@@ -82,6 +82,10 @@ msgid "unknown Pod"
 msgstr "unbekannter Pod"
 
 #: front/components/assistant/conversation/interactive_content/FrameRenderer.tsx
+msgid "Activate draft mode"
+msgstr "Entwurfsmodus aktivieren"
+
+#: front/components/assistant/conversation/interactive_content/FrameRenderer.tsx
 msgid "Saved"
 msgstr "Gespeichert"
 

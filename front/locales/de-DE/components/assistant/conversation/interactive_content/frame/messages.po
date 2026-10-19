@@ -26,24 +26,24 @@ msgid "Error loading the Frame source."
 msgstr "Fehler beim Laden der Frame-Quelle."
 
 #: front/components/assistant/conversation/interactive_content/frame/FrameDraftControls.tsx
-msgid "Not live yet. The share link shows the version from {liveSince}."
-msgstr "Noch nicht live. Der Freigabelink zeigt die Version vom {liveSince}."
-
-#: front/components/assistant/conversation/interactive_content/frame/FrameDraftControls.tsx
-msgid "Not live yet. The share link shows the live version."
-msgstr "Noch nicht live. Der Freigabelink zeigt die Live-Version."
-
-#: front/components/assistant/conversation/interactive_content/frame/FrameDraftControls.tsx
-msgid "Draft"
-msgstr "Entwurf"
-
-#: front/components/assistant/conversation/interactive_content/frame/FrameDraftControls.tsx
-msgid "Make live"
-msgstr "Live schalten"
+msgid "Validate draft"
+msgstr "Entwurf bestätigen"
 
 #: front/components/assistant/conversation/interactive_content/frame/FrameDraftControls.tsx
 msgid "Show these changes on the share link"
 msgstr "Diese Änderungen im Freigabelink anzeigen"
+
+#: front/components/assistant/conversation/interactive_content/frame/FrameDraftControls.tsx
+msgid "No changes yet. This leaves draft mode."
+msgstr "Noch keine Änderungen. Dadurch wird der Entwurfsmodus beendet."
+
+#: front/components/assistant/conversation/interactive_content/frame/FrameDraftModeBorder.tsx
+msgid "Changes stay in this draft until you validate it. The share link shows the live version."
+msgstr "Änderungen bleiben in diesem Entwurf, bis Sie ihn bestätigen. Der Freigabelink zeigt die Live-Version."
+
+#: front/components/assistant/conversation/interactive_content/frame/FrameDraftModeBorder.tsx
+msgid "Draft"
+msgstr "Entwurf"
 
 #: front/components/assistant/conversation/interactive_content/frame/FrameEditControls.tsx
 msgid "Apply"
@@ -321,6 +321,10 @@ msgstr "Vorschau anzeigen"
 msgid "Switch to code"
 msgstr "Code anzeigen"
 
+#: front/components/assistant/conversation/interactive_content/frame/FrameToolbar.tsx
+msgid "More actions"
+msgstr "Weitere Aktionen"
+
 #: front/components/assistant/conversation/interactive_content/frame/PreviewActionButtons.tsx
 msgid "Exit full screen mode"
 msgstr "Vollbildmodus beenden"
@@ -442,9 +446,9 @@ msgid "Discard"
 msgstr "Verwerfen"
 
 #: front/components/assistant/conversation/interactive_content/frame/useLiveFrameEditing.tsx
-msgid "This Frame has changes that aren't live yet. Edit it from the conversation."
-msgstr "Dieses Frame enthält Änderungen, die noch nicht live sind. Bearbeiten Sie es in der Unterhaltung."
+msgid "This Frame is in draft mode. Edit it from the conversation."
+msgstr "Dieses Frame ist im Entwurfsmodus. Bearbeiten Sie es in der Unterhaltung."
 
 #: front/components/assistant/conversation/interactive_content/frame/useLiveFrameEditing.tsx
-msgid "Draft pending"
-msgstr "Entwurf ausstehend"
+msgid "Draft mode"
+msgstr "Entwurfsmodus"

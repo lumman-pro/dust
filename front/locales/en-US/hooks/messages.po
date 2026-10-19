@@ -177,6 +177,10 @@ msgstr "Enable"
 msgid "Later"
 msgstr "Later"
 
+#: front/hooks/useEnterFrameDraftMode.ts
+msgid "Could not turn on draft mode"
+msgstr "Could not turn on draft mode"
+
 #: front/hooks/useExtensionMcpToolsToggle.ts
 msgid "Failed to update the extension MCP tools setting"
 msgstr "Failed to update the extension MCP tools setting"
@@ -276,6 +280,10 @@ msgstr "Changes are live"
 #: front/hooks/useMakeFrameDraftLive.ts
 msgid "The share link now shows this version."
 msgstr "The share link now shows this version."
+
+#: front/hooks/useMakeFrameDraftLive.ts
+msgid "Draft mode is off"
+msgstr "Draft mode is off"
 
 #: front/hooks/useMarkAllConversationsAsRead.ts
 msgid "All conversations marked as read"

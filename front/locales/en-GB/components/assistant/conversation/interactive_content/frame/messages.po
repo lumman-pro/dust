@@ -26,23 +26,23 @@ msgid "Error loading the Frame source."
 msgstr ""
 
 #: front/components/assistant/conversation/interactive_content/frame/FrameDraftControls.tsx
-msgid "Not live yet. The share link shows the version from {liveSince}."
-msgstr ""
-
-#: front/components/assistant/conversation/interactive_content/frame/FrameDraftControls.tsx
-msgid "Not live yet. The share link shows the live version."
-msgstr ""
-
-#: front/components/assistant/conversation/interactive_content/frame/FrameDraftControls.tsx
-msgid "Draft"
-msgstr ""
-
-#: front/components/assistant/conversation/interactive_content/frame/FrameDraftControls.tsx
-msgid "Make live"
+msgid "Validate draft"
 msgstr ""
 
 #: front/components/assistant/conversation/interactive_content/frame/FrameDraftControls.tsx
 msgid "Show these changes on the share link"
+msgstr ""
+
+#: front/components/assistant/conversation/interactive_content/frame/FrameDraftControls.tsx
+msgid "No changes yet. This leaves draft mode."
+msgstr ""
+
+#: front/components/assistant/conversation/interactive_content/frame/FrameDraftModeBorder.tsx
+msgid "Changes stay in this draft until you validate it. The share link shows the live version."
+msgstr ""
+
+#: front/components/assistant/conversation/interactive_content/frame/FrameDraftModeBorder.tsx
+msgid "Draft"
 msgstr ""
 
 #: front/components/assistant/conversation/interactive_content/frame/FrameEditControls.tsx
@@ -321,6 +321,10 @@ msgstr ""
 msgid "Switch to code"
 msgstr ""
 
+#: front/components/assistant/conversation/interactive_content/frame/FrameToolbar.tsx
+msgid "More actions"
+msgstr ""
+
 #: front/components/assistant/conversation/interactive_content/frame/PreviewActionButtons.tsx
 msgid "Exit full screen mode"
 msgstr ""
@@ -442,9 +446,9 @@ msgid "Discard"
 msgstr ""
 
 #: front/components/assistant/conversation/interactive_content/frame/useLiveFrameEditing.tsx
-msgid "This Frame has changes that aren't live yet. Edit it from the conversation."
+msgid "This Frame is in draft mode. Edit it from the conversation."
 msgstr ""
 
 #: front/components/assistant/conversation/interactive_content/frame/useLiveFrameEditing.tsx
-msgid "Draft pending"
+msgid "Draft mode"
 msgstr ""

@@ -18,7 +18,7 @@ interface Mocks {
   canWriteFrameSource: boolean;
   hasAuthorizedRequiredTools: boolean;
   contentCalls: Record<string, unknown>[];
-  draftPublicationId: string | null;
+  draftMode: boolean;
   fileMetadata: Record<string, unknown>;
   hasFrameFunctions: boolean;
   iframeProps: {
@@ -38,7 +38,7 @@ const mocks = vi.hoisted<Mocks>(() => ({
   canWriteFrameSource: true,
   hasAuthorizedRequiredTools: true,
   contentCalls: [],
-  draftPublicationId: null,
+  draftMode: false,
   fileMetadata: {},
   hasFrameFunctions: false,
   iframeProps: null,
@@ -190,7 +190,7 @@ vi.mock("@app/lib/swr/frames", () => ({
     mocks.permissionsCalls.push(args);
     return {
       canWriteFrameSource: mocks.canWriteFrameSource,
-      draftPublicationId: mocks.draftPublicationId,
+      draftMode: mocks.draftMode,
       hasFrameFunctions: mocks.hasFrameFunctions,
       requiredTools: [],
       isLastPublisher: false,
@@ -274,7 +274,7 @@ beforeEach(() => {
   mocks.hasFrameFunctions = false;
   mocks.canWriteFrameSource = true;
   mocks.hasAuthorizedRequiredTools = true;
-  mocks.draftPublicationId = null;
+  mocks.draftMode = false;
 });
 
 afterEach(() => {
@@ -400,16 +400,16 @@ describe("PodFramePanel", () => {
     });
   });
 
-  it("offers no editing while a draft is pending and points writers to the conversation", () => {
-    mocks.draftPublicationId = "pub_draft";
+  it("offers no editing in draft mode and points writers to the conversation", () => {
+    mocks.draftMode = true;
 
     render(createElement(PodFramePanel, panelProps));
 
     expect(screen.queryByText("edit-controls")).not.toBeInTheDocument();
-    expect(screen.getByText("Draft pending")).toBeInTheDocument();
+    expect(screen.getByText("Draft mode")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "This Frame has changes that aren't live yet. Edit it from the conversation."
+        "This Frame is in draft mode. Edit it from the conversation."
       )
     ).toBeInTheDocument();
     expect(mocks.iframeProps).toMatchObject({ isEditable: false });
@@ -424,14 +424,14 @@ describe("PodFramePanel", () => {
 
     render(createElement(PodFramePanel, panelProps));
 
-    expect(screen.queryByText("Draft pending")).not.toBeInTheDocument();
+    expect(screen.queryByText("Draft mode")).not.toBeInTheDocument();
     expect(screen.queryByText("edit-controls")).not.toBeInTheDocument();
   });
 
-  it("shows no draft note to a writer without a pending draft", () => {
+  it("shows no draft note to a writer outside draft mode", () => {
     render(createElement(PodFramePanel, panelProps));
 
-    expect(screen.queryByText("Draft pending")).not.toBeInTheDocument();
+    expect(screen.queryByText("Draft mode")).not.toBeInTheDocument();
   });
 
   it("serves the live publication: no latest bundle, functions or function target", () => {

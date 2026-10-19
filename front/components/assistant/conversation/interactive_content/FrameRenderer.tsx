@@ -4,6 +4,7 @@ import { ConversationSidePanelHeader } from "@app/components/assistant/conversat
 import { CenteredState } from "@app/components/assistant/conversation/interactive_content/CenteredState";
 import { FrameCodeView } from "@app/components/assistant/conversation/interactive_content/frame/FrameCodeView";
 import { FrameDraftControls } from "@app/components/assistant/conversation/interactive_content/frame/FrameDraftControls";
+import { FrameDraftModeBorder } from "@app/components/assistant/conversation/interactive_content/frame/FrameDraftModeBorder";
 import { FrameToolbar } from "@app/components/assistant/conversation/interactive_content/frame/FrameToolbar";
 import { FrameToolConsentGate } from "@app/components/assistant/conversation/interactive_content/frame/FrameToolConsentGate";
 import { PreviewActionButtons } from "@app/components/assistant/conversation/interactive_content/frame/PreviewActionButtons";
@@ -11,11 +12,12 @@ import { useFrameEditSession } from "@app/components/assistant/conversation/inte
 import { useSidePanelFullScreen } from "@app/components/assistant/conversation/useSidePanelFullScreen";
 import { ConfirmContext } from "@app/components/Confirm";
 import { useVisualizationRevert } from "@app/hooks/conversations";
+import { useEnterFrameDraftMode } from "@app/hooks/useEnterFrameDraftMode";
 import {
   useSendApiErrorNotification,
   useSendNotification,
 } from "@app/hooks/useNotification";
-import { useAuth } from "@app/lib/auth/AuthContext";
+import { useAuth, useFeatureFlags } from "@app/lib/auth/AuthContext";
 import { clientFetch } from "@app/lib/egress/client";
 import {
   useFileContent,
@@ -28,9 +30,14 @@ import { usePodFiles } from "@app/lib/swr/pods";
 import { useSpaceInfo } from "@app/lib/swr/spaces";
 import { getErrorFromResponse } from "@app/lib/swr/swr";
 import { useIsMobile } from "@app/lib/swr/useIsMobile";
+import {
+  TRACKING_ACTIONS,
+  TRACKING_AREAS,
+  trackEvent,
+} from "@app/lib/tracking";
 import type { ConversationWithoutContentType } from "@app/types/assistant/conversation";
 import type { LightWorkspaceType } from "@app/types/user";
-import { Button, Cube01, Spinner } from "@dust-tt/sparkle";
+import { Button, Cube01, DropdownMenuItem, Spinner } from "@dust-tt/sparkle";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { useCallback, useContext, useMemo, useRef, useState } from "react";
 
@@ -170,7 +177,8 @@ export function FrameRenderer({
     isFramePermissionsLoading,
     hasFramePermissions,
     draftPublicationId,
-    livePublishedAt,
+    draftMode,
+    livePublicationId,
     mutateFramePermissions,
   } = useFramePermissions({
     owner,
@@ -200,6 +208,23 @@ export function FrameRenderer({
   // Frames v2 source writers edit in a Preview|Edit session with batch Save. Legacy Frames keep
   // the always-on double-click + blur-save path.
   const canEditV2 = renderMode === "v2" && isEditable;
+  const { hasFeature } = useFeatureFlags();
+  // Draft mode is turned on from the conversation panel only: the one surface that shows drafts.
+  const canEnterDraftMode =
+    canEditV2 && hasFeature("frames_v2_drafts") && !draftMode;
+  const isDraftMode = canEditV2 && draftMode;
+  const enterDraftMode = useEnterFrameDraftMode({ owner, frameId: fileId });
+  const handleEnterDraftMode = async () => {
+    trackEvent({
+      area: TRACKING_AREAS.FRAMES,
+      object: "draft_mode_enter",
+      action: TRACKING_ACTIONS.CLICK,
+      extra: { frame_id: fileId },
+    });
+    if (await enterDraftMode()) {
+      await mutateFramePermissions();
+    }
+  };
   const editSession = useFrameEditSession({
     owner,
     fileId,
@@ -366,17 +391,15 @@ export function FrameRenderer({
           editSession={editSession}
           canEditV2={canEditV2}
           hideEditLabels={isMobile}
-          status={
-            canEditV2 && draftPublicationId ? (
-              <FrameDraftControls
-                owner={owner}
-                frameId={fileId}
-                draftPublicationId={draftPublicationId}
-                livePublishedAt={livePublishedAt}
-                hideLabels={isMobile}
-                onMadeLive={() => mutateFramePermissions()}
+          menuItems={
+            canEnterDraftMode ? (
+              <DropdownMenuItem
+                label={t`Activate draft mode`}
+                onClick={() => {
+                  void handleEnterDraftMode();
+                }}
               />
-            ) : null
+            ) : undefined
           }
           podActions={
             isFrameInPod
@@ -393,6 +416,16 @@ export function FrameRenderer({
           }
           trailing={
             <>
+              {isDraftMode && livePublicationId && (
+                <FrameDraftControls
+                  owner={owner}
+                  frameId={fileId}
+                  draftPublicationId={draftPublicationId}
+                  livePublicationId={livePublicationId}
+                  hideLabels={isMobile}
+                  onValidated={() => mutateFramePermissions()}
+                />
+              )}
               {projectSaveState === "saved" && (
                 <Button
                   icon={Cube01}
@@ -437,62 +470,66 @@ export function FrameRenderer({
           />
         ) : (
           <>
-            {showCode ? (
-              <FrameCodeView
-                code={
-                  renderMode === "v2" ? (frameSource ?? undefined) : fileContent
-                }
-                isLoading={renderMode === "v2" && isFrameSourceLoading}
-                hasError={
-                  renderMode === "v2" &&
-                  (isFrameSourceNotFound || Boolean(frameSourceError))
-                }
-              />
-            ) : (
-              <div className="relative h-full">
-                <AuthenticatedVisualizationActionIframe
-                  agentConfigurationId={
-                    fileMetadata?.useCaseMetadata
-                      .lastEditedByAgentConfigurationId ?? ""
+            <FrameDraftModeBorder isDraftMode={isDraftMode}>
+              {showCode ? (
+                <FrameCodeView
+                  code={
+                    renderMode === "v2"
+                      ? (frameSource ?? undefined)
+                      : fileContent
                   }
-                  workspaceId={owner.sId}
-                  vizUrl={vizUrl}
-                  visualization={{
-                    code: fileContent ?? "",
-                    complete: true,
-                    // Stable across revisions — contentHash belongs in `key` only.
-                    // Putting it in identifier forced Next.js to recompile /content
-                    // for every publish / content refresh.
-                    identifier: `viz-${fileId}`,
-                  }}
-                  key={vizInstanceKey}
-                  conversationId={conversation?.sId ?? null}
-                  spaceId={frameSpaceId ?? undefined}
-                  framePackageRoot={framePackageRoot}
-                  frameId={renderMode === "v2" ? fileId : undefined}
-                  frameFileId={fileId}
-                  isInDrawer={true}
-                  functionTarget="latest"
-                  isEditable={isEditable}
-                  stagedEditMode={canEditV2 ? editSession.mode : undefined}
-                  onEditText={
-                    !isEditable
-                      ? undefined
-                      : canEditV2
-                        ? editSession.stageEdit
-                        : handleEditText
+                  isLoading={renderMode === "v2" && isFrameSourceLoading}
+                  hasError={
+                    renderMode === "v2" &&
+                    (isFrameSourceNotFound || Boolean(frameSourceError))
                   }
-                  ref={iframeRef}
                 />
-                {editSession.isSaving && (
-                  <div
-                    className="absolute inset-0 z-10 cursor-wait"
-                    aria-busy="true"
-                    aria-label={t`Publishing your changes...`}
+              ) : (
+                <div className="relative h-full">
+                  <AuthenticatedVisualizationActionIframe
+                    agentConfigurationId={
+                      fileMetadata?.useCaseMetadata
+                        .lastEditedByAgentConfigurationId ?? ""
+                    }
+                    workspaceId={owner.sId}
+                    vizUrl={vizUrl}
+                    visualization={{
+                      code: fileContent ?? "",
+                      complete: true,
+                      // Stable across revisions — contentHash belongs in `key` only.
+                      // Putting it in identifier forced Next.js to recompile /content
+                      // for every publish / content refresh.
+                      identifier: `viz-${fileId}`,
+                    }}
+                    key={vizInstanceKey}
+                    conversationId={conversation?.sId ?? null}
+                    spaceId={frameSpaceId ?? undefined}
+                    framePackageRoot={framePackageRoot}
+                    frameId={renderMode === "v2" ? fileId : undefined}
+                    frameFileId={fileId}
+                    isInDrawer={true}
+                    functionTarget="latest"
+                    isEditable={isEditable}
+                    stagedEditMode={canEditV2 ? editSession.mode : undefined}
+                    onEditText={
+                      !isEditable
+                        ? undefined
+                        : canEditV2
+                          ? editSession.stageEdit
+                          : handleEditText
+                    }
+                    ref={iframeRef}
                   />
-                )}
-              </div>
-            )}
+                  {editSession.isSaving && (
+                    <div
+                      className="absolute inset-0 z-10 cursor-wait"
+                      aria-busy="true"
+                      aria-label={t`Publishing your changes...`}
+                    />
+                  )}
+                </div>
+              )}
+            </FrameDraftModeBorder>
             <PreviewActionButtons
               lastEditedByAgentConfigurationId={
                 lastEditedByAgentConfigurationId

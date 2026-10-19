@@ -177,6 +177,10 @@ msgstr "Activer"
 msgid "Later"
 msgstr "Plus tard"
 
+#: front/hooks/useEnterFrameDraftMode.ts
+msgid "Could not turn on draft mode"
+msgstr "Impossible d’activer le mode brouillon."
+
 #: front/hooks/useExtensionMcpToolsToggle.ts
 msgid "Failed to update the extension MCP tools setting"
 msgstr "Impossible de mettre à jour le paramètre des outils MCP de l’extension"
@@ -276,6 +280,10 @@ msgstr "Les modifications sont en ligne."
 #: front/hooks/useMakeFrameDraftLive.ts
 msgid "The share link now shows this version."
 msgstr "Le lien de partage affiche désormais cette version."
+
+#: front/hooks/useMakeFrameDraftLive.ts
+msgid "Draft mode is off"
+msgstr "Le mode brouillon est désactivé."
 
 #: front/hooks/useMarkAllConversationsAsRead.ts
 msgid "All conversations marked as read"

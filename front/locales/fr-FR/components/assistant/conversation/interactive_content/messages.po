@@ -82,6 +82,10 @@ msgid "unknown Pod"
 msgstr "Pod inconnu"
 
 #: front/components/assistant/conversation/interactive_content/FrameRenderer.tsx
+msgid "Activate draft mode"
+msgstr "Activer le mode brouillon"
+
+#: front/components/assistant/conversation/interactive_content/FrameRenderer.tsx
 msgid "Saved"
 msgstr "Enregistré"
 

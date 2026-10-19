@@ -7,7 +7,16 @@ import { PinPodBannerButton } from "@app/components/pod/files/PinPodBannerButton
 import { PodFileTabButton } from "@app/components/pod/files/PodFileTabButton";
 import type { PodFileTab } from "@app/types/pod_file_tab";
 import type { LightWorkspaceType } from "@app/types/user";
-import { Button, cn, Eye, Terminal } from "@dust-tt/sparkle";
+import {
+  Button,
+  cn,
+  DotsHorizontal,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+  Eye,
+  Terminal,
+} from "@dust-tt/sparkle";
 import { useLingui } from "@lingui/react/macro";
 import type { ReactNode, RefObject } from "react";
 
@@ -47,8 +56,10 @@ interface FrameToolbarProps {
   podActions?: FrameToolbarPodActions | null;
   /** Conversation-only actions (e.g. save-to-pod) rendered after the shared cluster. */
   trailing?: ReactNode;
-  /** Conversation-only status (e.g. the pending-draft chip), rendered after the Beta chip. */
+  /** Status (e.g. the draft-mode chip on Pod surfaces), rendered after the Beta chip. */
   status?: ReactNode;
+  /** Items of the trailing "more" menu, shown only when set. */
+  menuItems?: ReactNode;
 }
 
 /**
@@ -73,6 +84,7 @@ export function FrameToolbar({
   podActions = null,
   trailing,
   status,
+  menuItems,
 }: FrameToolbarProps) {
   const { t } = useLingui();
 
@@ -139,6 +151,19 @@ export function FrameToolbar({
         </>
       )}
       {trailing}
+      {menuItems && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              icon={DotsHorizontal}
+              variant="ghost"
+              aria-label={t`More actions`}
+              tooltip={t`More actions`}
+            />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">{menuItems}</DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   );
 
