@@ -1,5 +1,6 @@
 import { Authenticator } from "@app/lib/auth";
 import { getPrivateUploadBucket } from "@app/lib/file_storage";
+import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { DfsTenantResource } from "@app/lib/resources/dfs_tenant_resource";
 import { SpaceResource } from "@app/lib/resources/space_resource";
 import { assertNever } from "@app/types/shared/utils/assert_never";
@@ -7,25 +8,45 @@ import assert from "assert";
 
 // `w/<workspaceSId>/pods/<podSId>/files/<path>`, see `getPodFilesBasePath`.
 const POD_FILE_OBJECT_NAME_REGEX = /^w\/([^/]+)\/pods\/([^/]+)\/files\/(.+)$/;
+// `w/<workspaceSId>/conversations/<conversationSId>/files/<path>`, see
+// `getConversationFilesBasePath`.
+const CONVERSATION_FILE_OBJECT_NAME_REGEX =
+  /^w\/([^/]+)\/conversations\/([^/]+)\/files\/(.+)$/;
 // Custom metadata key holding a symlink's target on the empty object gcsfuse stores for it.
 const GCSFUSE_SYMLINK_TARGET_METADATA_KEY = "gcsfuse_symlink_target";
-// The folder of a pod's dfs folder holding its files, see `dfs/design-docs/URI.md`.
+// The folder of a pod's or conversation's dfs folder holding its files, see
+// `dfs/design-docs/URI.md`.
 const DFS_FILES_FOLDER_NAME = "files";
 
-/** An object of the private uploads bucket that dfs mirrors. */
-export type ReplicatedGcsObject = {
+interface ReplicatedPodFile {
   kind: "pod_file";
   objectName: string;
   workspaceId: string;
   podId: string;
   // The object name below the pod's files root, ending with `/` for a folder placeholder.
   path: string;
-};
+}
 
-/** The dfs folder of a pod, which front creates and stores on the pod. */
-export type DfsReplicationFolder = { kind: "pod"; podId: string };
+interface ReplicatedConversationFile {
+  kind: "conversation_file";
+  objectName: string;
+  workspaceId: string;
+  conversationId: string;
+  // The object name below the conversation's files root, ending with `/` for a folder placeholder.
+  path: string;
+}
 
-/** A path below the dfs folder of a pod. */
+/** An object of the private uploads bucket that dfs mirrors. */
+export type ReplicatedGcsObject =
+  | ReplicatedPodFile
+  | ReplicatedConversationFile;
+
+/** The dfs folder of a pod or conversation, which front creates and stores on it. */
+export type DfsReplicationFolder =
+  | { kind: "pod"; podId: string }
+  | { kind: "conversation"; conversationId: string };
+
+/** A path below the dfs folder of a pod or conversation. */
 export interface DfsReplicationTarget {
   folder: DfsReplicationFolder;
   path: string[];
@@ -50,7 +71,8 @@ export type DfsReplicationPlan =
 
 /**
  * @cc [owner:aubin-tchoi,label:product] replicated-gcs-object-names
- * Only object names `w/<workspaceSId>/pods/<podSId>/files/<path>` with a non-empty `<path>` MUST be
+ * Only object names `w/<workspaceSId>/pods/<podSId>/files/<path>` and
+ * `w/<workspaceSId>/conversations/<conversationSId>/files/<path>` with a non-empty `<path>` MUST be
  * parsed. Every other name MUST return `null`: it is not replicated.
  */
 export function parseReplicatedGcsObjectName(
@@ -64,6 +86,18 @@ export function parseReplicatedGcsObjectName(
       workspaceId: podFile[1],
       podId: podFile[2],
       path: podFile[3],
+    };
+  }
+  const conversationFile = objectName.match(
+    CONVERSATION_FILE_OBJECT_NAME_REGEX
+  );
+  if (conversationFile) {
+    return {
+      kind: "conversation_file",
+      objectName,
+      workspaceId: conversationFile[1],
+      conversationId: conversationFile[2],
+      path: conversationFile[3],
     };
   }
   return null;
@@ -86,13 +120,14 @@ export function parseReplicatedGcsObjectName(
  */
 /**
  * @cc [owner:aubin-tchoi,label:product] replication-skips
- * Names `parseReplicatedGcsObjectName` rejects, objects of a workspace without a dfs tenant, and
- * files of a pod that does not exist (including a soft-deleted one) MUST be planned as `skip`.
+ * Names `parseReplicatedGcsObjectName` rejects, objects of a workspace without a dfs tenant, files
+ * of a pod that does not exist (including a soft-deleted one), and files of a conversation that does
+ * not exist (including a deleted one) MUST be planned as `skip`.
  */
 /**
  * @cc [owner:aubin-tchoi,label:product] files-folder-targets
- * Target paths MUST start with `files`: pod files live under `files/` in the pod's dfs folder, as in
- * `dfs/design-docs/URI.md`, never at its root.
+ * Target paths MUST start with `files`: pod and conversation files live under `files/` in their
+ * dfs folder, as in `dfs/design-docs/URI.md`, never at its root.
  */
 export async function planGcsObjectReplication(
   objectName: string
@@ -124,8 +159,19 @@ async function getReplicationFolder(
       const space = await SpaceResource.fetchById(auth, object.podId);
       return space?.isProject() ? { kind: "pod", podId: space.sId } : null;
     }
+    case "conversation_file": {
+      // Replication mirrors every conversation of the workspace, whoever can read it.
+      const conversation = await ConversationResource.fetchById(
+        auth,
+        object.conversationId,
+        { dangerouslySkipPermissionFiltering: true }
+      );
+      return conversation
+        ? { kind: "conversation", conversationId: conversation.sId }
+        : null;
+    }
     default:
-      assertNever(object.kind);
+      assertNever(object);
   }
 }
 
