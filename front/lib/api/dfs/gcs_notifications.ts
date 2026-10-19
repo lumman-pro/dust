@@ -47,16 +47,16 @@ export interface GcsReplicationNotification {
   };
 }
 
+export interface GcsReplicationSource {
+  workspaceId: string;
+  bucket: string;
+  objectName: string;
+}
+
 /**
  * @cc [owner:flvndvd,label:security] gcs-notification-source
  * Accepted events MUST match the configured bucket and notification identity. Payload bucket,
  * name and generation MUST match the attributes. Custom metadata MUST NOT supply DFS grants.
- */
-/**
- * @cc [owner:flvndvd,label:security] gcs-notification-path
- * Only conversation and pod `files/` objects are eligible. Names MUST NOT be URL-decoded or
- * normalized. Empty, dot and parent components MUST fail rather than alias another DFS path.
- * Directory marker objects (names ending in `/`) and objects outside these prefixes are ignored.
  */
 export function parseGcsReplicationNotification(
   message: { attributes: unknown; data: Buffer },
@@ -80,23 +80,12 @@ export function parseGcsReplicationNotification(
     return new Err(new Error("Unexpected GCS notification source."));
   }
 
-  const [root, workspaceId, namespace, resourceId, folder, ...path] =
-    objectId.split("/");
-  if (
-    root !== "w" ||
-    (namespace !== "pods" && namespace !== "conversations") ||
-    folder !== "files" ||
-    objectId.endsWith("/")
-  ) {
-    return new Ok(null);
+  const destination = parseGcsReplicationPath(objectId);
+  if (destination.isErr()) {
+    return destination;
   }
-  if (
-    path.length === 0 ||
-    [workspaceId, resourceId, ...path].some(
-      (part) => !part || part === "." || part === ".." || part.includes("\0")
-    )
-  ) {
-    return new Err(new Error("Invalid GCS replication path."));
+  if (!destination.value) {
+    return new Ok(null);
   }
 
   let payload: unknown;
@@ -122,11 +111,41 @@ export function parseGcsReplicationNotification(
   return new Ok({
     eventType,
     metadata: metadata.data,
-    destination: {
-      workspaceId,
-      kind: namespace === "pods" ? "pod" : "conversation",
-      resourceId,
-      path,
-    },
+    destination: destination.value,
+  });
+}
+
+/**
+ * @cc [owner:flvndvd,label:security] gcs-notification-path
+ * Only conversation and pod `files/` objects are eligible. Names MUST NOT be URL-decoded or
+ * normalized. Empty, dot and parent components MUST fail rather than alias another DFS path.
+ * Directory marker objects (names ending in `/`) and objects outside these prefixes are ignored.
+ */
+export function parseGcsReplicationPath(
+  objectName: string
+): Result<GcsReplicationNotification["destination"] | null, Error> {
+  const [root, workspaceId, namespace, resourceId, folder, ...path] =
+    objectName.split("/");
+  if (
+    root !== "w" ||
+    (namespace !== "pods" && namespace !== "conversations") ||
+    folder !== "files" ||
+    objectName.endsWith("/")
+  ) {
+    return new Ok(null);
+  }
+  if (
+    path.length === 0 ||
+    [workspaceId, resourceId, ...path].some(
+      (part) => !part || part === "." || part === ".." || part.includes("\0")
+    )
+  ) {
+    return new Err(new Error("Invalid GCS replication path."));
+  }
+  return new Ok({
+    workspaceId,
+    kind: namespace === "pods" ? "pod" : "conversation",
+    resourceId,
+    path,
   });
 }

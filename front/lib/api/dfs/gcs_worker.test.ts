@@ -1,15 +1,13 @@
 // @vitest-environment node
-import type { GcsReplicationImporter } from "@app/lib/api/dfs/gcs_worker";
 import { runGcsReplicationWorker } from "@app/lib/api/dfs/gcs_worker";
 import { FeatureFlagResource } from "@app/lib/resources/feature_flag_resource";
+import { getTemporalClientForFrontNamespace } from "@app/lib/temporal";
 import { GcsNotificationFactory } from "@app/tests/utils/GcsNotificationFactory";
 import {
   FakePubSub,
   FakePubSubMessage,
 } from "@app/tests/utils/mocks/gcs_pubsub";
 import { WorkspaceFactory } from "@app/tests/utils/WorkspaceFactory";
-import type { Result } from "@app/types/shared/result";
-import { Err, Ok } from "@app/types/shared/result";
 import type { WorkspaceType } from "@app/types/user";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -25,12 +23,16 @@ const source = GcsNotificationFactory.source;
 describe("runGcsReplicationWorker", () => {
   let stop: AbortController;
   let workspace: WorkspaceType;
+  const handoff = vi.fn();
 
   beforeEach(async () => {
     FakePubSub.instances = [];
     stop = new AbortController();
     workspace = await WorkspaceFactory.basic();
     await FeatureFlagResource.enable(workspace, "dfs_gcs_replication");
+    const client = await getTemporalClientForFrontNamespace();
+    handoff.mockReset().mockResolvedValue(undefined);
+    vi.mocked(client.workflow.signalWithStart).mockImplementation(handoff);
   });
 
   afterEach(() => {
@@ -38,15 +40,13 @@ describe("runGcsReplicationWorker", () => {
     vi.useRealTimers();
   });
 
-  it("acknowledges only after the importer completes", async () => {
-    const pending = Promise.withResolvers<Result<void, Error>>();
-    const importNotification = vi.fn<GcsReplicationImporter>(
-      () => pending.promise
-    );
+  it("acknowledges only after the Temporal accepts the signal", async () => {
+    const pending = Promise.withResolvers<void>();
+    handoff.mockReturnValue(pending.promise);
     const running = runGcsReplicationWorker({
       subscriptionName,
       source,
-      importNotification,
+
       signal: stop.signal,
     });
     const client = FakePubSub.latest();
@@ -56,9 +56,9 @@ describe("runGcsReplicationWorker", () => {
     const message = new FakePubSubMessage(envelope.attributes, envelope.data);
 
     client.subscriber.deliver(message);
-    await vi.waitFor(() => expect(importNotification).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(handoff).toHaveBeenCalledOnce());
     expect(message.ack).not.toHaveBeenCalled();
-    pending.resolve(new Ok(undefined));
+    pending.resolve();
     await vi.waitFor(() => expect(message.ack).toHaveBeenCalledOnce());
     expect(message.nack).not.toHaveBeenCalled();
 
@@ -67,12 +67,11 @@ describe("runGcsReplicationWorker", () => {
     expect(client.close).toHaveBeenCalledOnce();
   });
 
-  it("acknowledges canonical uploads without invoking the importer", async () => {
-    const importNotification = vi.fn<GcsReplicationImporter>();
+  it("acknowledges canonical uploads without signaling Temporal", async () => {
     const running = runGcsReplicationWorker({
       subscriptionName,
       source,
-      importNotification,
+
       signal: stop.signal,
     });
     const envelope = GcsNotificationFactory.message({
@@ -82,7 +81,7 @@ describe("runGcsReplicationWorker", () => {
 
     FakePubSub.latest().subscriber.deliver(message);
     expect(message.ack).toHaveBeenCalledOnce();
-    expect(importNotification).not.toHaveBeenCalled();
+    expect(handoff).not.toHaveBeenCalled();
     stop.abort();
     expect((await running).isOk()).toBe(true);
   });
@@ -91,11 +90,11 @@ describe("runGcsReplicationWorker", () => {
     "ignores %s files when only another workspace has the flag",
     async (folder) => {
       const disabledWorkspace = await WorkspaceFactory.basic();
-      const importNotification = vi.fn<GcsReplicationImporter>();
+
       const running = runGcsReplicationWorker({
         subscriptionName,
         source,
-        importNotification,
+
         signal: stop.signal,
       });
       const envelope = GcsNotificationFactory.message({
@@ -107,7 +106,7 @@ describe("runGcsReplicationWorker", () => {
 
       FakePubSub.latest().subscriber.deliver(message);
       await vi.waitFor(() => expect(message.ack).toHaveBeenCalledOnce());
-      expect(importNotification).not.toHaveBeenCalled();
+      expect(handoff).not.toHaveBeenCalled();
       expect(message.nack).not.toHaveBeenCalled();
       stop.abort();
       expect((await running).isOk()).toBe(true);
@@ -115,13 +114,10 @@ describe("runGcsReplicationWorker", () => {
   );
 
   it("checks the flag again for the next delivery", async () => {
-    const importNotification = vi.fn<GcsReplicationImporter>(
-      async () => new Ok(undefined)
-    );
     const running = runGcsReplicationWorker({
       subscriptionName,
       source,
-      importNotification,
+
       signal: stop.signal,
     });
     const envelope = GcsNotificationFactory.message({
@@ -137,21 +133,20 @@ describe("runGcsReplicationWorker", () => {
 
     subscriber.deliver(first);
     await vi.waitFor(() => expect(first.ack).toHaveBeenCalledOnce());
-    expect(importNotification).toHaveBeenCalledOnce();
+    expect(handoff).toHaveBeenCalledOnce();
     await FeatureFlagResource.disable(workspace, "dfs_gcs_replication");
     subscriber.deliver(second);
     await vi.waitFor(() => expect(second.ack).toHaveBeenCalledOnce());
-    expect(importNotification).toHaveBeenCalledOnce();
+    expect(handoff).toHaveBeenCalledOnce();
     stop.abort();
     expect((await running).isOk()).toBe(true);
   });
 
   it("nacks when the workspace for the flag lookup cannot be resolved", async () => {
-    const importNotification = vi.fn<GcsReplicationImporter>();
     const running = runGcsReplicationWorker({
       subscriptionName,
       source,
-      importNotification,
+
       signal: stop.signal,
     });
     const envelope = GcsNotificationFactory.message();
@@ -160,17 +155,16 @@ describe("runGcsReplicationWorker", () => {
     FakePubSub.latest().subscriber.deliver(message);
     await vi.waitFor(() => expect(message.nack).toHaveBeenCalledOnce());
     expect(message.ack).not.toHaveBeenCalled();
-    expect(importNotification).not.toHaveBeenCalled();
+    expect(handoff).not.toHaveBeenCalled();
     stop.abort();
     expect((await running).isOk()).toBe(true);
   });
 
-  it("nacks invalid notifications without invoking the importer", async () => {
-    const importNotification = vi.fn<GcsReplicationImporter>();
+  it("nacks invalid notifications without signaling Temporal", async () => {
     const running = runGcsReplicationWorker({
       subscriptionName,
       source,
-      importNotification,
+
       signal: stop.signal,
     });
     const message = new FakePubSubMessage({}, Buffer.from("{}"));
@@ -178,24 +172,25 @@ describe("runGcsReplicationWorker", () => {
     FakePubSub.latest().subscriber.deliver(message);
     expect(message.nack).toHaveBeenCalledOnce();
     expect(message.ack).not.toHaveBeenCalled();
-    expect(importNotification).not.toHaveBeenCalled();
+    expect(handoff).not.toHaveBeenCalled();
     stop.abort();
     expect((await running).isOk()).toBe(true);
   });
 
-  it.each([false, true])(
-    "nacks failed imports, including unexpected exceptions (throws: %s)",
-    async (throws) => {
-      const importNotification: GcsReplicationImporter = async () => {
-        if (throws) {
-          throw new Error("unexpected failure");
-        }
-        return new Err(new Error("import failed"));
-      };
+  it.each(["connection", "signal"])(
+    "nacks a failed Temporal %s request",
+    async (failure) => {
+      const error = new Error("Temporal unavailable");
+      if (failure === "connection") {
+        vi.mocked(getTemporalClientForFrontNamespace).mockRejectedValueOnce(
+          error
+        );
+      } else {
+        handoff.mockRejectedValueOnce(error);
+      }
       const running = runGcsReplicationWorker({
         subscriptionName,
         source,
-        importNotification,
         signal: stop.signal,
       });
       const envelope = GcsNotificationFactory.message({
@@ -211,15 +206,13 @@ describe("runGcsReplicationWorker", () => {
     }
   );
 
-  it("rejects new deliveries while allowing an active import to finish during shutdown", async () => {
-    const pending = Promise.withResolvers<Result<void, Error>>();
-    const importNotification = vi.fn<GcsReplicationImporter>(
-      () => pending.promise
-    );
+  it("rejects new deliveries while allowing an active handoff to finish during shutdown", async () => {
+    const pending = Promise.withResolvers<void>();
+    handoff.mockReturnValue(pending.promise);
     const running = runGcsReplicationWorker({
       subscriptionName,
       source,
-      importNotification,
+
       signal: stop.signal,
     });
     const client = FakePubSub.latest();
@@ -235,28 +228,26 @@ describe("runGcsReplicationWorker", () => {
     );
 
     client.subscriber.deliver(active);
-    await vi.waitFor(() => expect(importNotification).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(handoff).toHaveBeenCalledOnce());
     stop.abort();
     client.subscriber.deliver(late);
     expect(late.nack).toHaveBeenCalledOnce();
-    await vi.waitFor(() => expect(importNotification).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(handoff).toHaveBeenCalledOnce());
     expect(client.close).not.toHaveBeenCalled();
-    pending.resolve(new Ok(undefined));
+    pending.resolve();
     await vi.waitFor(() => expect(active.ack).toHaveBeenCalledOnce());
     finishClose();
     expect((await running).isOk()).toBe(true);
   });
 
-  it("cancels an import after the drain timeout and never acknowledges its late success", async () => {
+  it("cancels a handoff after the drain timeout and never acknowledges its late acceptance", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    const pending = Promise.withResolvers<Result<void, Error>>();
-    const importNotification = vi.fn<GcsReplicationImporter>(
-      () => pending.promise
-    );
+    const pending = Promise.withResolvers<void>();
+    handoff.mockReturnValue(pending.promise);
     const running = runGcsReplicationWorker({
       subscriptionName,
       source,
-      importNotification,
+
       signal: stop.signal,
     });
     const client = FakePubSub.latest();
@@ -267,13 +258,15 @@ describe("runGcsReplicationWorker", () => {
     const message = new FakePubSubMessage(envelope.attributes, envelope.data);
 
     client.subscriber.deliver(message);
-    await vi.waitFor(() => expect(importNotification).toHaveBeenCalledOnce());
-    const importSignal = importNotification.mock.calls[0][1];
+    await vi.waitFor(() => expect(handoff).toHaveBeenCalledOnce());
+    const temporalClient = await getTemporalClientForFrontNamespace();
+    const handoffSignal = vi.mocked(temporalClient.connection.withAbortSignal)
+      .mock.calls[0][0];
     stop.abort();
-    expect(importSignal.aborted).toBe(false);
+    expect(handoffSignal.aborted).toBe(false);
     await vi.advanceTimersByTimeAsync(30_000);
-    expect(importSignal.aborted).toBe(true);
-    pending.resolve(new Ok(undefined));
+    expect(handoffSignal.aborted).toBe(true);
+    pending.resolve();
     await vi.advanceTimersByTimeAsync(0);
     expect(message.nack).toHaveBeenCalledOnce();
     expect(message.ack).not.toHaveBeenCalled();
@@ -281,15 +274,13 @@ describe("runGcsReplicationWorker", () => {
     expect((await running).isOk()).toBe(true);
   });
 
-  it("fails shutdown if the SDK closes while an import is still active", async () => {
-    const pending = Promise.withResolvers<Result<void, Error>>();
-    const importNotification = vi.fn<GcsReplicationImporter>(
-      () => pending.promise
-    );
+  it("fails shutdown if the SDK closes while a handoff is still active", async () => {
+    const pending = Promise.withResolvers<void>();
+    handoff.mockReturnValue(pending.promise);
     const running = runGcsReplicationWorker({
       subscriptionName,
       source,
-      importNotification,
+
       signal: stop.signal,
     });
     const envelope = GcsNotificationFactory.message({
@@ -298,20 +289,19 @@ describe("runGcsReplicationWorker", () => {
     const message = new FakePubSubMessage(envelope.attributes, envelope.data);
 
     FakePubSub.latest().subscriber.deliver(message);
-    await vi.waitFor(() => expect(importNotification).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(handoff).toHaveBeenCalledOnce());
     stop.abort();
     expect((await running).isErr()).toBe(true);
-    pending.resolve(new Ok(undefined));
+    pending.resolve();
     await vi.waitFor(() => expect(message.nack).toHaveBeenCalledOnce());
     expect(message.ack).not.toHaveBeenCalled();
   });
 
   it("returns subscription failures and closes both clients", async () => {
-    const importNotification = vi.fn<GcsReplicationImporter>();
     const running = runGcsReplicationWorker({
       subscriptionName,
       source,
-      importNotification,
+
       signal: stop.signal,
     });
     const client = FakePubSub.latest();
@@ -328,7 +318,7 @@ describe("runGcsReplicationWorker", () => {
     const running = runGcsReplicationWorker({
       subscriptionName,
       source,
-      importNotification: vi.fn(),
+
       signal: stop.signal,
     });
     const client = FakePubSub.latest();
@@ -346,7 +336,7 @@ describe("runGcsReplicationWorker", () => {
     const running = runGcsReplicationWorker({
       subscriptionName,
       source,
-      importNotification: vi.fn(),
+
       signal: stop.signal,
     });
     FakePubSub.latest().subscriber.emit("close");
@@ -354,45 +344,13 @@ describe("runGcsReplicationWorker", () => {
     expect((await running).isErr()).toBe(true);
   });
 
-  it("cancels work when its processing deadline expires", async () => {
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-    const pending = Promise.withResolvers<Result<void, Error>>();
-    const importNotification = vi.fn<GcsReplicationImporter>(
-      () => pending.promise
-    );
+  it("bounds active handoffs even if the SDK delivers more messages than configured", async () => {
+    const pending = Promise.withResolvers<void>();
+    handoff.mockReturnValue(pending.promise);
     const running = runGcsReplicationWorker({
       subscriptionName,
       source,
-      importNotification,
-      signal: stop.signal,
-    });
-    const envelope = GcsNotificationFactory.message({
-      workspaceId: workspace.sId,
-    });
-    const message = new FakePubSubMessage(envelope.attributes, envelope.data);
-    FakePubSub.latest().subscriber.deliver(message);
 
-    await vi.waitFor(() => expect(importNotification).toHaveBeenCalledOnce());
-    const importSignal = importNotification.mock.calls[0][1];
-    await vi.advanceTimersByTimeAsync(30 * 60_000);
-    expect(importSignal.aborted).toBe(true);
-    pending.resolve(new Ok(undefined));
-    await vi.advanceTimersByTimeAsync(0);
-    expect(message.ack).not.toHaveBeenCalled();
-    expect(message.nack).toHaveBeenCalledOnce();
-    stop.abort();
-    expect((await running).isOk()).toBe(true);
-  });
-
-  it("bounds active imports even if the SDK delivers more messages than configured", async () => {
-    const pending = Promise.withResolvers<Result<void, Error>>();
-    const importNotification = vi.fn<GcsReplicationImporter>(
-      () => pending.promise
-    );
-    const running = runGcsReplicationWorker({
-      subscriptionName,
-      source,
-      importNotification,
       signal: stop.signal,
     });
     const client = FakePubSub.latest();
@@ -408,9 +366,9 @@ describe("runGcsReplicationWorker", () => {
     for (const message of messages) {
       client.subscriber.deliver(message);
     }
-    await vi.waitFor(() => expect(importNotification).toHaveBeenCalledTimes(8));
+    await vi.waitFor(() => expect(handoff).toHaveBeenCalledTimes(8));
     expect(messages[8].nack).toHaveBeenCalledOnce();
-    pending.resolve(new Ok(undefined));
+    pending.resolve();
     await vi.waitFor(() => expect(messages[7].ack).toHaveBeenCalledOnce());
     stop.abort();
     expect((await running).isOk()).toBe(true);
@@ -421,7 +379,7 @@ describe("runGcsReplicationWorker", () => {
     const result = await runGcsReplicationWorker({
       subscriptionName,
       source,
-      importNotification: vi.fn(),
+
       signal: stop.signal,
     });
     expect(result.isOk()).toBe(true);
@@ -432,7 +390,7 @@ describe("runGcsReplicationWorker", () => {
     const result = await runGcsReplicationWorker({
       subscriptionName: "dfs-import",
       source,
-      importNotification: vi.fn(),
+
       signal: stop.signal,
     });
     expect(result.isErr()).toBe(true);

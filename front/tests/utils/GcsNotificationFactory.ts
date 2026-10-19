@@ -1,6 +1,7 @@
 import type {
   GcsReplicationMetadata,
   GcsReplicationNotification,
+  GcsReplicationSource,
 } from "@app/lib/api/dfs/gcs_notifications";
 
 export class GcsNotificationFactory {
@@ -36,6 +37,18 @@ export class GcsNotificationFactory {
         resourceId: "pod",
         path: ["report.txt"],
       },
+    };
+  }
+
+  static replicationSource(
+    overrides: Partial<GcsReplicationSource> = {}
+  ): GcsReplicationSource {
+    const { metadata, destination } = this.notification();
+    return {
+      workspaceId: destination.workspaceId,
+      bucket: metadata.bucket,
+      objectName: metadata.name,
+      ...overrides,
     };
   }
 

@@ -1,13 +1,12 @@
 import type { Readable } from "node:stream";
 import type {
   GcsReplicationMetadata,
-  GcsReplicationNotification,
+  GcsReplicationSource,
 } from "@app/lib/api/dfs/gcs_notifications";
 import { GcsReplicationMetadataSchema } from "@app/lib/api/dfs/gcs_notifications";
 import fileStorageConfig from "@app/lib/file_storage/config";
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
-import { assertNever } from "@app/types/shared/utils/assert_never";
 import { normalizeError } from "@app/types/shared/utils/error_utils";
 import { GoogleAuth } from "google-auth-library";
 import { request } from "undici";
@@ -18,7 +17,6 @@ let googleAuth: GoogleAuth | undefined;
 
 type GcsSourceRead =
   | { status: "absent" }
-  | { status: "superseded" }
   | {
       status: "live";
       metadata: GcsReplicationMetadata;
@@ -41,20 +39,24 @@ async function getAccessToken(): Promise<Result<string, Error>> {
 }
 
 async function getObject(
-  metadata: GcsReplicationMetadata,
+  source: Pick<GcsReplicationSource, "bucket" | "objectName">,
   {
-    media,
+    versions,
     accessToken,
     signal,
-  }: { media: boolean; accessToken: string; signal?: AbortSignal }
+  }: {
+    versions?: Pick<GcsReplicationMetadata, "generation" | "metageneration">;
+    accessToken: string;
+    signal?: AbortSignal;
+  }
 ) {
   const url = new URL(
-    `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(metadata.bucket)}/o/${encodeURIComponent(metadata.name)}`
+    `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(source.bucket)}/o/${encodeURIComponent(source.objectName)}`
   );
-  if (media) {
+  if (versions) {
     url.searchParams.set("alt", "media");
-    url.searchParams.set("ifGenerationMatch", metadata.generation);
-    url.searchParams.set("ifMetagenerationMatch", metadata.metageneration);
+    url.searchParams.set("ifGenerationMatch", versions.generation);
+    url.searchParams.set("ifMetagenerationMatch", versions.metageneration);
   }
   // Do not set `generation`: it selects a retained revision instead of checking the live object.
   try {
@@ -78,18 +80,18 @@ async function getObject(
 
 /**
  * @cc [owner:flvndvd,label:concurrency] gcs-replication-live-read
- * Finalize and metadata events MUST read with both event versions as preconditions. Delete and
- * archive events MUST first read live metadata. Only a live-object 404 may return `absent`.
- * A change between a delete/archive metadata read and its media read MUST remain retryable.
+ * Every pass MUST read current metadata, then condition its content read on both returned
+ * versions. Only a live metadata 404 may return `absent`. A 404 or 412 on the subsequent content
+ * read MUST remain retryable. Notification versions MUST NOT select the version to import.
  */
 /**
  * @cc [owner:flvndvd,label:concurrency] gcs-replication-read-lock
  * The caller MUST hold the source lock from before this read through the DFS commit. A `live`
  * result only opens the transfer: the caller MUST consume or destroy its stream, and MUST NOT
- * acknowledge or mark an import complete unless the entire stream and all DFS writes succeed.
+ * mark an import complete unless the entire stream and all DFS writes succeed.
  */
 export async function readGcsReplicationSource(
-  notification: GcsReplicationNotification,
+  source: Pick<GcsReplicationSource, "bucket" | "objectName">,
   { signal }: { signal?: AbortSignal } = {}
 ): Promise<Result<GcsSourceRead, Error>> {
   if (signal?.aborted) {
@@ -100,58 +102,38 @@ export async function readGcsReplicationSource(
     return token;
   }
 
-  let metadata = notification.metadata;
-  let reconcileCurrent: boolean;
-  switch (notification.eventType) {
-    case "OBJECT_FINALIZE":
-    case "OBJECT_METADATA_UPDATE":
-      reconcileCurrent = false;
-      break;
-    case "OBJECT_DELETE":
-    case "OBJECT_ARCHIVE":
-      reconcileCurrent = true;
-      break;
-    default:
-      return assertNever(notification.eventType);
+  const live = await getObject(source, { accessToken: token.value, signal });
+  if (live.isErr()) {
+    return live;
+  }
+  if (live.value.statusCode !== 200) {
+    live.value.body.destroy();
+    return live.value.statusCode === 404
+      ? new Ok({ status: "absent" })
+      : new Err(
+          new Error(`GCS metadata read failed (${live.value.statusCode}).`)
+        );
+  }
+  let payload: unknown;
+  try {
+    payload = await live.value.body.json();
+  } catch (error) {
+    return new Err(normalizeError(error));
+  }
+  const parsed = GcsReplicationMetadataSchema.safeParse(payload);
+  if (!parsed.success) {
+    return new Err(fromError(parsed.error));
+  }
+  const metadata = parsed.data;
+  if (
+    metadata.bucket !== source.bucket ||
+    metadata.name !== source.objectName
+  ) {
+    return new Err(new Error("GCS returned metadata for another object."));
   }
 
-  if (reconcileCurrent) {
-    const response = await getObject(metadata, {
-      media: false,
-      accessToken: token.value,
-      signal,
-    });
-    if (response.isErr()) {
-      return response;
-    }
-    const { statusCode, body } = response.value;
-    if (statusCode !== 200) {
-      body.destroy();
-      return statusCode === 404
-        ? new Ok({ status: "absent" })
-        : new Err(new Error(`GCS metadata read failed (${statusCode}).`));
-    }
-    let payload: unknown;
-    try {
-      payload = await body.json();
-    } catch (error) {
-      return new Err(normalizeError(error));
-    }
-    const parsed = GcsReplicationMetadataSchema.safeParse(payload);
-    if (!parsed.success) {
-      return new Err(fromError(parsed.error));
-    }
-    if (
-      parsed.data.bucket !== metadata.bucket ||
-      parsed.data.name !== metadata.name
-    ) {
-      return new Err(new Error("GCS returned metadata for another object."));
-    }
-    metadata = parsed.data;
-  }
-
-  const response = await getObject(metadata, {
-    media: true,
+  const response = await getObject(source, {
+    versions: metadata,
     accessToken: token.value,
     signal,
   });
@@ -163,13 +145,5 @@ export async function readGcsReplicationSource(
     return new Ok({ status: "live", metadata, stream: body });
   }
   body.destroy();
-  if (!reconcileCurrent) {
-    if (statusCode === 412) {
-      return new Ok({ status: "superseded" });
-    }
-    if (statusCode === 404) {
-      return new Ok({ status: "absent" });
-    }
-  }
   return new Err(new Error(`GCS content read failed (${statusCode}).`));
 }
