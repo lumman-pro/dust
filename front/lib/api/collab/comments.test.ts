@@ -183,8 +183,7 @@ describe("applyCommentRequest", () => {
       }),
     ]);
     expect(other).toBe(OTHER);
-    expect(result.value.added).toBe(edited.messages[1]);
-    expect(result.value.replaced).toBe(own);
+    expect(result.value.added).toBeNull();
   });
 
   it("refuses to edit a message that is not the last, not the user's, or gone", async () => {
@@ -302,8 +301,7 @@ describe("dispatchSessionCommentMentions", () => {
       file,
       live.doc,
       { type: "reply", commentId: "c1", position: 1, body: message.body },
-      message,
-      null
+      message
     );
 
     expect(dispatchCommentMentions).toHaveBeenCalledWith(file.auth, {
@@ -320,54 +318,12 @@ describe("dispatchSessionCommentMentions", () => {
       file,
       live.doc,
       { type: "add", commentId: "c2", body: message.body, quote: "Ship it" },
-      message,
-      null
+      message
     );
 
     expect(
       vi.mocked(dispatchCommentMentions).mock.calls[0][1].newMessages
     ).toEqual([{ commentId: "c2", quote: "Ship it", message }]);
-  });
-
-  it("dispatches an edit's message with the text it replaced", async () => {
-    const live = loadLive();
-    const message = live.comments[0].messages[1];
-    const replaced = { ...message, body: "Any idea?" };
-
-    await dispatchSessionCommentMentions(
-      file,
-      live.doc,
-      { type: "edit", commentId: "c1", position: 1, body: message.body },
-      message,
-      replaced
-    );
-
-    expect(dispatchCommentMentions).toHaveBeenCalledWith(file.auth, {
-      scopedPath: file.canonicalPath,
-      newMessages: [
-        {
-          commentId: "c1",
-          quote: "on Friday",
-          message,
-          previousBody: "Any idea?",
-        },
-      ],
-    });
-  });
-
-  it("dispatches nothing for an edit whose mentions were all there before", async () => {
-    const live = loadLive();
-    const message = live.comments[0].messages[1];
-
-    await dispatchSessionCommentMentions(
-      file,
-      live.doc,
-      { type: "edit", commentId: "c1", position: 1, body: message.body },
-      message,
-      { ...message, body: `${MENTION} thoughts?` }
-    );
-
-    expect(dispatchCommentMentions).not.toHaveBeenCalled();
   });
 
   it("dispatches nothing for a message without mentions", async () => {
@@ -378,8 +334,7 @@ describe("dispatchSessionCommentMentions", () => {
       file,
       live.doc,
       { type: "reply", commentId: "c1", position: 1, body: message.body },
-      message,
-      null
+      message
     );
 
     expect(dispatchCommentMentions).not.toHaveBeenCalled();

@@ -117,8 +117,7 @@ function logUnexpected(
  * answered to that connection only. Once accepted, the new threads MUST be sent to every
  * connection of the document and the document stored, so the save writes them, through the
  * connection that last changed its text, or through the latest commenter's when none did, and the
- * message it added, with the one an edit replaced, handed to `dispatchSessionCommentMentions`
- * without waiting for it. A command its
+ * message it added handed to `dispatchSessionCommentMentions` without waiting for it. A command its
  * document unloaded before it finished MUST change nothing. Every command carrying a request id
  * MUST be answered, refused as `unavailable` when it is invalid, failed, outlived its document,
  * found the document's last save failed at its turn, or did not finish within
@@ -391,8 +390,7 @@ export function createCollabHocuspocus(): Hocuspocus<CollabAccess> {
             file,
             document,
             command,
-            result.value.added,
-            result.value.replaced
+            result.value.added
           ).catch((err) =>
             logger.error(
               {

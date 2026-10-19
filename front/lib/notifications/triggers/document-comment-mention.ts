@@ -4,7 +4,7 @@ import { parseScopedPrefix } from "@app/lib/api/file_system/dust_file_system";
 import type { Authenticator } from "@app/lib/auth";
 import type { DustError } from "@app/lib/error";
 import { getFileNameFromScopedPath } from "@app/lib/markdown/file_preview";
-import { extractNewMentions } from "@app/lib/mentions/format";
+import { extractFromString } from "@app/lib/mentions/format";
 import {
   filterUsersByNotifyCondition,
   getActiveSubscriberAuth,
@@ -109,7 +109,6 @@ export async function getDocumentRouteAndSpace(
 /**
  * @cc [owner:adrien,label:product;security] document-comment-mention-notification
  * Each user mentioned in a new comment message MUST be notified once, except its author, users
- * an edited message's `previousBody` already mentions, users
  * who are not active members of the workspace, users `checkCollabReadAccess` refuses the document
  * to, and users whose
  * notify condition for the document's space is `never`. The payload MUST carry the document's
@@ -133,7 +132,7 @@ export async function triggerDocumentCommentMentionNotifications(
   const workspaceId = auth.getNonNullableWorkspace().sId;
 
   const mentionedUserIds = new Set(
-    extractNewMentions(newMessage.message.body, newMessage.previousBody)
+    extractFromString(newMessage.message.body)
       .filter(isUserMention)
       .map((mention) => mention.userId)
       .filter((userId) => userId !== author.sId)
