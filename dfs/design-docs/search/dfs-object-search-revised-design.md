@@ -5,7 +5,7 @@ This revision supersedes the earlier analysis/query recommendations in
 [the first proposal](dfs-object-search-index-design.md) and
 [the keyword-only note](dfs-full-keyword-search-design.md).
 
-**Status: index definition and bootstrap implemented. Cell, language, and permission projections revised.**
+**Status: index definition and bootstrap implemented. Filename casing and Unicode term handling verified.**
 The [DFS search module](../../server/src/search.rs) embeds versioned mappings and per-cell settings.
 Its [bootstrap command](../../server/src/search/README.md) previews the creation request or creates
 the index and write alias together. Remaining work is the object projection and durable indexing,
@@ -37,8 +37,10 @@ earlier analyzer examples remain alongside this note for reference. The
 [verification harness](dfs-object-search-validation.py)
 loaded the active mapping and `cell-00000` settings into a disposable ES 8.16 instance, changing
 only shard/replica counts and removing the production allocation constraint.
-[Results](dfs-object-search-validation-results.json): **73 checks passed on 147 synthetic objects**,
+[Results](dfs-object-search-validation-results.json): **83 checks passed on 151 synthetic objects**,
 plus a separate comparison of five prefix/indexing configurations. This establishes mechanics. It is not a production relevance or capacity benchmark.
+The [review and fixes](dfs-object-search-review.md) record the casing and Unicode regressions.
+The [original DD comparison](dfs-object-search-dd-comparison.md) separates retained fields, intentional changes, and open decisions.
 
 All five [Rust bootstrap tests](../../server/tests/search.rs) passed, covering creation, preflight
 and acknowledgement failures, cell allocation, offline preview, and rejection of regional selectors.
@@ -58,6 +60,7 @@ not mean byte-for-byte equality, and they never enable prefix expansion.
 | `repo`, while typing | Finds `Reports.pdf`, `AnnualReports.pdf`, reports in extracted content, and reports in selected textual attributes. |
 | `budget repo`, while typing | Requires budget and a matching interpretation of repo. Budget may be in the name while reports is in the content, or conversely. |
 | `A B` | Requires both clauses on the same object. Each can be satisfied by a different searchable field. |
+| `annualreports budget` | Finds `AnnualReports.pdf` with Budget in its content. `AnnualReports budget` matches the same objects. |
 | `"annual reports"` | Matches adjacent annual + reports in one field/value. Does not match annual report, annual revised reports, or annual in the name and reports in the body. |
 | `"report"` | Does not match reports merely through stemming or prefixing. |
 | `employee request` | Can match Employees in the filename and requested in content when the relevant text is accepted for English stemming. |
@@ -96,9 +99,9 @@ text in `_source`. Measure this storage tradeoff with real extracted sizes.
 
 | Field family | Mapping and purpose |
 | --- | --- |
-| `name` | Unstemmed ICU text, positions/offsets, prefix acceleration. Supports ordinary multilingual names. |
-| `name.parts` | Unstemmed filename components, positions/offsets, prefix acceleration. Splits punctuation, underscores, and case transitions. |
-| `stemmed.en.name`, `stemmed.fr.name` | Optional classified filename text, with component analysis followed by the selected stemmer. Unknown names have neither field. |
+| `name` | Unstemmed ICU filename components, positions/offsets, prefix acceleration. Dots and underscores separate words. CamelCase stays whole. |
+| `name.parts` | Additional unstemmed components split at punctuation, underscores, and case transitions during indexing. Queries use the same case-independent boundaries as `name`. |
+| `stemmed.en.name`, `stemmed.fr.name` | Optional classified filename components followed by the selected stemmer. Query analysis does not split on case. Unknown names have neither field. |
 | `name.keyword`, `name.folded` | Original complete basename and ICU-normalized complete basename. Identity, equality, and later exact-name ranking features. |
 | `content_text` | Complete extracted/native text, unstemmed, with phrase positions and prefix acceleration. Always retained regardless of language classification. |
 | `stemmed.en.content_text`, `stemmed.fr.content_text` | Text accepted for that language: the whole field when appropriate, or independently classified segments in a mixed body. |
@@ -115,27 +118,47 @@ text in `_source`. Measure this storage tradeoff with real extracted sizes.
 | Tenant, deletion, provenance fields | Tenant isolation, tombstones, and extraction/version provenance. |
 
 `dynamic: strict` prevents arbitrary xattribute names from creating mappings. Selected keywords
-must be validated/bounded in the projection before indexing, including their encoded byte length.
-Do not let a malformed or oversized optional tag reject the complete object. Unsupported binary
+must be validated in the projection before indexing. A normalized tag must fit within 32,766
+UTF-8 bytes after ICU folding, which can expand the input. Omit an oversized optional tag with a
+diagnostic, without truncating its equality value or rejecting the complete object. A raw-length
+`ignore_above` does not enforce this post-normalization bound. This validation belongs to the
+pending projection implementation. Unsupported binary
 xattributes are not coerced into prose. `xattr_names` and `xattr_pair_hashes` remain available for
 explicit raw existence/equality predicates independently of friendly modifiers.
 
 **Analysis is explicit and separates morphology from typing.**
 
+Every text analyzer applies NFKC normalization before tokenization and a final token-length guard
+after folding/stemming. NFKC retains letter case so index-time CamelCase splitting still works.
+The table shows the steps between those two shared safeguards.
+
 | Analyzer | Pipeline |
 | --- | --- |
-| `dfs_text` | Map straight/curly apostrophes to spaces → ICU tokenizer → ICU folding. No stemming or stop-word removal. |
-| `dfs_filename` | Whitespace tokenizer → word_delimiter_graph → ICU folding. Case splitting happens before folding. Numeric splitting is disabled. |
+| `dfs_text` | Apostrophes to spaces → ICU tokenizer → ICU folding. No stemming or stop-word removal. |
+| `dfs_filename` | Dots, underscores, and apostrophes to spaces → ICU tokenizer → ICU folding. Used by `name` and neutral filename queries. |
+| `dfs_filename_parts` | Whitespace tokenizer → word_delimiter_graph → ICU folding. Indexes additional CamelCase components. Numeric splitting is disabled. |
 | `dfs_text_en` | ICU tokenizer → English possessive normalization → ICU folding → Porter2. |
 | `dfs_text_fr` | ICU tokenizer → built-in `elision` → ICU folding → light_french. |
-| `dfs_filename_en/fr` | Filename components → ICU folding → the corresponding stemmer. |
-| `dfs_folded` | Keyword normalization with ICU folding. Used consistently for friendly full-name/tag equality. |
+| `dfs_filename_parts_en/fr` | Filename parts → ICU folding → the corresponding stemmer. Used for indexing classified names. |
+| `dfs_filename_en/fr` | Same boundaries as `dfs_filename` → ICU folding → the corresponding stemmer. Used for classified-name queries. |
+| `dfs_folded` | Keyword normalization with ICU folding. Used for whole-name/tag equality, without the text tokenizer or length filter. |
 
-The filename component filter does not concatenate or preserve extra originals in the same token
-stream. The root/keyword fields already retain them. This avoids unnecessary graphs for phrase
-and prefix analysis. It retains Q4/v2 as units while making Reports in Q4_Reports-final_v2.pdf
-searchable. The ordinary ICU root remains necessary for segmentation such as Japanese.
+`AnnualReports.pdf` indexes `annualreports` + `pdf` in `name`, and `annual` + `reports` + `pdf`
+in `name.parts`. A query for `AnnualReports`, `annualreports`, or `ANNUALREPORTS` has the same
+boundaries. This fixes completed and quoted searches while preserving component search such as
+`reports` and `"annual reports"`. `MySQL` does not acquire a different interpretation from `mysql`.
+The component filter does not concatenate or preserve extra originals in its own stream.
+The ICU root retains multilingual segmentation such as Japanese.
 [Word-delimiter guidance](https://www.elastic.co/docs/reference/text-analysis/analysis-word-delimiter-graph-tokenfilter).
+
+NFKC before tokenization exposes the word boundaries inside Unicode compatibility characters.
+The previously failing 3,300-byte ligature body now indexes as searchable words. A final
+`dfs_token_length` filter omits whole tokens longer than 8,191 UTF-16 units, conservatively below
+Lucene's 32,766-byte term limit even after folding expands them. It never truncates a token into
+a different searchable word. Original `_source` text remains intact, and highlight offsets are
+tested against the original text. Keyword values still require the projection bounds above.
+[ICU normalization](https://www.elastic.co/docs/reference/elasticsearch/plugins/analysis-icu-normalization-charfilter),
+[length filtering](https://www.elastic.co/docs/reference/text-analysis/analysis-length-tokenfilter).
 
 Porter2 is deliberately broader than the earlier KStem suggestion. The live probe and Lucene
 dictionary show that KStem keeps running unchanged. The proposed English alternate maps running
@@ -312,9 +335,9 @@ match indicators, token counts, type/extraction state, and source/object modific
 These query-dependent match features should be computed for the query, not stored as stale
 document scores. A future feature builder/reranker can consume the same parsed query and candidate
 objects while the retrieval/filtering stage stays stable. The current mapping/query adds no
-freshness boost or LTR model.
+freshness boost or LTR model. No production field weights are selected. The harness retains illustrative weights only.
 
-`name.token_count` counts tokens produced by `dfs_filename`, and `content_text.token_count` uses
+`name.token_count` counts tokens produced by `dfs_filename_parts`, and `content_text.token_count` uses
 `dfs_text`. These explicit numeric fields are optional inputs for later LTR. BM25 already has its
 own internal length normalization, and the current query does not use these counts as boosts.
 

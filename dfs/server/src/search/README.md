@@ -7,6 +7,13 @@ explain the object projection, analysis, and intended query behavior.
 Neutral name, content, and selected attribute fields always retain the original searchable text.
 Only classified text populates the explicit `stemmed.en` / `stemmed.fr` fields. Language detection
 and confidence policy belong to the projection work. This command does not run a detector.
+
+Filename analysis retains whole components in `name` and CamelCase parts in `name.parts`.
+Both use case-independent query boundaries, so `AnnualReports` and `annualreports` match the same
+names. Text analysis normalizes Unicode before tokenization and omits oversized normalized tokens
+without changing `_source`. Optional normalized keywords still need projection validation against
+the 32,766-byte term limit after folding. No production query weights are selected.
+
 `ancestor_ids` stores all physical ancestors, excluding the object itself. `read_grant_scope_ids`
 stores the object IDs where a direct READ grant could authorize the object, including itself and
 ancestors through the closest read-DENY, inclusive. Without a read-DENY, it includes all ancestors

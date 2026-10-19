@@ -29,6 +29,11 @@
       "dfs_french_stem": {
         "type": "stemmer",
         "language": "light_french"
+      },
+      "dfs_token_length": {
+        "type": "length",
+        "min": 0,
+        "max": 8191
       }
     },
     "analyzer": {
@@ -36,9 +41,11 @@
         "type": "custom",
         "tokenizer": "icu_tokenizer",
         "filter": [
-          "icu_folding"
+          "icu_folding",
+          "dfs_token_length"
         ],
         "char_filter": [
+          "dfs_nfkc",
           "dfs_apostrophe_boundaries"
         ]
       },
@@ -48,7 +55,11 @@
         "filter": [
           "dfs_english_possessive",
           "icu_folding",
-          "dfs_english_stem"
+          "dfs_english_stem",
+          "dfs_token_length"
+        ],
+        "char_filter": [
+          "dfs_nfkc"
         ]
       },
       "dfs_text_fr": {
@@ -57,33 +68,90 @@
         "filter": [
           "elision",
           "icu_folding",
-          "dfs_french_stem"
+          "dfs_french_stem",
+          "dfs_token_length"
+        ],
+        "char_filter": [
+          "dfs_nfkc"
+        ]
+      },
+      "dfs_filename_parts": {
+        "type": "custom",
+        "tokenizer": "whitespace",
+        "filter": [
+          "dfs_name_parts",
+          "icu_folding",
+          "dfs_token_length"
+        ],
+        "char_filter": [
+          "dfs_nfkc"
+        ]
+      },
+      "dfs_filename_parts_en": {
+        "type": "custom",
+        "tokenizer": "whitespace",
+        "filter": [
+          "dfs_name_parts",
+          "icu_folding",
+          "dfs_english_stem",
+          "dfs_token_length"
+        ],
+        "char_filter": [
+          "dfs_nfkc"
+        ]
+      },
+      "dfs_filename_parts_fr": {
+        "type": "custom",
+        "tokenizer": "whitespace",
+        "filter": [
+          "dfs_name_parts",
+          "icu_folding",
+          "dfs_french_stem",
+          "dfs_token_length"
+        ],
+        "char_filter": [
+          "dfs_nfkc"
         ]
       },
       "dfs_filename": {
         "type": "custom",
-        "tokenizer": "whitespace",
+        "tokenizer": "icu_tokenizer",
+        "char_filter": [
+          "dfs_nfkc",
+          "dfs_filename_boundaries",
+          "dfs_apostrophe_boundaries"
+        ],
         "filter": [
-          "dfs_name_parts",
-          "icu_folding"
+          "icu_folding",
+          "dfs_token_length"
         ]
       },
       "dfs_filename_en": {
         "type": "custom",
-        "tokenizer": "whitespace",
+        "tokenizer": "icu_tokenizer",
+        "char_filter": [
+          "dfs_nfkc",
+          "dfs_filename_boundaries",
+          "dfs_apostrophe_boundaries"
+        ],
         "filter": [
-          "dfs_name_parts",
           "icu_folding",
-          "dfs_english_stem"
+          "dfs_english_stem",
+          "dfs_token_length"
         ]
       },
       "dfs_filename_fr": {
         "type": "custom",
-        "tokenizer": "whitespace",
+        "tokenizer": "icu_tokenizer",
+        "char_filter": [
+          "dfs_nfkc",
+          "dfs_filename_boundaries",
+          "dfs_apostrophe_boundaries"
+        ],
         "filter": [
-          "dfs_name_parts",
           "icu_folding",
-          "dfs_french_stem"
+          "dfs_french_stem",
+          "dfs_token_length"
         ]
       }
     },
@@ -94,6 +162,17 @@
           "\\u0027 => \\u0020",
           "\\u2019 => \\u0020",
           "\\u2018 => \\u0020"
+        ]
+      },
+      "dfs_nfkc": {
+        "type": "icu_normalizer",
+        "name": "nfkc"
+      },
+      "dfs_filename_boundaries": {
+        "type": "mapping",
+        "mappings": [
+          ". => \\u0020",
+          "_ => \\u0020"
         ]
       }
     }

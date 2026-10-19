@@ -39,6 +39,17 @@ pub enum IndexCell {
  * direct READ-grant object IDs in read_grant_scope_ids (self included, bounded by the nearest
  * read-DENY inclusively). Both fields MUST be keywords, independent of current grant attachments.
  */
+/**
+ * @cc [owner:flvndvd,label:backend] objects-index-filename-casing
+ * Filename analysis MUST retain whole components and CamelCase parts in separate fields.
+ * Query analysis MUST NOT infer different word boundaries from query letter case.
+ */
+/**
+ * @cc [owner:flvndvd,label:backend,label:error-handling] objects-index-text-term-size
+ * Text analyzers MUST keep emitted terms below Lucene's byte limit after normalization.
+ * Oversized terms MUST be omitted whole rather than truncated into different searchable words.
+ * Analysis MUST preserve original source text and offsets for highlighting.
+ */
 pub fn objects_index_body(cell: IndexCell) -> Result<Value> {
     let settings = match cell {
         IndexCell::Local => include_str!("search/indices/objects_1.settings.local.json"),

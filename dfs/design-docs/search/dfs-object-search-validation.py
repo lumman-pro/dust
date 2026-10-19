@@ -18,6 +18,7 @@ DEFINITIONS = ROOT.parents[1] / "server/src/search/indices"
 BASE = "http://127.0.0.1:19217"
 INDEX = "codex-dfs-object-search-v1"
 RESULTS = ROOT / "dfs-object-search-validation-results.json"
+COMPATIBILITY_TEXT = "\ufdfa" * 1100
 
 
 def request(method, path, payload=None, ndjson=False):
@@ -192,7 +193,13 @@ documents = {
     "body_prefix": document("Minutes.txt", "Reports from the committee.", mime_type="text/plain"),
     "attribute_prefix": document("Reference", attributes={"title": "Reports from France"}),
     "name_components": document("Q4_Reports-final_v2.pdf", "Forecast approved."),
-    "camel": document("AnnualReports.pdf"),
+    "camel": document("AnnualReports.pdf", "Budget"),
+    "acronym_joined": document("MySQL.pdf"),
+    "acronym_spaced": document("my sql.pdf"),
+    "unicode_expansion": document("Unicode extraction", COMPATIBILITY_TEXT,
+                                  stemmed={"en": {"content_text": COMPATIBILITY_TEXT},
+                                           "fr": {"content_text": COMPATIBILITY_TEXT}}),
+    "compatibility_offsets": document("Compatibility.pdf", "Before ﬁnancial notes after."),
     "singular": document("Report.pdf"),
     "cross_fields": document("A.pdf", "B"),
     "only_a": document("A"),
@@ -376,6 +383,45 @@ check("directory kind modifier", "type:folder", exact=["folder"])
 check("literal PDF suffix remains searchable", '"pdf"', present=["name_prefix", "name_components"])
 check("trailing whitespace commits the active word", "repo ", interactive=True, exact=[])
 
+# Whole filename components survive alongside CamelCase parts. Query casing must
+# not invent boundaries or change which names match after the word is committed.
+for label, template, interactive in [
+    ("completed filename conjunction ignores casing", "{} budget", False),
+    ("filename before active prefix ignores casing", "{} budg", True),
+    ("quoted filename component ignores casing", '"{}"', False),
+]:
+    results = []
+    for spelling in ["AnnualReports", "annualreports", "ANNUALREPORTS"]:
+        query = template.format(spelling)
+        hits = search(query, interactive)["hits"]["hits"]
+        results.append({"query": query, "hits": {hit["_id"]: hit["_score"] for hit in hits}})
+    checks.append({"label": label, "interactive": interactive, "results": results,
+                   "passed": all(set(result["hits"]) == {"camel"}
+                                 and result["hits"] == results[0]["hits"] for result in results)})
+for spelling in ["MySQL", "mysql"]:
+    check("query casing does not split an acronym into separate words", spelling,
+          exact=["acronym_joined"])
+
+# This source expanded beyond Lucene's byte limit when folding ran only after
+# tokenization. Exercise every body representation, even artificial classifications.
+for field in ["content_text", "stemmed.en.content_text", "stemmed.fr.content_text"]:
+    query = {"bool": {"filter": [{"term": {"object_id": "unicode_expansion"}}],
+                      "must": [{"match": {field: "الله"}}]}}
+    hits = search("", query=query)["hits"]["hits"]
+    checks.append({"label": "Unicode compatibility expansion remains searchable", "field": field,
+                   "source_utf8_bytes": len(COMPATIBILITY_TEXT.encode()),
+                   "hits": [hit["_id"] for hit in hits],
+                   "passed": [hit["_id"] for hit in hits] == ["unicode_expansion"]})
+unicode_source = request("GET", "/" + INDEX + "/_doc/unicode_expansion")["_source"]
+checks.append({"label": "Unicode normalization preserves the original extracted source",
+               "passed": unicode_source["content_text"] == COMPATIBILITY_TEXT})
+compatibility_highlight = search("financial", highlight={"fields": {"content_text": {}}})
+checks.append({"label": "compatibility normalization keeps highlight offsets in original text",
+               "passed": any(hit["_id"] == "compatibility_offsets"
+                             and hit.get("highlight", {}).get("content_text")
+                             == ["Before <em>ﬁnancial</em> notes after."]
+                             for hit in compatibility_highlight["hits"]["hits"])})
+
 
 check("incomplete French word matches without language detection", "report an", interactive=True, present=["report_annee"])
 check("quoted incomplete French word is not a prefix", '"report an"', absent=["report_annee"])
@@ -429,7 +475,8 @@ for value in ["Reports.pdf", "Q4_Reports-final_v2.pdf", "AnnualReports.pdf", "ar
               ".gitignore", "v1.2", "東京 予算報告書", "C++ C#", "L’avion des sociétés",
               "ponies running reports", "journaux chevaux", "𠮷report"]:
     analyzers[value] = {}
-    for analyzer in ["dfs_text", "dfs_filename", "dfs_filename_en", "dfs_filename_fr", "dfs_text_en", "dfs_text_fr"]:
+    for analyzer in ["dfs_text", "dfs_text_en", "dfs_text_fr", "dfs_filename", "dfs_filename_parts",
+                     "dfs_filename_en", "dfs_filename_parts_en", "dfs_filename_fr", "dfs_filename_parts_fr"]:
         analyzed = request("POST", "/" + INDEX + "/_analyze", {"text": value, "analyzer": analyzer})
         analyzers[value][analyzer] = [{key: token[key] for key in ["token", "position", "start_offset", "end_offset"]}
                                       for token in analyzed["tokens"]]

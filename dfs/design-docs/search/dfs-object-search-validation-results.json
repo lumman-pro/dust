@@ -10,7 +10,7 @@
     "minimum_wire_compatibility_version": "7.17.0",
     "minimum_index_compatibility_version": "7.0.0"
   },
-  "document_count": 147,
+  "document_count": 151,
   "mapping_source": "../../server/src/search/indices/objects_1.mappings.json",
   "settings_source": "../../server/src/search/indices/objects_1.settings.cell-00000.json",
   "local_settings_changes": {
@@ -92,11 +92,11 @@
       ],
       "expected_exact": null,
       "hits": [
-        "supplementary",
         "singular",
-        "report_annee",
+        "supplementary",
         "inexact_inflection",
-        "composite_wrong_form"
+        "composite_wrong_form",
+        "report_annee"
       ],
       "passed": true
     },
@@ -112,16 +112,16 @@
       ],
       "expected_exact": null,
       "hits": [
-        "inexact_order",
-        "draft",
         "name_prefix",
         "reverse_cross_prefix",
         "bilingual",
-        "camel",
         "exact_phrase",
+        "inexact_order",
         "composite",
         "composite_wrong_type",
+        "draft",
         "folder",
+        "camel",
         "inexact_gap",
         "name_components",
         "inexact_split",
@@ -153,10 +153,10 @@
       ],
       "expected_exact": null,
       "hits": [
-        "camel",
         "exact_phrase",
         "composite",
         "composite_wrong_type",
+        "camel",
         "exact_body_phrase"
       ],
       "passed": true
@@ -175,10 +175,10 @@
       ],
       "expected_exact": null,
       "hits": [
-        "camel",
         "exact_phrase",
         "composite",
         "composite_wrong_type",
+        "camel",
         "exact_body_phrase"
       ],
       "passed": true
@@ -231,8 +231,9 @@
       "expected_exact": null,
       "hits": [
         "cross_metadata",
-        "folder",
         "cross_prefix",
+        "folder",
+        "camel",
         "draft",
         "name_prefix",
         "reverse_cross_prefix",
@@ -271,11 +272,11 @@
       "expected_absent": [],
       "expected_exact": null,
       "hits": [
-        "supplementary",
         "singular",
-        "report_annee",
+        "supplementary",
         "inexact_inflection",
         "composite_wrong_form",
+        "report_annee",
         "name_prefix",
         "bilingual",
         "camel",
@@ -324,9 +325,9 @@
       "expected_exact": null,
       "hits": [
         "french_stem",
-        "metadata_french_stem",
         "bilingual",
-        "mixed_body"
+        "mixed_body",
+        "metadata_french_stem"
       ],
       "passed": true
     },
@@ -506,9 +507,10 @@
       "expected_exact": null,
       "hits": [
         "cross_metadata",
+        "cross_prefix",
         "length_short",
         "length_long",
-        "cross_prefix",
+        "camel",
         "filter_pdf",
         "filter_other_owner",
         "draft",
@@ -591,6 +593,7 @@
       "hits": [
         "cross_metadata",
         "cross_prefix",
+        "camel",
         "draft",
         "name_prefix",
         "reverse_cross_prefix",
@@ -613,7 +616,8 @@
       ],
       "expected_exact": null,
       "hits": [
-        "composite"
+        "composite",
+        "camel"
       ],
       "passed": true
     },
@@ -798,11 +802,10 @@
       "expected_absent": [],
       "expected_exact": null,
       "hits": [
-        "filter_type_word",
-        "name_components",
-        "exact_name",
-        "nonexact_name",
         "name_prefix",
+        "camel",
+        "acronym_joined",
+        "compatibility_offsets",
         "singular",
         "cross_fields",
         "cross_prefix",
@@ -818,7 +821,7 @@
         "filter_other_owner",
         "long_prefix",
         "unknown_language",
-        "camel",
+        "acronym_spaced",
         "exact_phrase",
         "inexact_inflection",
         "inexact_order",
@@ -827,10 +830,14 @@
         "composite",
         "composite_wrong_type",
         "composite_wrong_form",
+        "filter_type_word",
         "draft",
         "folder",
         "unknown_mime_pdf",
         "inexact_gap",
+        "exact_name",
+        "nonexact_name",
+        "name_components",
         "stop_words"
       ],
       "passed": true
@@ -846,6 +853,144 @@
       "passed": true
     },
     {
+      "label": "completed filename conjunction ignores casing",
+      "interactive": false,
+      "results": [
+        {
+          "query": "AnnualReports budget",
+          "hits": {
+            "camel": 22.139978
+          }
+        },
+        {
+          "query": "annualreports budget",
+          "hits": {
+            "camel": 22.139978
+          }
+        },
+        {
+          "query": "ANNUALREPORTS budget",
+          "hits": {
+            "camel": 22.139978
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "label": "filename before active prefix ignores casing",
+      "interactive": true,
+      "results": [
+        {
+          "query": "AnnualReports budg",
+          "hits": {
+            "camel": 19.158777
+          }
+        },
+        {
+          "query": "annualreports budg",
+          "hits": {
+            "camel": 19.158777
+          }
+        },
+        {
+          "query": "ANNUALREPORTS budg",
+          "hits": {
+            "camel": 19.158777
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "label": "quoted filename component ignores casing",
+      "interactive": false,
+      "results": [
+        {
+          "query": "\"AnnualReports\"",
+          "hits": {
+            "camel": 18.908777
+          }
+        },
+        {
+          "query": "\"annualreports\"",
+          "hits": {
+            "camel": 18.908777
+          }
+        },
+        {
+          "query": "\"ANNUALREPORTS\"",
+          "hits": {
+            "camel": 18.908777
+          }
+        }
+      ],
+      "passed": true
+    },
+    {
+      "label": "query casing does not split an acronym into separate words",
+      "input": "MySQL",
+      "interactive": false,
+      "expected_present": [],
+      "expected_absent": [],
+      "expected_exact": [
+        "acronym_joined"
+      ],
+      "hits": [
+        "acronym_joined"
+      ],
+      "passed": true
+    },
+    {
+      "label": "query casing does not split an acronym into separate words",
+      "input": "mysql",
+      "interactive": false,
+      "expected_present": [],
+      "expected_absent": [],
+      "expected_exact": [
+        "acronym_joined"
+      ],
+      "hits": [
+        "acronym_joined"
+      ],
+      "passed": true
+    },
+    {
+      "label": "Unicode compatibility expansion remains searchable",
+      "field": "content_text",
+      "source_utf8_bytes": 3300,
+      "hits": [
+        "unicode_expansion"
+      ],
+      "passed": true
+    },
+    {
+      "label": "Unicode compatibility expansion remains searchable",
+      "field": "stemmed.en.content_text",
+      "source_utf8_bytes": 3300,
+      "hits": [
+        "unicode_expansion"
+      ],
+      "passed": true
+    },
+    {
+      "label": "Unicode compatibility expansion remains searchable",
+      "field": "stemmed.fr.content_text",
+      "source_utf8_bytes": 3300,
+      "hits": [
+        "unicode_expansion"
+      ],
+      "passed": true
+    },
+    {
+      "label": "Unicode normalization preserves the original extracted source",
+      "passed": true
+    },
+    {
+      "label": "compatibility normalization keeps highlight offsets in original text",
+      "passed": true
+    },
+    {
       "label": "incomplete French word matches without language detection",
       "input": "report an",
       "interactive": true,
@@ -855,9 +1000,9 @@
       "expected_absent": [],
       "expected_exact": null,
       "hits": [
-        "report_annee",
         "inexact_inflection",
         "composite_wrong_form",
+        "report_annee",
         "camel"
       ],
       "passed": true
@@ -903,9 +1048,9 @@
       "expected_exact": null,
       "hits": [
         "french_stem",
-        "metadata_french_stem",
         "bilingual",
-        "mixed_body"
+        "mixed_body",
+        "metadata_french_stem"
       ],
       "passed": true
     },
@@ -1156,8 +1301,8 @@
     {
       "label": "unrelated body length does not change filename score",
       "scores": {
-        "length_short": 16.675787,
-        "length_long": 16.675787
+        "length_short": 16.817348,
+        "length_long": 16.817348
       },
       "passed": true
     },
@@ -1188,7 +1333,37 @@
           "end_offset": 11
         }
       ],
+      "dfs_text_en": [
+        {
+          "token": "reports.pdf",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 11
+        }
+      ],
+      "dfs_text_fr": [
+        {
+          "token": "reports.pdf",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 11
+        }
+      ],
       "dfs_filename": [
+        {
+          "token": "reports",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 7
+        },
+        {
+          "token": "pdf",
+          "position": 1,
+          "start_offset": 8,
+          "end_offset": 11
+        }
+      ],
+      "dfs_filename_parts": [
         {
           "token": "reports",
           "position": 0,
@@ -1216,6 +1391,20 @@
           "end_offset": 11
         }
       ],
+      "dfs_filename_parts_en": [
+        {
+          "token": "report",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 7
+        },
+        {
+          "token": "pdf",
+          "position": 1,
+          "start_offset": 8,
+          "end_offset": 11
+        }
+      ],
       "dfs_filename_fr": [
         {
           "token": "report",
@@ -1230,19 +1419,17 @@
           "end_offset": 11
         }
       ],
-      "dfs_text_en": [
+      "dfs_filename_parts_fr": [
         {
-          "token": "reports.pdf",
+          "token": "report",
           "position": 0,
           "start_offset": 0,
-          "end_offset": 11
-        }
-      ],
-      "dfs_text_fr": [
+          "end_offset": 7
+        },
         {
-          "token": "reports.pdf",
-          "position": 0,
-          "start_offset": 0,
+          "token": "pdf",
+          "position": 1,
+          "start_offset": 8,
           "end_offset": 11
         }
       ]
@@ -1268,102 +1455,6 @@
           "end_offset": 23
         }
       ],
-      "dfs_filename": [
-        {
-          "token": "q4",
-          "position": 0,
-          "start_offset": 0,
-          "end_offset": 2
-        },
-        {
-          "token": "reports",
-          "position": 1,
-          "start_offset": 3,
-          "end_offset": 10
-        },
-        {
-          "token": "final",
-          "position": 2,
-          "start_offset": 11,
-          "end_offset": 16
-        },
-        {
-          "token": "v2",
-          "position": 3,
-          "start_offset": 17,
-          "end_offset": 19
-        },
-        {
-          "token": "pdf",
-          "position": 4,
-          "start_offset": 20,
-          "end_offset": 23
-        }
-      ],
-      "dfs_filename_en": [
-        {
-          "token": "q4",
-          "position": 0,
-          "start_offset": 0,
-          "end_offset": 2
-        },
-        {
-          "token": "report",
-          "position": 1,
-          "start_offset": 3,
-          "end_offset": 10
-        },
-        {
-          "token": "final",
-          "position": 2,
-          "start_offset": 11,
-          "end_offset": 16
-        },
-        {
-          "token": "v2",
-          "position": 3,
-          "start_offset": 17,
-          "end_offset": 19
-        },
-        {
-          "token": "pdf",
-          "position": 4,
-          "start_offset": 20,
-          "end_offset": 23
-        }
-      ],
-      "dfs_filename_fr": [
-        {
-          "token": "q4",
-          "position": 0,
-          "start_offset": 0,
-          "end_offset": 2
-        },
-        {
-          "token": "report",
-          "position": 1,
-          "start_offset": 3,
-          "end_offset": 10
-        },
-        {
-          "token": "final",
-          "position": 2,
-          "start_offset": 11,
-          "end_offset": 16
-        },
-        {
-          "token": "v2",
-          "position": 3,
-          "start_offset": 17,
-          "end_offset": 19
-        },
-        {
-          "token": "pdf",
-          "position": 4,
-          "start_offset": 20,
-          "end_offset": 23
-        }
-      ],
       "dfs_text_en": [
         {
           "token": "q4_report",
@@ -1403,6 +1494,198 @@
           "start_offset": 20,
           "end_offset": 23
         }
+      ],
+      "dfs_filename": [
+        {
+          "token": "q4",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "reports",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 10
+        },
+        {
+          "token": "final",
+          "position": 2,
+          "start_offset": 11,
+          "end_offset": 16
+        },
+        {
+          "token": "v2",
+          "position": 3,
+          "start_offset": 17,
+          "end_offset": 19
+        },
+        {
+          "token": "pdf",
+          "position": 4,
+          "start_offset": 20,
+          "end_offset": 23
+        }
+      ],
+      "dfs_filename_parts": [
+        {
+          "token": "q4",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "reports",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 10
+        },
+        {
+          "token": "final",
+          "position": 2,
+          "start_offset": 11,
+          "end_offset": 16
+        },
+        {
+          "token": "v2",
+          "position": 3,
+          "start_offset": 17,
+          "end_offset": 19
+        },
+        {
+          "token": "pdf",
+          "position": 4,
+          "start_offset": 20,
+          "end_offset": 23
+        }
+      ],
+      "dfs_filename_en": [
+        {
+          "token": "q4",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "report",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 10
+        },
+        {
+          "token": "final",
+          "position": 2,
+          "start_offset": 11,
+          "end_offset": 16
+        },
+        {
+          "token": "v2",
+          "position": 3,
+          "start_offset": 17,
+          "end_offset": 19
+        },
+        {
+          "token": "pdf",
+          "position": 4,
+          "start_offset": 20,
+          "end_offset": 23
+        }
+      ],
+      "dfs_filename_parts_en": [
+        {
+          "token": "q4",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "report",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 10
+        },
+        {
+          "token": "final",
+          "position": 2,
+          "start_offset": 11,
+          "end_offset": 16
+        },
+        {
+          "token": "v2",
+          "position": 3,
+          "start_offset": 17,
+          "end_offset": 19
+        },
+        {
+          "token": "pdf",
+          "position": 4,
+          "start_offset": 20,
+          "end_offset": 23
+        }
+      ],
+      "dfs_filename_fr": [
+        {
+          "token": "q4",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "report",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 10
+        },
+        {
+          "token": "final",
+          "position": 2,
+          "start_offset": 11,
+          "end_offset": 16
+        },
+        {
+          "token": "v2",
+          "position": 3,
+          "start_offset": 17,
+          "end_offset": 19
+        },
+        {
+          "token": "pdf",
+          "position": 4,
+          "start_offset": 20,
+          "end_offset": 23
+        }
+      ],
+      "dfs_filename_parts_fr": [
+        {
+          "token": "q4",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "report",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 10
+        },
+        {
+          "token": "final",
+          "position": 2,
+          "start_offset": 11,
+          "end_offset": 16
+        },
+        {
+          "token": "v2",
+          "position": 3,
+          "start_offset": 17,
+          "end_offset": 19
+        },
+        {
+          "token": "pdf",
+          "position": 4,
+          "start_offset": 20,
+          "end_offset": 23
+        }
       ]
     },
     "AnnualReports.pdf": {
@@ -1411,66 +1694,6 @@
           "token": "annualreports.pdf",
           "position": 0,
           "start_offset": 0,
-          "end_offset": 17
-        }
-      ],
-      "dfs_filename": [
-        {
-          "token": "annual",
-          "position": 0,
-          "start_offset": 0,
-          "end_offset": 6
-        },
-        {
-          "token": "reports",
-          "position": 1,
-          "start_offset": 6,
-          "end_offset": 13
-        },
-        {
-          "token": "pdf",
-          "position": 2,
-          "start_offset": 14,
-          "end_offset": 17
-        }
-      ],
-      "dfs_filename_en": [
-        {
-          "token": "annual",
-          "position": 0,
-          "start_offset": 0,
-          "end_offset": 6
-        },
-        {
-          "token": "report",
-          "position": 1,
-          "start_offset": 6,
-          "end_offset": 13
-        },
-        {
-          "token": "pdf",
-          "position": 2,
-          "start_offset": 14,
-          "end_offset": 17
-        }
-      ],
-      "dfs_filename_fr": [
-        {
-          "token": "anual",
-          "position": 0,
-          "start_offset": 0,
-          "end_offset": 6
-        },
-        {
-          "token": "report",
-          "position": 1,
-          "start_offset": 6,
-          "end_offset": 13
-        },
-        {
-          "token": "pdf",
-          "position": 2,
-          "start_offset": 14,
           "end_offset": 17
         }
       ],
@@ -1489,6 +1712,108 @@
           "start_offset": 0,
           "end_offset": 17
         }
+      ],
+      "dfs_filename": [
+        {
+          "token": "annualreports",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 13
+        },
+        {
+          "token": "pdf",
+          "position": 1,
+          "start_offset": 14,
+          "end_offset": 17
+        }
+      ],
+      "dfs_filename_parts": [
+        {
+          "token": "annual",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 6
+        },
+        {
+          "token": "reports",
+          "position": 1,
+          "start_offset": 6,
+          "end_offset": 13
+        },
+        {
+          "token": "pdf",
+          "position": 2,
+          "start_offset": 14,
+          "end_offset": 17
+        }
+      ],
+      "dfs_filename_en": [
+        {
+          "token": "annualreport",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 13
+        },
+        {
+          "token": "pdf",
+          "position": 1,
+          "start_offset": 14,
+          "end_offset": 17
+        }
+      ],
+      "dfs_filename_parts_en": [
+        {
+          "token": "annual",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 6
+        },
+        {
+          "token": "report",
+          "position": 1,
+          "start_offset": 6,
+          "end_offset": 13
+        },
+        {
+          "token": "pdf",
+          "position": 2,
+          "start_offset": 14,
+          "end_offset": 17
+        }
+      ],
+      "dfs_filename_fr": [
+        {
+          "token": "anualreport",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 13
+        },
+        {
+          "token": "pdf",
+          "position": 1,
+          "start_offset": 14,
+          "end_offset": 17
+        }
+      ],
+      "dfs_filename_parts_fr": [
+        {
+          "token": "anual",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 6
+        },
+        {
+          "token": "report",
+          "position": 1,
+          "start_offset": 6,
+          "end_offset": 13
+        },
+        {
+          "token": "pdf",
+          "position": 2,
+          "start_offset": 14,
+          "end_offset": 17
+        }
       ]
     },
     "archive.tar.gz": {
@@ -1500,7 +1825,43 @@
           "end_offset": 14
         }
       ],
+      "dfs_text_en": [
+        {
+          "token": "archive.tar.gz",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 14
+        }
+      ],
+      "dfs_text_fr": [
+        {
+          "token": "archive.tar.gz",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 14
+        }
+      ],
       "dfs_filename": [
+        {
+          "token": "archive",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 7
+        },
+        {
+          "token": "tar",
+          "position": 1,
+          "start_offset": 8,
+          "end_offset": 11
+        },
+        {
+          "token": "gz",
+          "position": 2,
+          "start_offset": 12,
+          "end_offset": 14
+        }
+      ],
+      "dfs_filename_parts": [
         {
           "token": "archive",
           "position": 0,
@@ -1540,6 +1901,26 @@
           "end_offset": 14
         }
       ],
+      "dfs_filename_parts_en": [
+        {
+          "token": "archiv",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 7
+        },
+        {
+          "token": "tar",
+          "position": 1,
+          "start_offset": 8,
+          "end_offset": 11
+        },
+        {
+          "token": "gz",
+          "position": 2,
+          "start_offset": 12,
+          "end_offset": 14
+        }
+      ],
       "dfs_filename_fr": [
         {
           "token": "archiv",
@@ -1560,19 +1941,23 @@
           "end_offset": 14
         }
       ],
-      "dfs_text_en": [
+      "dfs_filename_parts_fr": [
         {
-          "token": "archive.tar.gz",
+          "token": "archiv",
           "position": 0,
           "start_offset": 0,
-          "end_offset": 14
-        }
-      ],
-      "dfs_text_fr": [
+          "end_offset": 7
+        },
         {
-          "token": "archive.tar.gz",
-          "position": 0,
-          "start_offset": 0,
+          "token": "tar",
+          "position": 1,
+          "start_offset": 8,
+          "end_offset": 11
+        },
+        {
+          "token": "gz",
+          "position": 2,
+          "start_offset": 12,
           "end_offset": 14
         }
       ]
@@ -1586,7 +1971,31 @@
           "end_offset": 10
         }
       ],
+      "dfs_text_en": [
+        {
+          "token": "gitignor",
+          "position": 0,
+          "start_offset": 1,
+          "end_offset": 10
+        }
+      ],
+      "dfs_text_fr": [
+        {
+          "token": "gitignor",
+          "position": 0,
+          "start_offset": 1,
+          "end_offset": 10
+        }
+      ],
       "dfs_filename": [
+        {
+          "token": "gitignore",
+          "position": 0,
+          "start_offset": 1,
+          "end_offset": 10
+        }
+      ],
+      "dfs_filename_parts": [
         {
           "token": "gitignore",
           "position": 0,
@@ -1602,6 +2011,14 @@
           "end_offset": 10
         }
       ],
+      "dfs_filename_parts_en": [
+        {
+          "token": "gitignor",
+          "position": 0,
+          "start_offset": 1,
+          "end_offset": 10
+        }
+      ],
       "dfs_filename_fr": [
         {
           "token": "gitignor",
@@ -1610,15 +2027,7 @@
           "end_offset": 10
         }
       ],
-      "dfs_text_en": [
-        {
-          "token": "gitignor",
-          "position": 0,
-          "start_offset": 1,
-          "end_offset": 10
-        }
-      ],
-      "dfs_text_fr": [
+      "dfs_filename_parts_fr": [
         {
           "token": "gitignor",
           "position": 0,
@@ -1636,7 +2045,37 @@
           "end_offset": 4
         }
       ],
+      "dfs_text_en": [
+        {
+          "token": "v1.2",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 4
+        }
+      ],
+      "dfs_text_fr": [
+        {
+          "token": "v1.2",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 4
+        }
+      ],
       "dfs_filename": [
+        {
+          "token": "v1",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "2",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 4
+        }
+      ],
+      "dfs_filename_parts": [
         {
           "token": "v1",
           "position": 0,
@@ -1664,6 +2103,20 @@
           "end_offset": 4
         }
       ],
+      "dfs_filename_parts_en": [
+        {
+          "token": "v1",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "2",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 4
+        }
+      ],
       "dfs_filename_fr": [
         {
           "token": "v1",
@@ -1678,19 +2131,17 @@
           "end_offset": 4
         }
       ],
-      "dfs_text_en": [
+      "dfs_filename_parts_fr": [
         {
-          "token": "v1.2",
+          "token": "v1",
           "position": 0,
           "start_offset": 0,
-          "end_offset": 4
-        }
-      ],
-      "dfs_text_fr": [
+          "end_offset": 2
+        },
         {
-          "token": "v1.2",
-          "position": 0,
-          "start_offset": 0,
+          "token": "2",
+          "position": 1,
+          "start_offset": 3,
           "end_offset": 4
         }
       ]
@@ -1716,48 +2167,6 @@
           "end_offset": 8
         }
       ],
-      "dfs_filename": [
-        {
-          "token": "東京",
-          "position": 0,
-          "start_offset": 0,
-          "end_offset": 2
-        },
-        {
-          "token": "予算報告書",
-          "position": 1,
-          "start_offset": 3,
-          "end_offset": 8
-        }
-      ],
-      "dfs_filename_en": [
-        {
-          "token": "東京",
-          "position": 0,
-          "start_offset": 0,
-          "end_offset": 2
-        },
-        {
-          "token": "予算報告書",
-          "position": 1,
-          "start_offset": 3,
-          "end_offset": 8
-        }
-      ],
-      "dfs_filename_fr": [
-        {
-          "token": "東京",
-          "position": 0,
-          "start_offset": 0,
-          "end_offset": 2
-        },
-        {
-          "token": "予算報告書",
-          "position": 1,
-          "start_offset": 3,
-          "end_offset": 8
-        }
-      ],
       "dfs_text_en": [
         {
           "token": "東京",
@@ -1795,6 +2204,108 @@
           "token": "報告書",
           "position": 2,
           "start_offset": 5,
+          "end_offset": 8
+        }
+      ],
+      "dfs_filename": [
+        {
+          "token": "東京",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "予算",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 5
+        },
+        {
+          "token": "報告書",
+          "position": 2,
+          "start_offset": 5,
+          "end_offset": 8
+        }
+      ],
+      "dfs_filename_parts": [
+        {
+          "token": "東京",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "予算報告書",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 8
+        }
+      ],
+      "dfs_filename_en": [
+        {
+          "token": "東京",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "予算",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 5
+        },
+        {
+          "token": "報告書",
+          "position": 2,
+          "start_offset": 5,
+          "end_offset": 8
+        }
+      ],
+      "dfs_filename_parts_en": [
+        {
+          "token": "東京",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "予算報告書",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 8
+        }
+      ],
+      "dfs_filename_fr": [
+        {
+          "token": "東京",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "予算",
+          "position": 1,
+          "start_offset": 3,
+          "end_offset": 5
+        },
+        {
+          "token": "報告書",
+          "position": 2,
+          "start_offset": 5,
+          "end_offset": 8
+        }
+      ],
+      "dfs_filename_parts_fr": [
+        {
+          "token": "東京",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "予算報告書",
+          "position": 1,
+          "start_offset": 3,
           "end_offset": 8
         }
       ]
@@ -1814,7 +2325,49 @@
           "end_offset": 5
         }
       ],
+      "dfs_text_en": [
+        {
+          "token": "c",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 1
+        },
+        {
+          "token": "c",
+          "position": 1,
+          "start_offset": 4,
+          "end_offset": 5
+        }
+      ],
+      "dfs_text_fr": [
+        {
+          "token": "c",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 1
+        },
+        {
+          "token": "c",
+          "position": 1,
+          "start_offset": 4,
+          "end_offset": 5
+        }
+      ],
       "dfs_filename": [
+        {
+          "token": "c",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 1
+        },
+        {
+          "token": "c",
+          "position": 1,
+          "start_offset": 4,
+          "end_offset": 5
+        }
+      ],
+      "dfs_filename_parts": [
         {
           "token": "c",
           "position": 0,
@@ -1842,6 +2395,20 @@
           "end_offset": 5
         }
       ],
+      "dfs_filename_parts_en": [
+        {
+          "token": "c",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 1
+        },
+        {
+          "token": "c",
+          "position": 1,
+          "start_offset": 4,
+          "end_offset": 5
+        }
+      ],
       "dfs_filename_fr": [
         {
           "token": "c",
@@ -1856,21 +2423,7 @@
           "end_offset": 5
         }
       ],
-      "dfs_text_en": [
-        {
-          "token": "c",
-          "position": 0,
-          "start_offset": 0,
-          "end_offset": 1
-        },
-        {
-          "token": "c",
-          "position": 1,
-          "start_offset": 4,
-          "end_offset": 5
-        }
-      ],
-      "dfs_text_fr": [
+      "dfs_filename_parts_fr": [
         {
           "token": "c",
           "position": 0,
@@ -1907,84 +2460,6 @@
         },
         {
           "token": "societes",
-          "position": 3,
-          "start_offset": 12,
-          "end_offset": 20
-        }
-      ],
-      "dfs_filename": [
-        {
-          "token": "l",
-          "position": 0,
-          "start_offset": 0,
-          "end_offset": 1
-        },
-        {
-          "token": "avion",
-          "position": 1,
-          "start_offset": 2,
-          "end_offset": 7
-        },
-        {
-          "token": "des",
-          "position": 2,
-          "start_offset": 8,
-          "end_offset": 11
-        },
-        {
-          "token": "societes",
-          "position": 3,
-          "start_offset": 12,
-          "end_offset": 20
-        }
-      ],
-      "dfs_filename_en": [
-        {
-          "token": "l",
-          "position": 0,
-          "start_offset": 0,
-          "end_offset": 1
-        },
-        {
-          "token": "avion",
-          "position": 1,
-          "start_offset": 2,
-          "end_offset": 7
-        },
-        {
-          "token": "des",
-          "position": 2,
-          "start_offset": 8,
-          "end_offset": 11
-        },
-        {
-          "token": "societ",
-          "position": 3,
-          "start_offset": 12,
-          "end_offset": 20
-        }
-      ],
-      "dfs_filename_fr": [
-        {
-          "token": "l",
-          "position": 0,
-          "start_offset": 0,
-          "end_offset": 1
-        },
-        {
-          "token": "avion",
-          "position": 1,
-          "start_offset": 2,
-          "end_offset": 7
-        },
-        {
-          "token": "des",
-          "position": 2,
-          "start_offset": 8,
-          "end_offset": 11
-        },
-        {
-          "token": "societ",
           "position": 3,
           "start_offset": 12,
           "end_offset": 20
@@ -2029,6 +2504,162 @@
           "start_offset": 12,
           "end_offset": 20
         }
+      ],
+      "dfs_filename": [
+        {
+          "token": "l",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 1
+        },
+        {
+          "token": "avion",
+          "position": 1,
+          "start_offset": 2,
+          "end_offset": 7
+        },
+        {
+          "token": "des",
+          "position": 2,
+          "start_offset": 8,
+          "end_offset": 11
+        },
+        {
+          "token": "societes",
+          "position": 3,
+          "start_offset": 12,
+          "end_offset": 20
+        }
+      ],
+      "dfs_filename_parts": [
+        {
+          "token": "l",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 1
+        },
+        {
+          "token": "avion",
+          "position": 1,
+          "start_offset": 2,
+          "end_offset": 7
+        },
+        {
+          "token": "des",
+          "position": 2,
+          "start_offset": 8,
+          "end_offset": 11
+        },
+        {
+          "token": "societes",
+          "position": 3,
+          "start_offset": 12,
+          "end_offset": 20
+        }
+      ],
+      "dfs_filename_en": [
+        {
+          "token": "l",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 1
+        },
+        {
+          "token": "avion",
+          "position": 1,
+          "start_offset": 2,
+          "end_offset": 7
+        },
+        {
+          "token": "des",
+          "position": 2,
+          "start_offset": 8,
+          "end_offset": 11
+        },
+        {
+          "token": "societ",
+          "position": 3,
+          "start_offset": 12,
+          "end_offset": 20
+        }
+      ],
+      "dfs_filename_parts_en": [
+        {
+          "token": "l",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 1
+        },
+        {
+          "token": "avion",
+          "position": 1,
+          "start_offset": 2,
+          "end_offset": 7
+        },
+        {
+          "token": "des",
+          "position": 2,
+          "start_offset": 8,
+          "end_offset": 11
+        },
+        {
+          "token": "societ",
+          "position": 3,
+          "start_offset": 12,
+          "end_offset": 20
+        }
+      ],
+      "dfs_filename_fr": [
+        {
+          "token": "l",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 1
+        },
+        {
+          "token": "avion",
+          "position": 1,
+          "start_offset": 2,
+          "end_offset": 7
+        },
+        {
+          "token": "des",
+          "position": 2,
+          "start_offset": 8,
+          "end_offset": 11
+        },
+        {
+          "token": "societ",
+          "position": 3,
+          "start_offset": 12,
+          "end_offset": 20
+        }
+      ],
+      "dfs_filename_parts_fr": [
+        {
+          "token": "l",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 1
+        },
+        {
+          "token": "avion",
+          "position": 1,
+          "start_offset": 2,
+          "end_offset": 7
+        },
+        {
+          "token": "des",
+          "position": 2,
+          "start_offset": 8,
+          "end_offset": 11
+        },
+        {
+          "token": "societ",
+          "position": 3,
+          "start_offset": 12,
+          "end_offset": 20
+        }
       ]
     },
     "ponies running reports": {
@@ -2052,7 +2683,67 @@
           "end_offset": 22
         }
       ],
+      "dfs_text_en": [
+        {
+          "token": "poni",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 6
+        },
+        {
+          "token": "run",
+          "position": 1,
+          "start_offset": 7,
+          "end_offset": 14
+        },
+        {
+          "token": "report",
+          "position": 2,
+          "start_offset": 15,
+          "end_offset": 22
+        }
+      ],
+      "dfs_text_fr": [
+        {
+          "token": "pon",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 6
+        },
+        {
+          "token": "runing",
+          "position": 1,
+          "start_offset": 7,
+          "end_offset": 14
+        },
+        {
+          "token": "report",
+          "position": 2,
+          "start_offset": 15,
+          "end_offset": 22
+        }
+      ],
       "dfs_filename": [
+        {
+          "token": "ponies",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 6
+        },
+        {
+          "token": "running",
+          "position": 1,
+          "start_offset": 7,
+          "end_offset": 14
+        },
+        {
+          "token": "reports",
+          "position": 2,
+          "start_offset": 15,
+          "end_offset": 22
+        }
+      ],
+      "dfs_filename_parts": [
         {
           "token": "ponies",
           "position": 0,
@@ -2092,6 +2783,26 @@
           "end_offset": 22
         }
       ],
+      "dfs_filename_parts_en": [
+        {
+          "token": "poni",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 6
+        },
+        {
+          "token": "run",
+          "position": 1,
+          "start_offset": 7,
+          "end_offset": 14
+        },
+        {
+          "token": "report",
+          "position": 2,
+          "start_offset": 15,
+          "end_offset": 22
+        }
+      ],
       "dfs_filename_fr": [
         {
           "token": "pon",
@@ -2112,27 +2823,7 @@
           "end_offset": 22
         }
       ],
-      "dfs_text_en": [
-        {
-          "token": "poni",
-          "position": 0,
-          "start_offset": 0,
-          "end_offset": 6
-        },
-        {
-          "token": "run",
-          "position": 1,
-          "start_offset": 7,
-          "end_offset": 14
-        },
-        {
-          "token": "report",
-          "position": 2,
-          "start_offset": 15,
-          "end_offset": 22
-        }
-      ],
-      "dfs_text_fr": [
+      "dfs_filename_parts_fr": [
         {
           "token": "pon",
           "position": 0,
@@ -2168,7 +2859,49 @@
           "end_offset": 16
         }
       ],
+      "dfs_text_en": [
+        {
+          "token": "journaux",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 8
+        },
+        {
+          "token": "chevaux",
+          "position": 1,
+          "start_offset": 9,
+          "end_offset": 16
+        }
+      ],
+      "dfs_text_fr": [
+        {
+          "token": "journal",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 8
+        },
+        {
+          "token": "cheval",
+          "position": 1,
+          "start_offset": 9,
+          "end_offset": 16
+        }
+      ],
       "dfs_filename": [
+        {
+          "token": "journaux",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 8
+        },
+        {
+          "token": "chevaux",
+          "position": 1,
+          "start_offset": 9,
+          "end_offset": 16
+        }
+      ],
+      "dfs_filename_parts": [
         {
           "token": "journaux",
           "position": 0,
@@ -2196,6 +2929,20 @@
           "end_offset": 16
         }
       ],
+      "dfs_filename_parts_en": [
+        {
+          "token": "journaux",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 8
+        },
+        {
+          "token": "chevaux",
+          "position": 1,
+          "start_offset": 9,
+          "end_offset": 16
+        }
+      ],
       "dfs_filename_fr": [
         {
           "token": "journal",
@@ -2210,21 +2957,7 @@
           "end_offset": 16
         }
       ],
-      "dfs_text_en": [
-        {
-          "token": "journaux",
-          "position": 0,
-          "start_offset": 0,
-          "end_offset": 8
-        },
-        {
-          "token": "chevaux",
-          "position": 1,
-          "start_offset": 9,
-          "end_offset": 16
-        }
-      ],
-      "dfs_text_fr": [
+      "dfs_filename_parts_fr": [
         {
           "token": "journal",
           "position": 0,
@@ -2254,30 +2987,6 @@
           "end_offset": 8
         }
       ],
-      "dfs_filename": [
-        {
-          "token": "𠮷report",
-          "position": 0,
-          "start_offset": 0,
-          "end_offset": 8
-        }
-      ],
-      "dfs_filename_en": [
-        {
-          "token": "𠮷report",
-          "position": 0,
-          "start_offset": 0,
-          "end_offset": 8
-        }
-      ],
-      "dfs_filename_fr": [
-        {
-          "token": "𠮷report",
-          "position": 0,
-          "start_offset": 0,
-          "end_offset": 8
-        }
-      ],
       "dfs_text_en": [
         {
           "token": "𠮷",
@@ -2303,6 +3012,72 @@
           "token": "report",
           "position": 1,
           "start_offset": 2,
+          "end_offset": 8
+        }
+      ],
+      "dfs_filename": [
+        {
+          "token": "𠮷",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "report",
+          "position": 1,
+          "start_offset": 2,
+          "end_offset": 8
+        }
+      ],
+      "dfs_filename_parts": [
+        {
+          "token": "𠮷report",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 8
+        }
+      ],
+      "dfs_filename_en": [
+        {
+          "token": "𠮷",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "report",
+          "position": 1,
+          "start_offset": 2,
+          "end_offset": 8
+        }
+      ],
+      "dfs_filename_parts_en": [
+        {
+          "token": "𠮷report",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 8
+        }
+      ],
+      "dfs_filename_fr": [
+        {
+          "token": "𠮷",
+          "position": 0,
+          "start_offset": 0,
+          "end_offset": 2
+        },
+        {
+          "token": "report",
+          "position": 1,
+          "start_offset": 2,
+          "end_offset": 8
+        }
+      ],
+      "dfs_filename_parts_fr": [
+        {
+          "token": "𠮷report",
+          "position": 0,
+          "start_offset": 0,
           "end_offset": 8
         }
       ]
@@ -2403,7 +3178,7 @@
     },
     "electroencephalographic": {
       "allowed": false,
-      "error": "{\"error\":{\"root_cause\":[{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}],\"type\":\"search_phase_execution_exception\",\"reason\":\"all shards failed\",\"phase\":\"query\",\"grouped\":true,\"failed_shards\":[{\"shard\":0,\"index\":\"codex-dfs-object-search-v1\",\"node\":\"lv1TTrmoSE2fl_AKf6ehTw\",\"reason\":{\"type\":\"query_shard_exception\",\"reason\":\"failed to create query: [prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\",\"index_uuid\":\"UHJBsB4fT662geQHb090TA\",\"index\":\"codex-dfs-object-search-v1\",\"caused_by\":{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}}}],\"caused_by\":{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}},\"status\":400}"
+      "error": "{\"error\":{\"root_cause\":[{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}],\"type\":\"search_phase_execution_exception\",\"reason\":\"all shards failed\",\"phase\":\"query\",\"grouped\":true,\"failed_shards\":[{\"shard\":0,\"index\":\"codex-dfs-object-search-v1\",\"node\":\"JfC9iBFnRh6doCWLGNBcCg\",\"reason\":{\"type\":\"query_shard_exception\",\"reason\":\"failed to create query: [prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\",\"index_uuid\":\"MQVY5yNMSCyx60pzXhZEdA\",\"index\":\"codex-dfs-object-search-v1\",\"caused_by\":{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}}}],\"caused_by\":{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}},\"status\":400}"
     }
   },
   "stem_highlights": [
@@ -2424,18 +3199,8 @@
     },
     {
       "_index": "codex-dfs-object-search-v1",
-      "_id": "metadata_french_stem",
-      "_score": 0.56098,
-      "_source": {
-        "kind": "file",
-        "name": "Documents",
-        "mime_type": "application/pdf"
-      }
-    },
-    {
-      "_index": "codex-dfs-object-search-v1",
       "_id": "bilingual",
-      "_score": 0.4256689,
+      "_score": 0.9590099,
       "_source": {
         "kind": "file",
         "name": "Reports.pdf",
@@ -2450,7 +3215,7 @@
     {
       "_index": "codex-dfs-object-search-v1",
       "_id": "mixed_body",
-      "_score": 0.4256689,
+      "_score": 0.9590099,
       "_source": {
         "kind": "file",
         "name": "Bilingual bulletin",
@@ -2460,6 +3225,16 @@
         "stemmed.fr.content_text": [
           "Les <em>journaux</em> des sociétés."
         ]
+      }
+    },
+    {
+      "_index": "codex-dfs-object-search-v1",
+      "_id": "metadata_french_stem",
+      "_score": 0.56098,
+      "_source": {
+        "kind": "file",
+        "name": "Documents",
+        "mime_type": "application/pdf"
       }
     }
   ],
@@ -2475,7 +3250,7 @@
       },
       "highlight": {
         "name": [
-          "<em>Reports.pdf</em>"
+          "<em>Reports</em>.pdf"
         ]
       }
     },
@@ -2520,7 +3295,7 @@
       },
       "highlight": {
         "name": [
-          "<em>Report.pdf</em>"
+          "<em>Report</em>.pdf"
         ]
       }
     },
@@ -2535,7 +3310,7 @@
       },
       "highlight": {
         "name": [
-          "<em>Reports.pdf</em>"
+          "<em>Reports</em>.pdf"
         ]
       }
     },
@@ -2550,7 +3325,7 @@
       },
       "highlight": {
         "name": [
-          "Annual <em>reports.pdf</em>"
+          "Annual <em>reports</em>.pdf"
         ]
       }
     },
@@ -2565,7 +3340,7 @@
       },
       "highlight": {
         "name": [
-          "Annual <em>report.pdf</em>"
+          "Annual <em>report</em>.pdf"
         ]
       }
     },
@@ -2595,7 +3370,7 @@
       },
       "highlight": {
         "name": [
-          "Annual revised <em>reports.pdf</em>"
+          "Annual revised <em>reports</em>.pdf"
         ]
       }
     },
@@ -2610,7 +3385,7 @@
       },
       "highlight": {
         "name": [
-          "<em>Reports.pdf</em>"
+          "<em>Reports</em>.pdf"
         ]
       }
     },
@@ -2625,7 +3400,7 @@
       },
       "highlight": {
         "name": [
-          "Annual <em>reports.pdf</em>"
+          "Annual <em>reports</em>.pdf"
         ]
       }
     },
@@ -2640,7 +3415,7 @@
       },
       "highlight": {
         "name": [
-          "Annual <em>reports.pdf</em>"
+          "Annual <em>reports</em>.pdf"
         ]
       }
     },
@@ -2655,7 +3430,7 @@
       },
       "highlight": {
         "name": [
-          "Annual <em>report.pdf</em>"
+          "Annual <em>report</em>.pdf"
         ]
       }
     },
@@ -2700,7 +3475,7 @@
       },
       "highlight": {
         "name": [
-          "Budget <em>reports.pdf</em>"
+          "Budget <em>reports</em>.pdf"
         ]
       }
     },
@@ -2824,7 +3599,7 @@
     {
       "_index": "codex-dfs-object-search-v1",
       "_id": "length_short",
-      "_score": 16.675787,
+      "_score": 16.817348,
       "_source": {
         "kind": "file",
         "name": "Quasar budget",
@@ -2845,7 +3620,7 @@
     {
       "_index": "codex-dfs-object-search-v1",
       "_id": "length_long",
-      "_score": 16.675787,
+      "_score": 16.817348,
       "_source": {
         "kind": "file",
         "name": "Quasar budget",

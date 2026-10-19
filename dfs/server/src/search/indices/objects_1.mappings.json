@@ -34,7 +34,7 @@
     },
     "name": {
       "type": "text",
-      "analyzer": "dfs_text",
+      "analyzer": "dfs_filename",
       "index_options": "offsets",
       "position_increment_gap": 100,
       "index_prefixes": {
@@ -44,12 +44,13 @@
       "fields": {
         "parts": {
           "type": "text",
-          "analyzer": "dfs_filename",
+          "analyzer": "dfs_filename_parts",
           "index_options": "offsets",
           "index_prefixes": {
             "min_chars": 1,
             "max_chars": 10
-          }
+          },
+          "search_analyzer": "dfs_filename"
         },
         "keyword": {
           "type": "keyword"
@@ -60,7 +61,7 @@
         },
         "token_count": {
           "type": "token_count",
-          "analyzer": "dfs_filename",
+          "analyzer": "dfs_filename_parts",
           "index": false,
           "doc_values": true
         }
@@ -205,9 +206,10 @@
           "properties": {
             "name": {
               "type": "text",
-              "analyzer": "dfs_filename_en",
+              "analyzer": "dfs_filename_parts_en",
               "index_options": "offsets",
-              "position_increment_gap": 100
+              "position_increment_gap": 100,
+              "search_analyzer": "dfs_filename_en"
             },
             "content_text": {
               "type": "text",
@@ -247,9 +249,10 @@
           "properties": {
             "name": {
               "type": "text",
-              "analyzer": "dfs_filename_fr",
+              "analyzer": "dfs_filename_parts_fr",
               "index_options": "offsets",
-              "position_increment_gap": 100
+              "position_increment_gap": 100,
+              "search_analyzer": "dfs_filename_fr"
             },
             "content_text": {
               "type": "text",
