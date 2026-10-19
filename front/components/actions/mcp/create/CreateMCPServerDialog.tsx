@@ -302,9 +302,7 @@ export function CreateMCPServerDialog({
     }
   }, [internalMCPServer, isOpen]);
 
-  // Initialize authorization for remote servers whose OAuth provider is known upfront (static
-  // OAuth, with workspace-entered credentials or Dust's own OAuth app) when dialog opens. Dynamic
-  // OAuth waits for discovery.
+  // Dynamic OAuth is excluded: its authorization comes from discovery on the first submit.
   useEffect(() => {
     if (
       isOpen &&
