@@ -118,12 +118,14 @@ under its owner's user folder:
 <tenant-root>/
   users/
     <userSId>/
+      files/
       pods/
         pod-<podSId>/
           files/
       conversations/
         conv-<conversationSId>/
           files/
+          MEMORY.md
 ```
 
 Only user folders are created from the tenant root. Pod and conversation folders are created from
@@ -138,8 +140,10 @@ create dfs://<userSId>--<user-folder-id>/conversations/conv-<conversationSId>
 - **Layout:** namespace folders (`users/`, `pods/`, `conversations/`) keep listings small and leave
   room for grants per namespace. They are created the first time they are needed, like any missing
   intermediate directory.
-- **Files:** a pod's or a conversation's files live in `files/` in its folder, so they never
-  collide with other content front adds to that folder, such as a pod's `conversations/`.
+- **Files:** a user's, a pod's or a conversation's files live in `files/` in its folder, so they
+  never collide with other content front adds to that folder, such as a pod's `conversations/`.
+- **Conversation memory:** the snapshot of its user's memory a conversation reads is `MEMORY.md`
+  at the root of the conversation folder, beside `files/`.
 - **Stored reference:** front stores the returned folder ID on the user, the pod, or the
   conversation. All later access to that context's content uses this ID as the anchor, never a path
   from the root or from the user folder.

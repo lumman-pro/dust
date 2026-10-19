@@ -2,7 +2,9 @@ import { Authenticator } from "@app/lib/auth";
 import { getPrivateUploadBucket } from "@app/lib/file_storage";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { DfsTenantResource } from "@app/lib/resources/dfs_tenant_resource";
+import { MembershipResource } from "@app/lib/resources/membership_resource";
 import { SpaceResource } from "@app/lib/resources/space_resource";
+import { UserResource } from "@app/lib/resources/user_resource";
 import { assertNever } from "@app/types/shared/utils/assert_never";
 import assert from "assert";
 
@@ -12,11 +14,19 @@ const POD_FILE_OBJECT_NAME_REGEX = /^w\/([^/]+)\/pods\/([^/]+)\/files\/(.+)$/;
 // `getConversationFilesBasePath`.
 const CONVERSATION_FILE_OBJECT_NAME_REGEX =
   /^w\/([^/]+)\/conversations\/([^/]+)\/files\/(.+)$/;
+// `w/<workspaceSId>/conversations/<conversationSId>/MEMORY.md`, see `ensureConversationMemoryFile`.
+const CONVERSATION_MEMORY_FILE_OBJECT_NAME_REGEX =
+  /^w\/([^/]+)\/conversations\/([^/]+)\/MEMORY\.md$/;
+// `w/<workspaceSId>/users/<userSId>/files/<path>`, see `GCSFileSystemBackend.toGCSPath`.
+const USER_FILE_OBJECT_NAME_REGEX = /^w\/([^/]+)\/users\/([^/]+)\/files\/(.+)$/;
 // Custom metadata key holding a symlink's target on the empty object gcsfuse stores for it.
 const GCSFUSE_SYMLINK_TARGET_METADATA_KEY = "gcsfuse_symlink_target";
-// The folder of a pod's or conversation's dfs folder holding its files, see
+// The folder of a user's, pod's or conversation's dfs folder holding its files, see
 // `dfs/design-docs/URI.md`.
 const DFS_FILES_FOLDER_NAME = "files";
+// The conversation's memory file, at the root of its dfs folder beside `files/`, see
+// `dfs/design-docs/URI.md`.
+const DFS_CONVERSATION_MEMORY_FILE_NAME = "MEMORY.md";
 
 interface ReplicatedPodFile {
   kind: "pod_file";
@@ -36,17 +46,36 @@ interface ReplicatedConversationFile {
   path: string;
 }
 
+interface ReplicatedConversationMemoryFile {
+  kind: "conversation_memory_file";
+  objectName: string;
+  workspaceId: string;
+  conversationId: string;
+}
+
+interface ReplicatedUserFile {
+  kind: "user_file";
+  objectName: string;
+  workspaceId: string;
+  userId: string;
+  // The object name below the user's files root, ending with `/` for a folder placeholder.
+  path: string;
+}
+
 /** An object of the private uploads bucket that dfs mirrors. */
 export type ReplicatedGcsObject =
   | ReplicatedPodFile
-  | ReplicatedConversationFile;
+  | ReplicatedConversationFile
+  | ReplicatedConversationMemoryFile
+  | ReplicatedUserFile;
 
-/** The dfs folder of a pod or conversation, which front creates and stores on it. */
+/** The dfs folder of a user, pod or conversation, which front creates and stores on it. */
 export type DfsReplicationFolder =
+  | { kind: "user"; userId: string }
   | { kind: "pod"; podId: string }
   | { kind: "conversation"; conversationId: string };
 
-/** A path below the dfs folder of a pod or conversation. */
+/** A path below the dfs folder of a user, pod or conversation. */
 export interface DfsReplicationTarget {
   folder: DfsReplicationFolder;
   path: string[];
@@ -71,9 +100,11 @@ export type DfsReplicationPlan =
 
 /**
  * @cc [owner:aubin-tchoi,label:product] replicated-gcs-object-names
- * Only object names `w/<workspaceSId>/pods/<podSId>/files/<path>` and
- * `w/<workspaceSId>/conversations/<conversationSId>/files/<path>` with a non-empty `<path>` MUST be
- * parsed. Every other name MUST return `null`: it is not replicated.
+ * Only object names `w/<workspaceSId>/pods/<podSId>/files/<path>`,
+ * `w/<workspaceSId>/conversations/<conversationSId>/files/<path>` and
+ * `w/<workspaceSId>/users/<userSId>/files/<path>` with a non-empty `<path>`, and
+ * `w/<workspaceSId>/conversations/<conversationSId>/MEMORY.md`, MUST be parsed. Every other name
+ * MUST return `null`: it is not replicated.
  */
 export function parseReplicatedGcsObjectName(
   objectName: string
@@ -100,6 +131,27 @@ export function parseReplicatedGcsObjectName(
       path: conversationFile[3],
     };
   }
+  const conversationMemoryFile = objectName.match(
+    CONVERSATION_MEMORY_FILE_OBJECT_NAME_REGEX
+  );
+  if (conversationMemoryFile) {
+    return {
+      kind: "conversation_memory_file",
+      objectName,
+      workspaceId: conversationMemoryFile[1],
+      conversationId: conversationMemoryFile[2],
+    };
+  }
+  const userFile = objectName.match(USER_FILE_OBJECT_NAME_REGEX);
+  if (userFile) {
+    return {
+      kind: "user_file",
+      objectName,
+      workspaceId: userFile[1],
+      userId: userFile[2],
+      path: userFile[3],
+    };
+  }
   return null;
 }
 
@@ -121,13 +173,16 @@ export function parseReplicatedGcsObjectName(
 /**
  * @cc [owner:aubin-tchoi,label:product] replication-skips
  * Names `parseReplicatedGcsObjectName` rejects, objects of a workspace without a dfs tenant, files
- * of a pod that does not exist (including a soft-deleted one), and files of a conversation that does
- * not exist (including a deleted one) MUST be planned as `skip`.
+ * of a pod that does not exist (including a soft-deleted one), files and the memory file of a
+ * conversation that does not exist (including a deleted one), and files of a user that does not
+ * exist or is not an active member of the workspace MUST be planned as `skip`.
  */
 /**
  * @cc [owner:aubin-tchoi,label:product] files-folder-targets
- * Target paths MUST start with `files`: pod and conversation files live under `files/` in their
- * dfs folder, as in `dfs/design-docs/URI.md`, never at its root.
+ * Target paths of user, pod and conversation files MUST start with `files`: they live under
+ * `files/` in their dfs folder, as in `dfs/design-docs/URI.md`, never at its root. The conversation
+ * memory file is the only exception: its target path MUST be `MEMORY.md`, at the root of the
+ * conversation's dfs folder beside `files/`.
  */
 export async function planGcsObjectReplication(
   objectName: string
@@ -159,7 +214,8 @@ async function getReplicationFolder(
       const space = await SpaceResource.fetchById(auth, object.podId);
       return space?.isProject() ? { kind: "pod", podId: space.sId } : null;
     }
-    case "conversation_file": {
+    case "conversation_file":
+    case "conversation_memory_file": {
       // Replication mirrors every conversation of the workspace, whoever can read it.
       const conversation = await ConversationResource.fetchById(
         auth,
@@ -170,23 +226,30 @@ async function getReplicationFolder(
         ? { kind: "conversation", conversationId: conversation.sId }
         : null;
     }
+    case "user_file": {
+      const user = await UserResource.fetchById(object.userId);
+      if (!user) {
+        return null;
+      }
+      const membership =
+        await MembershipResource.getActiveMembershipOfUserInWorkspace({
+          user,
+          workspace: auth.getNonNullableWorkspace(),
+        });
+      return membership ? { kind: "user", userId: user.sId } : null;
+    }
     default:
       assertNever(object);
   }
 }
 
 async function planMirror(
-  { objectName, path }: ReplicatedGcsObject,
+  object: ReplicatedGcsObject,
   folder: DfsReplicationFolder
 ): Promise<DfsReplicationPlan> {
-  const isFolder = path.endsWith("/");
-  const target: DfsReplicationTarget = {
-    folder,
-    path: [
-      DFS_FILES_FOLDER_NAME,
-      ...(isFolder ? path.slice(0, -1) : path).split("/"),
-    ],
-  };
+  const { objectName } = object;
+  const { path, isFolder } = getTargetPath(object);
+  const target: DfsReplicationTarget = { folder, path };
 
   const file = getPrivateUploadBucket().file(objectName);
   const [exists] = await file.exists();
@@ -209,4 +272,28 @@ async function planMirror(
     generation: String(generation),
     contentType: metadata.contentType,
   };
+}
+
+function getTargetPath(object: ReplicatedGcsObject): {
+  path: string[];
+  isFolder: boolean;
+} {
+  switch (object.kind) {
+    case "pod_file":
+    case "conversation_file":
+    case "user_file": {
+      const isFolder = object.path.endsWith("/");
+      return {
+        path: [
+          DFS_FILES_FOLDER_NAME,
+          ...(isFolder ? object.path.slice(0, -1) : object.path).split("/"),
+        ],
+        isFolder,
+      };
+    }
+    case "conversation_memory_file":
+      return { path: [DFS_CONVERSATION_MEMORY_FILE_NAME], isFolder: false };
+    default:
+      assertNever(object);
+  }
 }
