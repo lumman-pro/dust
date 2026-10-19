@@ -4,12 +4,12 @@ import { FrameToolbar } from "@app/components/assistant/conversation/interactive
 import { FrameToolConsentGate } from "@app/components/assistant/conversation/interactive_content/frame/FrameToolConsentGate";
 import { PreviewActionButtons } from "@app/components/assistant/conversation/interactive_content/frame/PreviewActionButtons";
 import { useFrameEditSession } from "@app/components/assistant/conversation/interactive_content/frame/useFrameEditSession";
+import { useLiveFrameEditing } from "@app/components/assistant/conversation/interactive_content/frame/useLiveFrameEditing";
 import {
   useFileContent,
   useFileContentByUrl,
   useShareInteractiveContentFile,
 } from "@app/lib/swr/files";
-import { useFramePermissions } from "@app/lib/swr/frames";
 import { useIsMobile } from "@app/lib/swr/useIsMobile";
 import type { PodFileTab } from "@app/types/pod_file_tab";
 import type { LightWorkspaceType } from "@app/types/user";
@@ -91,15 +91,18 @@ export function PodHoverFrameViewer({
   });
 
   const {
+    canEditV2,
     canWriteFrameSource,
     hasFrameFunctions,
     requiredTools,
     hasAuthorizedRequiredTools,
     isFramePermissionsLoading,
     mutateFramePermissions,
-  } = useFramePermissions({
+    status: draftStatus,
+  } = useLiveFrameEditing({
     owner,
     frameId: frameId ?? "",
+    isV2,
     disabled: !isV2,
   });
   const needsToolConsent =
@@ -121,13 +124,13 @@ export function PodHoverFrameViewer({
     disabled: !isV2 || !showCode,
   });
 
-  const canEditV2 = isV2 && canWriteFrameSource;
   const editSession = useFrameEditSession({
     owner,
     fileId,
     conversationId: undefined,
     iframeRef,
     mutateFileContent,
+    onSaved: mutateFramePermissions,
   });
 
   const framePackageRoot = framePath.includes("/")
@@ -184,6 +187,7 @@ export function PodHoverFrameViewer({
       hasFrameFunctions={hasFrameFunctions}
       editSession={editSession}
       canEditV2={canEditV2}
+      status={draftStatus}
       hideEditLabels={isMobile}
       podActions={{
         spaceId,

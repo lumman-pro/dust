@@ -60,6 +60,8 @@ export function httpErrorMessage({
   switch (type) {
     case "invalid_request_error":
       return `Invalid request to ${provider}: ${detail}`;
+    case "context_length_exceeded":
+      return `Context length exceeded for ${provider}: ${detail}`;
     case "authentication_error":
       return `Authentication failed for ${provider}: ${detail}`;
     case "permission_error":

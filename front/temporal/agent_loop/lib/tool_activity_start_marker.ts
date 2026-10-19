@@ -5,7 +5,7 @@ import { runOnRedis } from "@app/lib/api/redis";
 // backlogged.
 const TOOL_ACTIVITY_START_MARKER_TTL_SECONDS = 24 * 60 * 60;
 
-type ToolActivityStartMarker = "started" | "abandoned";
+type ToolActivityStartMarker = "started" | "abandoned" | "completed";
 
 export type ToolActivityExecution = {
   workflowId: string;
@@ -69,4 +69,39 @@ export async function claimToolActivityNeverStarted(
   );
 
   return marker === "abandoned";
+}
+
+/**
+ * @cc [owner:tdraier,label:error-handling;concurrency] completed-only-after-start-claim
+ * MUST only be called once `claimToolActivityStart` returned true for `execution`. For
+ * `TOOL_ACTIVITY_START_MARKER_TTL_SECONDS` after it succeeds, `isToolActivityCompleted` returns true
+ * and `claimToolActivityNeverStarted` keeps returning false for `execution`. Redis failures throw.
+ */
+export async function markToolActivityCompleted(
+  execution: ToolActivityExecution
+): Promise<void> {
+  const key = makeToolActivityStartMarkerKey(execution);
+  const marker: ToolActivityStartMarker = "completed";
+
+  await runOnRedis({ origin: "tool_activity_start_marker" }, (redis) =>
+    redis.set(key, marker, { EX: TOOL_ACTIVITY_START_MARKER_TTL_SECONDS })
+  );
+}
+
+/**
+ * @cc [owner:tdraier,label:error-handling;concurrency] completed-iff-marked
+ * Returns true if and only if `markToolActivityCompleted` succeeded for `execution` less than
+ * `TOOL_ACTIVITY_START_MARKER_TTL_SECONDS` ago. Redis failures throw.
+ */
+export async function isToolActivityCompleted(
+  execution: ToolActivityExecution
+): Promise<boolean> {
+  const key = makeToolActivityStartMarkerKey(execution);
+
+  const marker = await runOnRedis(
+    { origin: "tool_activity_start_marker" },
+    (redis) => redis.get(key)
+  );
+
+  return marker === "completed";
 }

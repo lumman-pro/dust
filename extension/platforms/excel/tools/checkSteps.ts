@@ -161,7 +161,10 @@ const READ_METHODS: ReadonlySet<string> = new Set<ExcelMember>([
  *   - `workbook.getSelectedRange().load()` is not allowed: it loads all the properties, which can
  *     be very large.
  */
-function checkLoad(step: Step, isLastStep: boolean): Result<undefined, string> {
+function checkLoadStep(
+  step: Step,
+  isLastStep: boolean
+): Result<undefined, string> {
   if (!isLastStep) {
     return new Err('"load" must be the last step of the expression.');
   }
@@ -174,26 +177,35 @@ function checkLoad(step: Step, isLastStep: boolean): Result<undefined, string> {
 }
 
 /**
- * Checks one step.
+ * Says if a name is not part of the Office.js API. A property is always allowed, so these names
+ * are refused:
+ *   - `workbook.constructor` gives the `Workbook` class, not a workbook.
+ *     `workbook.constructor.constructor` gives `Function`, which turns a string into code.
+ *   - `workbook.__proto__` gives the object that holds the methods of all workbooks.
+ *   - `workbook._context` and the other names that start with `_` are internal data of
+ *     Office.js.
+ */
+function isInternalName(name: string): boolean {
+  return name.startsWith("_") || name === "constructor";
+}
+
+/**
+ * Checks one step of a read.
  *
  * Examples:
  *   - The property `worksheets` is allowed: to get a property only reads.
  *   - The call `getItem('Sheet1')` is allowed: `getItem` is in `READ_METHODS`.
  *   - The call `delete()` is not allowed: it is not in `READ_METHODS`.
  */
-function checkStep(step: Step, isLastStep: boolean): Result<undefined, string> {
-  // A property is always allowed, so these names are refused here. They are not part of the
-  // Office.js API:
-  //   - `workbook.constructor` gives the `Workbook` class, not a workbook.
-  //     `workbook.constructor.constructor` gives `Function`, which turns a string into code.
-  //   - `workbook.__proto__` gives the object that holds the methods of all workbooks.
-  //   - `workbook._context` and the other names that start with `_` are internal data of
-  //     Office.js.
-  if (step.name.startsWith("_") || step.name === "constructor") {
+function checkReadStep(
+  step: Step,
+  isLastStep: boolean
+): Result<undefined, string> {
+  if (isInternalName(step.name)) {
     return new Err(`"${step.name}" is not allowed.`);
   }
   if (step.name === "load") {
-    return checkLoad(step, isLastStep);
+    return checkLoadStep(step, isLastStep);
   }
   switch (step.kind) {
     case "property":
@@ -209,8 +221,8 @@ function checkStep(step: Step, isLastStep: boolean): Result<undefined, string> {
 }
 
 /**
- * Checks the steps of an expression. A property is always allowed, and a method call only if the
- * method only reads.
+ * Checks the steps of a read expression. A property is always allowed, and a method call only if
+ * the method only reads.
  *
  * Example: `workbook.worksheets.getItem('Sheet1').load('name')` is allowed. Each step is checked:
  * the property `worksheets`, the call `getItem('Sheet1')`, then the call `load('name')`.
@@ -218,9 +230,9 @@ function checkStep(step: Step, isLastStep: boolean): Result<undefined, string> {
  * This check does not know what each step gives. Thus `queueReads` checks, in Excel.run, that an
  * expression that gives an Office.js object ends with `load(...)`.
  */
-export function checkSteps(steps: Step[]): Result<undefined, string> {
+export function checkReadSteps(steps: Step[]): Result<undefined, string> {
   for (const [index, step] of steps.entries()) {
-    const check = checkStep(step, index === steps.length - 1);
+    const check = checkReadStep(step, index === steps.length - 1);
     if (check.isErr()) {
       return check;
     }

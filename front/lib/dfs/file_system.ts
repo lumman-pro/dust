@@ -503,8 +503,18 @@ export class DfsFileSystem {
     return new Ok(entries);
   }
 
-  /** Creates the directory at `uri` and its missing parents, see `create-missing-parents`. */
-  async mkdir(uri: string): Promise<Result<DfsResolvedObject, DfsError>> {
+  /**
+   * Creates the directory at `uri` and its missing parents, see `create-missing-parents`. `mimeType`
+   * and `xattrs` apply to the directory at `uri` only; dfs defaults its MIME type to
+   * `inode/directory`.
+   */
+  async mkdir(
+    uri: string,
+    {
+      mimeType,
+      xattrs,
+    }: { mimeType?: string; xattrs?: Record<string, Uint8Array> } = {}
+  ): Promise<Result<DfsResolvedObject, DfsError>> {
     const parsed = parseDfsUri(uri);
     if (parsed.isErr()) {
       return parsed;
@@ -528,6 +538,8 @@ export class DfsFileSystem {
         name,
         objectId: newDfsObjectId(),
         kind: "directory",
+        mimeType,
+        xattrs,
       },
     ]);
   }

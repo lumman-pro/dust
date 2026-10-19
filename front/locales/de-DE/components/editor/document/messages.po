@@ -42,7 +42,6 @@ msgid "Insert"
 msgstr "Einfügen"
 
 #: front/components/editor/document/DocumentBlockMenu.tsx
-#: front/components/editor/document/DocumentCommentThread.tsx
 msgid "Close"
 msgstr "Schließen"
 
@@ -123,8 +122,12 @@ msgid "Resolve"
 msgstr "Erledigen"
 
 #: front/components/editor/document/DocumentCommentThread.tsx
-msgid "Delete comment"
-msgstr "Kommentar löschen"
+msgid "More actions"
+msgstr "Weitere Aktionen"
+
+#: front/components/editor/document/DocumentCommentThread.tsx
+msgid "Delete"
+msgstr "Löschen"
 
 #. placeholder {0}: replies.length
 #: front/components/editor/document/DocumentCommentThread.tsx

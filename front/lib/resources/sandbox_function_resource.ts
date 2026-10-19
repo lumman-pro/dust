@@ -4,8 +4,11 @@ import type {
   PokeFrameFunctionDetails,
 } from "@app/lib/api/poke/frames";
 import { SandboxFunctionInvocationError } from "@app/lib/api/sandbox_functions/errors";
-import { authorizeSandboxFunctionInvocation } from "@app/lib/api/sandbox_functions/workspace_user";
-import type { Authenticator } from "@app/lib/auth";
+import {
+  authorizePublicFrameFunctionCall,
+  authorizeSandboxFunctionInvocation,
+} from "@app/lib/api/sandbox_functions/workspace_user";
+import { Authenticator } from "@app/lib/auth";
 import { executeWithLock } from "@app/lib/lock";
 import { BaseResource } from "@app/lib/resources/base_resource";
 import { FileResource } from "@app/lib/resources/file_resource";
@@ -24,9 +27,9 @@ import {
 } from "@app/lib/resources/string_ids";
 import type { ResourceFindOptions } from "@app/lib/resources/types";
 import type {
+  NonExternalSandboxFunctionInvocationOrigin,
   PostSandboxFunctionInvocationRequestBody,
   SandboxFunctionExecutionMode,
-  SandboxFunctionInvocationOrigin,
   SandboxFunctionStake,
   SandboxFunctionUserIdentityPolicy,
 } from "@app/types/api/sandbox_functions";
@@ -61,6 +64,16 @@ export interface FramePublicationFunctionDefinition {
 }
 
 export const SANDBOX_FUNCTION_PUBLISH_LOCK_TTL_MS = 5 * 60_000;
+
+type FetchActiveForAnonymousInput = {
+  frame: FileResource;
+  slug: string;
+};
+
+type InvokeAnonymouslyInput = {
+  body: PostSandboxFunctionInvocationRequestBody;
+  viewerEmail: string | null;
+};
 
 // A `findAll` carrying an aggregate attribute returns plain rows rather than model instances, so
 // the model's declared types do not describe them. Parsed instead of cast so a shape change fails
@@ -679,10 +692,49 @@ export class SandboxFunctionResource extends BaseResource<SandboxFunctionModel> 
     return sandboxFunction ?? null;
   }
 
+  /**
+   * @cc [owner:achilleburah,label:security] anonymous-fetch-scoped-to-shared-frame
+   * Only a function of `frame`'s active publication MAY be returned, and only when `frame` is a
+   * Frames v2 file of the viewer's workspace. The caller MUST have resolved `frame` from a share
+   * token, since the viewer holds no permission on it.
+   */
+  static async fetchActiveForAnonymous(
+    auth: Authenticator<"anonymous">,
+    { frame, slug }: FetchActiveForAnonymousInput
+  ): Promise<SandboxFunctionResource | null> {
+    const workspace = auth.getNonNullableWorkspace();
+    const publicationId = frame.useCaseMetadata?.activePublicationId;
+    if (
+      frame.workspaceId !== workspace.id ||
+      !frame.isFrameV2 ||
+      !publicationId ||
+      !isValidSandboxFunctionSlug(slug)
+    ) {
+      return null;
+    }
+
+    const sandboxFunction = await this.model.findOne({
+      where: {
+        workspaceId: workspace.id,
+        fileId: frame.id,
+        publicationId,
+        slug,
+      },
+    });
+
+    return sandboxFunction
+      ? new this(this.model, sandboxFunction.get(), frame)
+      : null;
+  }
+
   async invoke(
     auth: Authenticator,
     body: PostSandboxFunctionInvocationRequestBody,
-    { origin = "delegated" }: { origin?: SandboxFunctionInvocationOrigin } = {}
+    {
+      origin = "delegated",
+    }: {
+      origin?: NonExternalSandboxFunctionInvocationOrigin;
+    } = {}
   ): Promise<Result<SandboxFunctionInvocationResource, Error>> {
     if (auth.getNonNullableWorkspace().id !== this.workspaceId) {
       return new Err(
@@ -719,6 +771,58 @@ export class SandboxFunctionResource extends BaseResource<SandboxFunctionModel> 
       body,
       origin,
     });
+  }
+
+  /**
+   * @cc [owner:achilleburah,label:security] anonymous-call-runs-as-frame-owner
+   * The denial of authorizePublicFrameFunctionCall MUST be returned before any invocation is
+   * created. Only once it passes MAY the internal admin Authenticator be built, and it MUST only
+   * start this function's invocation with the `external_session` origin.
+   */
+  async invokeAnonymously(
+    auth: Authenticator<"anonymous">,
+    { body, viewerEmail }: InvokeAnonymouslyInput
+  ): Promise<Result<SandboxFunctionInvocationResource, Error>> {
+    const workspace = auth.getNonNullableWorkspace();
+    if (workspace.id !== this.workspaceId) {
+      return new Err(
+        new SandboxFunctionInvocationError(
+          "This Frame function belongs to another workspace."
+        )
+      );
+    }
+    if (viewerEmail === null) {
+      return new Err(
+        new SandboxFunctionInvocationError(
+          "This Frame function requires a verified email."
+        )
+      );
+    }
+    const authorization = await authorizePublicFrameFunctionCall({
+      workspace,
+      plan: auth.plan(),
+      userIdentity: this.userIdentity,
+      frame: this.frame,
+    });
+    if (!authorization.authorized) {
+      return new Err(
+        new SandboxFunctionInvocationError(
+          authorization.errorMessage,
+          authorization.errorCode
+        )
+      );
+    }
+
+    // The sandbox belongs to the Frame, so it runs with the reaper's Frame Authenticator.
+    const frameOwnerAuth = await Authenticator.internalAdminForWorkspace(
+      workspace.sId,
+      { dangerouslyRequestAllGroups: true }
+    );
+
+    return SandboxFunctionInvocationResource.createAndStartExecution(
+      frameOwnerAuth,
+      { sandboxFunction: this, body, origin: "external_session" }
+    );
   }
 
   /**

@@ -265,6 +265,18 @@ msgstr "{skippedAttachmentCount, plural, one {# attachment was skipped.} other {
 msgid "Failed to hide the suggestion."
 msgstr "Failed to hide the suggestion."
 
+#: front/hooks/useMakeFrameDraftLive.ts
+msgid "Could not make the changes live"
+msgstr "Could not make the changes live"
+
+#: front/hooks/useMakeFrameDraftLive.ts
+msgid "Changes are live"
+msgstr "Changes are live"
+
+#: front/hooks/useMakeFrameDraftLive.ts
+msgid "The share link now shows this version."
+msgstr "The share link now shows this version."
+
 #: front/hooks/useMarkAllConversationsAsRead.ts
 msgid "All conversations marked as read"
 msgstr "All conversations marked as read"

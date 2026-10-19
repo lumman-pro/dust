@@ -13,11 +13,7 @@ impl Attributes {
     /// The attributes of inode `ino`, which holds the dfs object `attr` describes. Fails with `EIO`
     /// for symlinks, which the mount does not support yet, and for kinds it does not know.
     pub(crate) fn from_attr(ino: Ino, attr: &Attr) -> Result<Self, Errno> {
-        let kind = match ObjectKind::try_from(attr.kind) {
-            Ok(ObjectKind::Directory) => Kind::Directory,
-            Ok(ObjectKind::File) => Kind::File,
-            Ok(ObjectKind::Symlink) | Err(_) => return Err(Errno::EIO),
-        };
+        let kind = Kind::from_attr(attr).ok_or(Errno::EIO)?;
         Ok(Self {
             ino,
             kind,
@@ -27,6 +23,18 @@ impl Attributes {
             mtime: time(attr.mtime),
             ctime: time(attr.ctime),
         })
+    }
+}
+
+impl Kind {
+    /// The kind of the object `attr` describes, if the mount supports it: not for symlinks yet, nor
+    /// for kinds it does not know.
+    pub(crate) fn from_attr(attr: &Attr) -> Option<Self> {
+        match ObjectKind::try_from(attr.kind) {
+            Ok(ObjectKind::Directory) => Some(Kind::Directory),
+            Ok(ObjectKind::File) => Some(Kind::File),
+            Ok(ObjectKind::Symlink) | Err(_) => None,
+        }
     }
 }
 

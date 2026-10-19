@@ -77,6 +77,7 @@ fn mount() -> Result<()> {
         list_returns_every_page(&channel, &tenant).await?;
         apply_returns_one_ordered_result_per_operation(&channel, &tenant).await?;
         read_files_returns_one_ordered_result_per_object(&channel, &tenant).await?;
+        folders_list_readable_children(&channel, &tenant).await?;
         replies_are_served_until_the_cache_ttl(&channel, &tenant).await
     })
 }
@@ -351,8 +352,6 @@ async fn root_looks_up_readable_folders(channel: &Channel, tenant: &Tenant) -> R
     assert_eq!(workspace.permissions, 0o700);
     assert_eq!(fs.readdir(ROOT_INO).await?[0].ino, workspace.ino);
     assert_eq!(fs.getattr(workspace.ino).await?, workspace);
-    // The mount does not list dfs directories yet.
-    assert_eq!(fs.readdir(workspace.ino).await, Err(Errno::EOPNOTSUPP));
 
     // Like the listing: not a directory, unreadable, missing, and not configured.
     for name in ["report", "secret", "missing", "other"] {
@@ -620,6 +619,28 @@ async fn read_files_returns_one_ordered_result_per_object(
     assert!(remote.read_files(&[]).await?.is_empty());
     let too_many = vec![tenant.file_id; READ_FILES_MAX_OBJECTS + 1];
     assert_eq!(remote.read_files(&too_many).await, Err(Errno::EINVAL));
+    Ok(())
+}
+
+async fn folders_list_readable_children(channel: &Channel, tenant: &Tenant) -> Result<()> {
+    let fs = Fs::new(
+        tenant.remote(channel).await?,
+        vec![folder("workspace", tenant.root_id)],
+        Budget::default(),
+    )?;
+    let workspace = fs.lookup(ROOT_INO, "workspace").await?;
+
+    let entries = fs.readdir(workspace.ino).await?;
+    let report = entries
+        .iter()
+        .find(|entry| entry.name == "report.txt")
+        .context("missing report.txt")?;
+    assert_eq!(report.kind, Kind::File);
+    assert!(![ROOT_INO, workspace.ino].contains(&report.ino));
+    // Left out: the file the session cannot read.
+    assert!(!entries.iter().any(|entry| entry.name == "secret.txt"));
+    // A listing counts no lookup, so the kernel cannot ask about a listed inode before looking it up.
+    assert_eq!(fs.getattr(report.ino).await, Err(Errno::ENOENT));
     Ok(())
 }
 

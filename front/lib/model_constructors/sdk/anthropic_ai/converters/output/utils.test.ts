@@ -561,6 +561,25 @@ describe("streamErrorToErrorEvent", () => {
     );
   });
 
+  it("maps prompt-too-long failures to a Dust context_length_exceeded", () => {
+    const err = new APIError(
+      400,
+      {
+        type: "error",
+        error: {
+          type: "invalid_request_error",
+          message: "prompt is too long: 1057001 tokens > 1000000 maximum",
+        },
+      },
+      "prompt is too long: 1057001 tokens > 1000000 maximum",
+      undefined,
+      "invalid_request_error"
+    );
+    const result = streamErrorToErrorEvent(metadata, err);
+    expect(result.content.type).toBe("context_length_exceeded");
+    expect(result.content.errorSource).toBe("dust");
+  });
+
   it.each([
     [400, "invalid_request_error", "dust"],
     [422, "invalid_request_error", "dust"],
@@ -1690,6 +1709,24 @@ describe("batchResultToEvents", () => {
         message: "Server error from Anthropic: upstream blew up",
         errorSource: "provider",
       },
+    });
+  });
+
+  it("maps a prompt-too-long errored result to a context_length_exceeded event", () => {
+    const result = {
+      type: "errored",
+      error: {
+        type: "error",
+        error: {
+          type: "invalid_request_error",
+          message: "prompt is too long: 1057001 tokens > 1000000 maximum",
+        },
+      },
+    } as BetaMessageBatchResult;
+    const events = batchResultToEvents(result, metadata, realConverters);
+    expect(events[0]).toMatchObject({
+      type: "error",
+      content: { type: "context_length_exceeded", errorSource: "dust" },
     });
   });
 

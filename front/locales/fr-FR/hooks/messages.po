@@ -265,6 +265,18 @@ msgstr "{skippedAttachmentCount, plural, one {# pièce jointe a été ignorée.}
 msgid "Failed to hide the suggestion."
 msgstr "Impossible de masquer la suggestion."
 
+#: front/hooks/useMakeFrameDraftLive.ts
+msgid "Could not make the changes live"
+msgstr "Impossible de mettre les modifications en ligne."
+
+#: front/hooks/useMakeFrameDraftLive.ts
+msgid "Changes are live"
+msgstr "Les modifications sont en ligne."
+
+#: front/hooks/useMakeFrameDraftLive.ts
+msgid "The share link now shows this version."
+msgstr "Le lien de partage affiche désormais cette version."
+
 #: front/hooks/useMarkAllConversationsAsRead.ts
 msgid "All conversations marked as read"
 msgstr "Toutes les conversations ont été marquées comme lues"

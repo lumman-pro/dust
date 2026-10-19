@@ -890,6 +890,14 @@ msgstr "Reaktion hinzufügen"
 msgid "More reactions"
 msgstr "Weitere Reaktionen"
 
+#: front/components/assistant/conversation/MessageTimeline.tsx
+msgid "Message timeline"
+msgstr "Nachrichtenverlauf"
+
+#: front/components/assistant/conversation/MessageTimeline.tsx
+msgid "Go to message {messageNumber}"
+msgstr "Zu Nachricht {messageNumber}"
+
 #: front/components/assistant/conversation/SidebarMenu.tsx
 msgid "Today"
 msgstr "Heute"
@@ -1161,8 +1169,12 @@ msgid "An unexpected error occurred."
 msgstr "Ein unerwarteter Fehler ist aufgetreten."
 
 #: front/components/assistant/conversation/agentErrorMessages.ts
-msgid "Your message or retrieved data is too large. Break it into smaller parts or reduce the input size."
-msgstr "Ihre Nachricht oder die abgerufenen Daten sind zu groß. Teilen Sie sie in kleinere Teile auf oder verringern Sie die Eingabegröße."
+msgid "Context window exceeded"
+msgstr "Kontextfenster überschritten"
+
+#: front/components/assistant/conversation/agentErrorMessages.ts
+msgid "Your message, retrieved data, or the agent's instructions are too large for the model. Break your request into smaller parts or shorten the agent's instructions."
+msgstr "Ihre Nachricht, die abgerufenen Daten oder die Anweisungen des Agenten sind zu groß für das Modell. Teilen Sie Ihre Anfrage in kleinere Teile auf oder kürzen Sie die Anweisungen des Agenten."
 
 #: front/components/assistant/conversation/agentErrorMessages.ts
 msgid "The connection was interrupted while receiving the response. Try again."
@@ -1395,10 +1407,6 @@ msgstr "Dieses Tool ist für den Agenten nicht verfügbar."
 #: front/components/assistant/conversation/agentErrorMessages.ts
 msgid "This answer was marked as failed because it stopped responding."
 msgstr "Diese Antwort wurde als fehlgeschlagen markiert, da sie nicht mehr reagiert hat."
-
-#: front/components/assistant/conversation/agentErrorMessages.ts
-msgid "Context window exceeded"
-msgstr "Kontextfenster überschritten"
 
 #: front/components/assistant/conversation/agentErrorMessages.ts
 msgid "Your message or retrieved data is too large. Break your request into smaller parts or reduce agent output."

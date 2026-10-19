@@ -24,18 +24,32 @@ import { useLingui } from "@lingui/react/macro";
 import { useCallback } from "react";
 import type { Fetcher } from "swr";
 
-/** Relative API path of a Frame's permissions, for the live publication unless asked. */
+/**
+ * Relative API path of a Frame's permissions, for the live publication unless asked. A `cacheKey`
+ * (the Frame's content hash) makes a new publish refetch them.
+ */
 export function getFramePermissionsKey({
   owner,
   frameId,
   publication,
+  cacheKey,
 }: {
   owner: LightWorkspaceType;
   frameId: string;
   publication?: "latest";
+  cacheKey?: string;
 }): string {
-  const publicationParam = publication ? `?publication=${publication}` : "";
-  return `/api/w/${owner.sId}/frames/${encodeURIComponent(frameId)}/permissions${publicationParam}`;
+  const params = new URLSearchParams();
+  if (cacheKey) {
+    params.set("v", cacheKey);
+  }
+  if (publication) {
+    params.set("publication", publication);
+  }
+  const query = params.toString();
+  return `/api/w/${owner.sId}/frames/${encodeURIComponent(frameId)}/permissions${
+    query ? `?${query}` : ""
+  }`;
 }
 
 /**
@@ -48,11 +62,13 @@ export function useFramePermissions({
   owner,
   frameId,
   publication,
+  cacheKey,
   disabled = false,
 }: {
   owner: LightWorkspaceType | null;
   frameId: string;
   publication?: "latest";
+  cacheKey?: string;
   disabled?: boolean;
 }) {
   const { fetcher } = useFetcher();
@@ -60,14 +76,17 @@ export function useFramePermissions({
   const isDisabled = disabled || !owner || !frameId;
   const swrKey = isDisabled
     ? null
-    : getFramePermissionsKey({ owner, frameId, publication });
+    : getFramePermissionsKey({ owner, frameId, publication, cacheKey });
 
-  const { data, error, mutate } = useSWRWithDefaults(
+  const { data, error, isLoading, mutate } = useSWRWithDefaults(
     swrKey,
     permissionsFetcher,
     {
       disabled: isDisabled,
       revalidateOnFocus: false,
+      // A new cacheKey (agent publish) keeps the previous permissions while it loads, so the panel
+      // keeps its edit rights; `hasFramePermissions` tells retained ones from none at all.
+      keepPreviousData: true,
     }
   );
 
@@ -81,8 +100,11 @@ export function useFramePermissions({
     isLastPublisher: data?.isLastPublisher ?? false,
     lastPublisherName: data?.lastPublisherName ?? null,
     hasAuthorizedRequiredTools: data?.hasAuthorizedRequiredTools ?? true,
-    isFramePermissionsLoading: !isDisabled && !data && !error,
+    hasFramePermissions: data !== undefined,
+    isFramePermissionsLoading: !isDisabled && isLoading,
     isFramePermissionsError: error,
+    draftPublicationId: data?.draftPublicationId ?? null,
+    livePublishedAt: data?.livePublishedAt ?? null,
     mutateFramePermissions: mutate,
   };
 }

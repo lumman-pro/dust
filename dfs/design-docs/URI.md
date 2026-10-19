@@ -119,9 +119,12 @@ under its owner's user folder:
   users/
     <userSId>/
       pods/
-        pod-<podSId>/
-      conversations/
-        conv-<conversationSId>/
+        <podName>/                     application/vnd.dust.pod
+                                       xattr dust.display_name = <pod's actual name>
+          .conversations/
+            conv-<conversationSId>/    application/vnd.dust.conversation
+      .conversations/
+        conv-<conversationSId>/        application/vnd.dust.conversation
 ```
 
 Only user folders are created from the tenant root. Pod and conversation folders are created from
@@ -129,13 +132,23 @@ their owner's user folder ID, which front already stores:
 
 ```text
 create dfs://<tenant-root-id>/users/<userSId>
-create dfs://<userSId>--<user-folder-id>/pods/pod-<podSId>
-create dfs://<userSId>--<user-folder-id>/conversations/conv-<conversationSId>
+create dfs://<userSId>--<user-folder-id>/pods/<podName>
+create dfs://<userSId>--<user-folder-id>/.conversations/conv-<conversationSId>
 ```
 
-- **Layout:** namespace folders (`users/`, `pods/`, `conversations/`) keep listings small and leave
+- **Layout:** namespace folders (`users/`, `pods/`, `.conversations/`) keep listings small and leave
   room for grants per namespace. They are created the first time they are needed, like any missing
-  intermediate directory.
+  intermediate directory. `.conversations/` starts with a dot so that file listings hide it by
+  default.
+- **MIME types:** pod folders have the MIME type `application/vnd.dust.pod` and conversation folders
+  `application/vnd.dust.conversation`, so clients can recognize them wherever they are moved. Other
+  folders keep the default `inode/directory`.
+- **Pod names:** pod folders are named after the pod, made a valid basename: `/` and control
+  characters become `-`, surrounding whitespace and leading dots are removed, and the name is cut to
+  255 bytes. A name with nothing left falls back to `pod-<podSId>`. The pod's actual name is stored
+  in the `dust.display_name` xattr. Renaming a pod does not rename its folder yet, and two pods can
+  get the same folder name (a deleted pod's name reused, or names equal once sanitized): the second
+  one then reuses the first one's folder. Both are not handled yet.
 - **Stored reference:** front stores the returned folder ID on the user, the pod, or the
   conversation. All later access to that context's content uses this ID as the anchor, never a path
   from the root or from the user folder.
@@ -145,9 +158,9 @@ create dfs://<userSId>--<user-folder-id>/conversations/conv-<conversationSId>
   workspace, so a user who belongs to several workspaces has one folder per workspace, and its ID is
   stored per user and workspace, not on the global user. Deleting a user's folder deletes the pods
   and conversations it contains.
-- **Names:** user folders are named after the user's sId, like pod and conversation folders. An sId
-  never changes, so folders never need renaming, and it needs no percent-encoding in URIs. Two
-  contexts can therefore never claim the same name.
+- **Names:** user and conversation folders are named after their sId. An sId never changes, so
+  these folders never need renaming, and it needs no percent-encoding in URIs. Two of them can
+  therefore never claim the same name.
 - **Retries:** `Apply` has no idempotency key, so a lost response leaves the outcome unknown. A
   retry that fails with `ALREADY_EXISTS` looks the name up under the same parent folder and uses the
   existing folder's ID. This recovery is the only case where front resolves an existing context

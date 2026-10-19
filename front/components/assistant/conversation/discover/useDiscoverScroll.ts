@@ -1,4 +1,5 @@
 import { trackDiscoverScrollPullOpen } from "@app/components/assistant/conversation/discover/discoveryTracking";
+import { wheelDeltaPx } from "@app/lib/client/wheel";
 import { assertNeverAndIgnore } from "@app/types/shared/utils/assert_never";
 import { MOTION_EASINGS } from "@dust-tt/sparkle";
 import type { MotionValue } from "framer-motion";
@@ -13,7 +14,6 @@ const PULL_DISTANCE_PX = 250;
 const PULL_RELEASE_DELAY_MS = 300;
 const PULL_RELEASE_SECONDS = 0.25;
 const PULL_COMPLETE_TOLERANCE = 1e-6;
-const WHEEL_LINE_HEIGHT_PX = 16;
 
 type DiscoverStage = "home" | "transition" | "discover";
 
@@ -26,17 +26,6 @@ function releasePull(pullProgress: MotionValue<number>) {
     duration: PULL_RELEASE_SECONDS,
     ease: MOTION_EASINGS.enter,
   });
-}
-
-function wheelDeltaPx(event: WheelEvent, pageHeightPx: number): number {
-  switch (event.deltaMode) {
-    case WheelEvent.DOM_DELTA_LINE:
-      return event.deltaY * WHEEL_LINE_HEIGHT_PX;
-    case WheelEvent.DOM_DELTA_PAGE:
-      return event.deltaY * pageHeightPx;
-    default:
-      return event.deltaY;
-  }
 }
 
 function onScrollSettled(

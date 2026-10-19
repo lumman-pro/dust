@@ -6,7 +6,6 @@
 //! - `cache`: server replies served again while younger than the cache TTL.
 //!
 //! The mount root is built by the mount itself: it lists the folders the caller configures.
-//! Listing dfs directories returns `EOPNOTSUPP` until the mount uses the server's `List`.
 
 mod attributes;
 mod budget;

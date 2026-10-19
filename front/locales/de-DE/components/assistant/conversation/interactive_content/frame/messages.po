@@ -25,6 +25,26 @@ msgstr "Beta"
 msgid "Error loading the Frame source."
 msgstr "Fehler beim Laden der Frame-Quelle."
 
+#: front/components/assistant/conversation/interactive_content/frame/FrameDraftControls.tsx
+msgid "Not live yet. The share link shows the version from {liveSince}."
+msgstr "Noch nicht live. Der Freigabelink zeigt die Version vom {liveSince}."
+
+#: front/components/assistant/conversation/interactive_content/frame/FrameDraftControls.tsx
+msgid "Not live yet. The share link shows the live version."
+msgstr "Noch nicht live. Der Freigabelink zeigt die Live-Version."
+
+#: front/components/assistant/conversation/interactive_content/frame/FrameDraftControls.tsx
+msgid "Draft"
+msgstr "Entwurf"
+
+#: front/components/assistant/conversation/interactive_content/frame/FrameDraftControls.tsx
+msgid "Make live"
+msgstr "Live schalten"
+
+#: front/components/assistant/conversation/interactive_content/frame/FrameDraftControls.tsx
+msgid "Show these changes on the share link"
+msgstr "Diese Änderungen im Freigabelink anzeigen"
+
 #: front/components/assistant/conversation/interactive_content/frame/FrameEditControls.tsx
 msgid "Apply"
 msgstr "Anwenden"
@@ -420,3 +440,11 @@ msgstr "Sie haben ungespeicherte Textänderungen. Wenn Sie den Bearbeitungsmodus
 #: front/components/assistant/conversation/interactive_content/frame/useFrameEditSession.ts
 msgid "Discard"
 msgstr "Verwerfen"
+
+#: front/components/assistant/conversation/interactive_content/frame/useLiveFrameEditing.tsx
+msgid "This Frame has changes that aren't live yet. Edit it from the conversation."
+msgstr "Dieses Frame enthält Änderungen, die noch nicht live sind. Bearbeiten Sie es in der Unterhaltung."
+
+#: front/components/assistant/conversation/interactive_content/frame/useLiveFrameEditing.tsx
+msgid "Draft pending"
+msgstr "Entwurf ausstehend"

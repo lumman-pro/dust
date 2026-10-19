@@ -18,6 +18,7 @@ interface Mocks {
   canWriteFrameSource: boolean;
   hasAuthorizedRequiredTools: boolean;
   contentCalls: Record<string, unknown>[];
+  draftPublicationId: string | null;
   fileMetadata: Record<string, unknown>;
   hasFrameFunctions: boolean;
   iframeProps: {
@@ -37,6 +38,7 @@ const mocks = vi.hoisted<Mocks>(() => ({
   canWriteFrameSource: true,
   hasAuthorizedRequiredTools: true,
   contentCalls: [],
+  draftPublicationId: null,
   fileMetadata: {},
   hasFrameFunctions: false,
   iframeProps: null,
@@ -188,6 +190,7 @@ vi.mock("@app/lib/swr/frames", () => ({
     mocks.permissionsCalls.push(args);
     return {
       canWriteFrameSource: mocks.canWriteFrameSource,
+      draftPublicationId: mocks.draftPublicationId,
       hasFrameFunctions: mocks.hasFrameFunctions,
       requiredTools: [],
       isLastPublisher: false,
@@ -235,8 +238,8 @@ vi.mock("@dust-tt/sparkle", async () => {
     ReverseLeft: Empty,
     Spinner: Empty,
     Terminal: Empty,
-    Tooltip: ({ trigger }: { trigger: ReactNode }) =>
-      createElement("div", null, trigger),
+    Tooltip: ({ label, trigger }: { label?: ReactNode; trigger: ReactNode }) =>
+      createElement("div", null, trigger, label),
     XClose: Empty,
     cn: (...classes: Array<string | false | null | undefined>) =>
       classes.filter(Boolean).join(" "),
@@ -271,6 +274,7 @@ beforeEach(() => {
   mocks.hasFrameFunctions = false;
   mocks.canWriteFrameSource = true;
   mocks.hasAuthorizedRequiredTools = true;
+  mocks.draftPublicationId = null;
 });
 
 afterEach(() => {
@@ -394,6 +398,40 @@ describe("PodFramePanel", () => {
     expect(mocks.iframeProps).toMatchObject({
       isEditable: false,
     });
+  });
+
+  it("offers no editing while a draft is pending and points writers to the conversation", () => {
+    mocks.draftPublicationId = "pub_draft";
+
+    render(createElement(PodFramePanel, panelProps));
+
+    expect(screen.queryByText("edit-controls")).not.toBeInTheDocument();
+    expect(screen.getByText("Draft pending")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This Frame has changes that aren't live yet. Edit it from the conversation."
+      )
+    ).toBeInTheDocument();
+    expect(mocks.iframeProps).toMatchObject({ isEditable: false });
+    expect(mocks.iframeProps).toMatchObject({ stagedEditMode: undefined });
+    expect(
+      screen.getByRole("button", { name: "Switch to code" })
+    ).toBeInTheDocument();
+  });
+
+  it("shows no draft note to a viewer who cannot write the Frame source", () => {
+    mocks.canWriteFrameSource = false;
+
+    render(createElement(PodFramePanel, panelProps));
+
+    expect(screen.queryByText("Draft pending")).not.toBeInTheDocument();
+    expect(screen.queryByText("edit-controls")).not.toBeInTheDocument();
+  });
+
+  it("shows no draft note to a writer without a pending draft", () => {
+    render(createElement(PodFramePanel, panelProps));
+
+    expect(screen.queryByText("Draft pending")).not.toBeInTheDocument();
   });
 
   it("serves the live publication: no latest bundle, functions or function target", () => {

@@ -74,10 +74,16 @@ export const DEFAULT_SANDBOX_FUNCTION_STAKE: SandboxFunctionStake = "low";
 export const SANDBOX_FUNCTION_INVOCATION_ORIGINS = [
   "interactive_session",
   "delegated",
+  "external_session",
 ] as const;
 
 export type SandboxFunctionInvocationOrigin =
   (typeof SANDBOX_FUNCTION_INVOCATION_ORIGINS)[number];
+
+export type NonExternalSandboxFunctionInvocationOrigin = Exclude<
+  SandboxFunctionInvocationOrigin,
+  "external_session"
+>;
 
 // A published function's slug: lowercase alphanumeric with single hyphen separators (e.g. `greet`,
 // `send-slack-message`). This is the same grammar the manifest validates a function name against —

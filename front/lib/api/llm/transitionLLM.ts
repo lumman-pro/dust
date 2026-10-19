@@ -426,6 +426,8 @@ function mapErrorType(errorType: ErrorType): {
       return { type: "overloaded_error", isRetryable: true };
     case "invalid_request_error":
       return { type: "invalid_request_error", isRetryable: false };
+    case "context_length_exceeded":
+      return { type: "context_length_exceeded", isRetryable: false };
     case "authentication_error":
       return { type: "authentication_error", isRetryable: false };
     case "permission_error":

@@ -890,6 +890,14 @@ msgstr "Add reaction"
 msgid "More reactions"
 msgstr "More reactions"
 
+#: front/components/assistant/conversation/MessageTimeline.tsx
+msgid "Message timeline"
+msgstr "Message timeline"
+
+#: front/components/assistant/conversation/MessageTimeline.tsx
+msgid "Go to message {messageNumber}"
+msgstr "Go to message {messageNumber}"
+
 #: front/components/assistant/conversation/SidebarMenu.tsx
 msgid "Today"
 msgstr "Today"
@@ -1161,8 +1169,12 @@ msgid "An unexpected error occurred."
 msgstr "An unexpected error occurred."
 
 #: front/components/assistant/conversation/agentErrorMessages.ts
-msgid "Your message or retrieved data is too large. Break it into smaller parts or reduce the input size."
-msgstr "Your message or retrieved data is too large. Break it into smaller parts or reduce the input size."
+msgid "Context window exceeded"
+msgstr "Context window exceeded"
+
+#: front/components/assistant/conversation/agentErrorMessages.ts
+msgid "Your message, retrieved data, or the agent's instructions are too large for the model. Break your request into smaller parts or shorten the agent's instructions."
+msgstr "Your message, retrieved data, or the agent's instructions are too large for the model. Break your request into smaller parts or shorten the agent's instructions."
 
 #: front/components/assistant/conversation/agentErrorMessages.ts
 msgid "The connection was interrupted while receiving the response. Try again."
@@ -1395,10 +1407,6 @@ msgstr "This tool isn't available to the agent."
 #: front/components/assistant/conversation/agentErrorMessages.ts
 msgid "This answer was marked as failed because it stopped responding."
 msgstr "This answer was marked as failed because it stopped responding."
-
-#: front/components/assistant/conversation/agentErrorMessages.ts
-msgid "Context window exceeded"
-msgstr "Context window exceeded"
 
 #: front/components/assistant/conversation/agentErrorMessages.ts
 msgid "Your message or retrieved data is too large. Break your request into smaller parts or reduce agent output."

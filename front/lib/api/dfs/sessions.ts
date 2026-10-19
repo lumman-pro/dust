@@ -9,6 +9,10 @@ import { Err, Ok } from "@app/types/shared/result";
 // See `CreateSession` in `dfs/design-docs/API.md`.
 const MAX_SESSION_SUBJECTS = 512;
 
+// Reserved subject that gets `rw` on every object of its session's tenant, ignoring all grants (see
+// `superuser` in `dfs/design-docs/API.md`).
+export const DFS_SUPERUSER_SUBJECT = "superuser";
+
 export function createUserSubject(user: UserResource): string {
   return `u:${user.sId}`;
 }
@@ -60,6 +64,47 @@ export async function createDfsSession(
       )
     );
   }
+  return openSession(auth, { tenantClient, subjects });
+}
+
+/**
+ * Creates a dfs session holding only `DFS_SUPERUSER_SUBJECT`, which bypasses all grants in the
+ * authenticated workspace's tenant, and returns it with a client authenticated with its session
+ * key. `tenantClient` MUST be authenticated with the tenant key of the authenticated workspace (see
+ * `getDfsTenantClient`).
+ */
+/**
+ * @cc [owner:fabiencelier,label:security] superuser-session-subjects
+ * The session MUST hold `DFS_SUPERUSER_SUBJECT` and no other subject, and MUST belong to the
+ * workspace's tenant: a session whose `tenantId` is not the workspace sId MUST fail with
+ * `invalid_response`.
+ */
+/**
+ * @cc [owner:fabiencelier;id13,notify:fabiencelier;id13,label:security] superuser-session-uses
+ * The returned session can read and write every file and folder of the workspace in dfs, whatever
+ * their permissions, so it MUST only be used to create the context folders of
+ * `dfs/design-docs/URI.md`, with their MIME type and xattrs:
+ * - `users/` and the user folders `users/<userSId>`;
+ * - `pods/` and the pod folders `pods/<podName>`.
+ *
+ * It MUST NOT read, write, move or remove any other object, nor be given to a user, an agent or a
+ * sandbox. Any other access MUST use a session from `createDfsSession`.
+ */
+export async function createDfsSuperuserSession(
+  auth: Authenticator,
+  { tenantClient }: { tenantClient: DfsClient }
+): Promise<
+  Result<{ session: DfsSession; sessionClient: DfsClient }, DfsError>
+> {
+  return openSession(auth, { tenantClient, subjects: [DFS_SUPERUSER_SUBJECT] });
+}
+
+async function openSession(
+  auth: Authenticator,
+  { tenantClient, subjects }: { tenantClient: DfsClient; subjects: string[] }
+): Promise<
+  Result<{ session: DfsSession; sessionClient: DfsClient }, DfsError>
+> {
   const session = await tenantClient.createSession({ subjects });
   if (session.isErr()) {
     return session;

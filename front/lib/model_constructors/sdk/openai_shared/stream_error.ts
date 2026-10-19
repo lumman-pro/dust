@@ -1,7 +1,10 @@
 import type { EndpointMetadata } from "@app/lib/model_constructors/types/endpoint_metadata";
 import type { ErrorEvent } from "@app/lib/model_constructors/types/output/events";
 import { buildErrorEvent } from "@app/lib/model_constructors/utils/build_error_event";
-import { buildHttpStatusErrorEvent } from "@app/lib/model_constructors/utils/classify_http_status";
+import {
+  buildHttpStatusErrorEvent,
+  httpErrorMessage,
+} from "@app/lib/model_constructors/utils/classify_http_status";
 import { classifyStreamError } from "@app/lib/model_constructors/utils/classify_stream_error";
 import {
   APIConnectionError,
@@ -12,6 +15,10 @@ import {
 
 export function isFlexUnavailableError(error: unknown): error is APIError {
   return error instanceof APIError && error.code === "flex_unavailable";
+}
+
+function isContextLengthExceededError(error: APIError): boolean {
+  return error.code === "context_length_exceeded";
 }
 
 function getEffectiveHttpStatus(error: APIError): number | undefined {
@@ -75,6 +82,19 @@ export function openaiStreamErrorToErrorEvent(
     });
   }
   if (error instanceof APIError) {
+    if (isContextLengthExceededError(error)) {
+      return buildErrorEvent({
+        errorSource: "dust",
+        metadata,
+        type: "context_length_exceeded",
+        message: httpErrorMessage({
+          type: "context_length_exceeded",
+          provider: providerName,
+          detail: error.message,
+        }),
+        originalError: error,
+      });
+    }
     // A statusless `APIError` is how the SDK surfaces an in-band SSE `error`
     // payload. That can be a permanent request or model error, not only a
     // transient provider outage, so we attribute it to the provider but leave it
