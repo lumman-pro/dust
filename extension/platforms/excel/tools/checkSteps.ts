@@ -1,4 +1,5 @@
 import { Err, Ok, type Result } from "@app/types/shared/result";
+import { checkFormulasInArgument } from "@extension/platforms/excel/tools/formulas";
 import type { Step } from "@extension/platforms/excel/tools/parseExpression";
 
 // The member names of all the Excel classes. Example: "getRange" is in this type.
@@ -149,6 +150,63 @@ const READ_METHODS: ReadonlySet<string> = new Set<ExcelMember>([
   "isFiltered",
 ]);
 
+// The methods that a write expression can call as its last step. Each one changes the workbook,
+// the way the user would from the Excel window: it adds, changes, sorts or removes content.
+//
+// `set` is the method that changes the properties of an object. Every Office.js object has it,
+// and it takes the properties as one object: `range.set({ values: [[1]] })` writes what
+// `range.values = [[1]]` would write. It is why an expression never assigns.
+//
+// A method that is not in this list is refused, even when it writes. To allow one, add it here.
+//
+// `insertWorksheetsFromBase64` is not in the list on purpose: it inserts the worksheets of
+// another workbook, given as a base64 string. Their cells carry their own formulas, which stay
+// inside that string, so `checkFormulasInArgument` never reads them. It is a way around the only
+// rule that stops a formula from reaching outside the workbook.
+const WRITE_METHODS: ReadonlySet<string> = new Set<ExcelMember>([
+  "set",
+  "activate",
+  "add",
+  "apply",
+  "applyBottomItemsFilter",
+  "applyBottomPercentFilter",
+  "applyCellColorFilter",
+  "applyCustomFilter",
+  "applyDynamicFilter",
+  "applyFontColorFilter",
+  "applyIconFilter",
+  "applyTopItemsFilter",
+  "applyTopPercentFilter",
+  "applyValuesFilter",
+  "autoFill",
+  "autofitColumns",
+  "autofitRows",
+  "calculate",
+  "clear",
+  "clearFilters",
+  "convertToRange",
+  "copyFrom",
+  "delete",
+  "group",
+  "insert",
+  "merge",
+  "reapply",
+  "refresh",
+  "refreshAll",
+  "removeDuplicates",
+  "replaceAll",
+  "select",
+  "setCellProperties",
+  "setColumnProperties",
+  "setPrintArea",
+  "setPrintMargins",
+  "setPrintTitleColumns",
+  "setPrintTitleRows",
+  "setRowProperties",
+  "ungroup",
+  "unmerge",
+]);
+
 /**
  * Checks the `load` step.
  *
@@ -190,7 +248,8 @@ function isInternalName(name: string): boolean {
 }
 
 /**
- * Checks one step of a read.
+ * Checks a step that only reads: every step of a read, and every step of a write before the one
+ * that writes.
  *
  * Examples:
  *   - The property `worksheets` is allowed: to get a property only reads.
@@ -238,4 +297,56 @@ export function checkReadSteps(steps: Step[]): Result<undefined, string> {
     }
   }
   return new Ok(undefined);
+}
+
+/**
+ * Checks the step that writes, which is the last step of a write expression.
+ *
+ * Examples:
+ *   - `add('Sheet2')` is allowed: `add` is in `WRITE_METHODS`.
+ *   - `set({ values: [[1]] })` is allowed, and its properties are checked for formulas.
+ */
+function checkWriteStep(step: Step): Result<undefined, string> {
+  if (isInternalName(step.name)) {
+    return new Err(`"${step.name}" is not allowed.`);
+  }
+  if (step.kind !== "call" || !WRITE_METHODS.has(step.name)) {
+    return new Err(
+      `"${step.name}" is not allowed: a write must end with a method that changes the workbook, such as "set".`
+    );
+  }
+  // This step is the only one that writes, so its arguments are the only ones that put a
+  // formula in the workbook: the properties of `set`, the reference of `names.add`, the rule of
+  // a conditional format. The steps before it only read.
+  for (const arg of step.args) {
+    const check = checkFormulasInArgument(arg);
+    if (check.isErr()) {
+      return check;
+    }
+  }
+  return new Ok(undefined);
+}
+
+/**
+ * Checks the steps of a write expression: every step before the last one only moves to another
+ * object, and the last one is the write.
+ *
+ * Examples:
+ *   - `workbook.worksheets.add('Sheet2')` is allowed: `add` is in `WRITE_METHODS`.
+ *   - `workbook.worksheets.getItem('Sheet1').getRange('A1').set({ values: [[1]] })` is allowed:
+ *     the steps before `set` only move to the range.
+ */
+export function checkWriteSteps(steps: Step[]): Result<undefined, string> {
+  const lastStep = steps[steps.length - 1];
+  if (!lastStep) {
+    return new Err("the expression must write something.");
+  }
+  // Every step before the last one only moves to another object, which is what a read does.
+  for (const step of steps.slice(0, -1)) {
+    const check = checkReadStep(step, false);
+    if (check.isErr()) {
+      return check;
+    }
+  }
+  return checkWriteStep(lastStep);
 }
