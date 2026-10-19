@@ -8,7 +8,7 @@ import type { ToolHandlers } from "@app/lib/actions/mcp_internal_actions/tool_de
 import { buildTools } from "@app/lib/actions/mcp_internal_actions/tool_definition";
 import { isJITMCPServerView } from "@app/lib/actions/mcp_internal_actions/utils";
 import {
-  isPersonalServerUnusableForMessage,
+  isServerUsableForMessage,
   PERSONAL_SERVER_UNUSABLE_MESSAGE,
 } from "@app/lib/actions/personal_actions";
 import { getToolNamePrefix } from "@app/lib/actions/tool_name_utils";
@@ -66,11 +66,10 @@ const handlers: ToolHandlers<typeof TOOLSETS_TOOLS_METADATA> = {
         (mcpServerView) =>
           mcpServerView.server.availability !== "auto_hidden_builder"
       )
-      .filter(
-        (mcpServerView) =>
-          !isPersonalServerUnusableForMessage(mcpServerView, {
-            isWithoutConcreteUser,
-          })
+      .filter((mcpServerView) =>
+        isServerUsableForMessage(mcpServerView, {
+          isWithoutConcreteUser,
+        })
       );
 
     return new Ok(
@@ -108,7 +107,7 @@ const handlers: ToolHandlers<typeof TOOLSETS_TOOLS_METADATA> = {
     }
 
     if (
-      isPersonalServerUnusableForMessage(mcpServerView, {
+      !isServerUsableForMessage(mcpServerView, {
         isWithoutConcreteUser: isUserMessageWithoutConcreteUser(
           runContext.userMessage
         ),

@@ -6,7 +6,7 @@ import {
 import type { AgentLoopMCPApproveExecutionEvent } from "@app/lib/actions/mcp_internal_actions/events";
 import { validateToolInputs } from "@app/lib/actions/mcp_utils";
 import {
-  isPersonalServerUnusableForMessage,
+  isServerUsableForMessage,
   PERSONAL_SERVER_UNUSABLE_MESSAGE,
 } from "@app/lib/actions/personal_actions";
 import { isToolExecutionStatusFinal } from "@app/lib/actions/statuses";
@@ -119,7 +119,7 @@ export async function createSandboxChildAction(
   }
 
   if (
-    isPersonalServerUnusableForMessage(view, {
+    !isServerUsableForMessage(view, {
       isWithoutConcreteUser: userMessageRow.userMessage.userId === null,
     })
   ) {

@@ -2,16 +2,16 @@ import type { MCPOAuthUseCase } from "@app/types/oauth/lib";
 
 /**
  * @cc [owner:tdraier,label:security] authorless-messages-skip-personal-servers
- * A server view scoped to `personal_actions` MUST be reported unusable when the user message being
- * answered has no author (`user` is null, posted by Dust on someone's behalf). Every surface that
- * lists or runs tools for an agent message (agent-loop tool listing, `toolsets` list and enable,
- * sandbox `dsbx` listing and `/call`) MUST apply this check, so no path runs such a server.
+ * A server view scoped to `personal_actions` MUST be reported not usable when the user message
+ * being answered has no author (`user` is null, posted by Dust on someone's behalf). Every surface
+ * that lists or runs tools for an agent message (agent-loop tool listing, `toolsets` list and
+ * enable, sandbox `dsbx` listing and `/call`) MUST apply this check, so no path runs such a server.
  */
-export function isPersonalServerUnusableForMessage(
+export function isServerUsableForMessage(
   view: { oAuthUseCase: MCPOAuthUseCase | null },
   { isWithoutConcreteUser }: { isWithoutConcreteUser: boolean }
 ): boolean {
-  return isWithoutConcreteUser && view.oAuthUseCase === "personal_actions";
+  return !isWithoutConcreteUser || view.oAuthUseCase !== "personal_actions";
 }
 
 export const PERSONAL_SERVER_UNUSABLE_MESSAGE =

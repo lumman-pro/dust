@@ -1,4 +1,4 @@
-import { isPersonalServerUnusableForMessage } from "@app/lib/actions/personal_actions";
+import { isServerUsableForMessage } from "@app/lib/actions/personal_actions";
 import { isServerSideMCPServerConfiguration } from "@app/lib/actions/types/guards";
 import { FILES_SERVER_NAME } from "@app/lib/api/actions/servers/files/metadata";
 import { SANDBOX_TOOL_NAME } from "@app/lib/api/actions/servers/sandbox/metadata";
@@ -237,11 +237,10 @@ app.get("/", async (ctx): HandlerResult<GetSandboxToolsResponseType> => {
     {
       serverViews: filterServerViews(
         views
-          .filter(
-            (view) =>
-              !isPersonalServerUnusableForMessage(view, {
-                isWithoutConcreteUser,
-              })
+          .filter((view) =>
+            isServerUsableForMessage(view, {
+              isWithoutConcreteUser,
+            })
           )
           .map((view) => view.toJSON()),
         ctx.req.query()

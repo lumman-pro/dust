@@ -64,7 +64,7 @@ import {
   MCPOAuthProviderError,
   decideMCPAuthFailureAction,
 } from "@app/lib/actions/mcp_oauth_provider";
-import { isPersonalServerUnusableForMessage } from "@app/lib/actions/personal_actions";
+import { isServerUsableForMessage } from "@app/lib/actions/personal_actions";
 import {
   classifyToolAbortSignal,
   isToolInterruptionError,
@@ -1236,18 +1236,15 @@ export async function tryListMCPTools(
   // user's behalf) has no person to run as, so those servers are left out of the
   // tool list entirely: running them on the workspace connection instead would
   // quietly override that decision.
-  const listableActionsWithOrigin = isWithoutConcreteUser
-    ? mcpServerActionsWithOrigin.filter(({ action }) => {
-        if (!isServerSideMCPServerConfiguration(action)) {
-          return true;
-        }
-        const view = preFetchedMcpServerViews.get(action.mcpServerViewId);
-        return (
-          !view ||
-          !isPersonalServerUnusableForMessage(view, { isWithoutConcreteUser })
-        );
-      })
-    : mcpServerActionsWithOrigin;
+  const listableActionsWithOrigin = mcpServerActionsWithOrigin.filter(
+    ({ action }) => {
+      if (!isServerSideMCPServerConfiguration(action)) {
+        return true;
+      }
+      const view = preFetchedMcpServerViews.get(action.mcpServerViewId);
+      return !view || isServerUsableForMessage(view, { isWithoutConcreteUser });
+    }
+  );
 
   // Discover all tools exposed by all available MCP servers.
   const results = await concurrentExecutor(
