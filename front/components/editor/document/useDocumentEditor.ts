@@ -3,6 +3,7 @@ import {
   loggableRefusal,
   saveDfm,
 } from "@app/components/editor/document/dfm_persistence";
+import { DocumentCodeHighlight } from "@app/components/editor/document/DocumentCodeHighlight";
 import {
   getDocumentJSONComments,
   withDocumentJSONComments,
@@ -145,8 +146,16 @@ export const useDocumentEditor = ({
     [t]
   );
 
+  // Highlighting is added here, not with the schema, since the collab server bundles the schema
+  // and has no use for the highlighter.
+  const liveExtensions = live?.extensions;
+  const extensions = useMemo(
+    () => [...(liveExtensions ?? savedExtensions), DocumentCodeHighlight],
+    [liveExtensions, savedExtensions]
+  );
+
   const editor = useEditor({
-    extensions: live?.extensions ?? savedExtensions,
+    extensions,
     content,
     contentType: "json",
     immediatelyRender: false,
