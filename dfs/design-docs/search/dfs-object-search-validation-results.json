@@ -10,7 +10,7 @@
     "minimum_wire_compatibility_version": "7.17.0",
     "minimum_index_compatibility_version": "7.0.0"
   },
-  "document_count": 144,
+  "document_count": 147,
   "mapping_source": "../../server/src/search/indices/objects_1.mappings.json",
   "settings_source": "../../server/src/search/indices/objects_1.settings.cell-00000.json",
   "local_settings_changes": {
@@ -117,11 +117,11 @@
         "name_prefix",
         "reverse_cross_prefix",
         "bilingual",
-        "folder",
         "camel",
         "exact_phrase",
         "composite",
         "composite_wrong_type",
+        "folder",
         "inexact_gap",
         "name_components",
         "inexact_split",
@@ -231,6 +231,7 @@
       "expected_exact": null,
       "hits": [
         "cross_metadata",
+        "folder",
         "cross_prefix",
         "draft",
         "name_prefix",
@@ -498,7 +499,9 @@
       ],
       "expected_absent": [
         "filter_false_extension",
-        "filter_type_word"
+        "filter_type_word",
+        "unknown_mime_pdf",
+        "folder"
       ],
       "expected_exact": null,
       "hits": [
@@ -515,6 +518,50 @@
         "composite",
         "composite_wrong_form",
         "filter_pdf_not_text"
+      ],
+      "passed": true
+    },
+    {
+      "label": "a type alias groups multiple MIME values",
+      "input": "type:spreadsheet",
+      "interactive": false,
+      "expected_present": [],
+      "expected_absent": [],
+      "expected_exact": [
+        "spreadsheet_xls",
+        "spreadsheet_xlsx"
+      ],
+      "hits": [
+        "spreadsheet_xls",
+        "spreadsheet_xlsx"
+      ],
+      "passed": true
+    },
+    {
+      "label": "exact MIME selects one member of a type category",
+      "input": "mime:application/vnd.ms-excel",
+      "interactive": false,
+      "expected_present": [],
+      "expected_absent": [],
+      "expected_exact": [
+        "spreadsheet_xls"
+      ],
+      "hits": [
+        "spreadsheet_xls"
+      ],
+      "passed": true
+    },
+    {
+      "label": "extension matching remains available when MIME is unknown",
+      "input": "filename:\"Unknown format.pdf\" ext:pdf",
+      "interactive": false,
+      "expected_present": [],
+      "expected_absent": [],
+      "expected_exact": [
+        "unknown_mime_pdf"
+      ],
+      "hits": [
+        "unknown_mime_pdf"
       ],
       "passed": true
     },
@@ -770,7 +817,6 @@
         "filter_false_extension",
         "filter_other_owner",
         "long_prefix",
-        "folder",
         "unknown_language",
         "camel",
         "exact_phrase",
@@ -782,6 +828,8 @@
         "composite_wrong_type",
         "composite_wrong_form",
         "draft",
+        "folder",
+        "unknown_mime_pdf",
         "inexact_gap",
         "stop_words"
       ],
@@ -1108,8 +1156,8 @@
     {
       "label": "unrelated body length does not change filename score",
       "scores": {
-        "length_short": 16.555742,
-        "length_long": 16.555742
+        "length_short": 16.675787,
+        "length_long": 16.675787
       },
       "passed": true
     },
@@ -2355,7 +2403,7 @@
     },
     "electroencephalographic": {
       "allowed": false,
-      "error": "{\"error\":{\"root_cause\":[{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}],\"type\":\"search_phase_execution_exception\",\"reason\":\"all shards failed\",\"phase\":\"query\",\"grouped\":true,\"failed_shards\":[{\"shard\":0,\"index\":\"codex-dfs-object-search-v1\",\"node\":\"mAz_Q4PUSm-bJgYOqv6BnQ\",\"reason\":{\"type\":\"query_shard_exception\",\"reason\":\"failed to create query: [prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\",\"index_uuid\":\"Fuz5DA7uSHG3PBYhPto9Vg\",\"index\":\"codex-dfs-object-search-v1\",\"caused_by\":{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}}}],\"caused_by\":{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}},\"status\":400}"
+      "error": "{\"error\":{\"root_cause\":[{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}],\"type\":\"search_phase_execution_exception\",\"reason\":\"all shards failed\",\"phase\":\"query\",\"grouped\":true,\"failed_shards\":[{\"shard\":0,\"index\":\"codex-dfs-object-search-v1\",\"node\":\"lv1TTrmoSE2fl_AKf6ehTw\",\"reason\":{\"type\":\"query_shard_exception\",\"reason\":\"failed to create query: [prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\",\"index_uuid\":\"UHJBsB4fT662geQHb090TA\",\"index\":\"codex-dfs-object-search-v1\",\"caused_by\":{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}}}],\"caused_by\":{\"type\":\"exception\",\"reason\":\"[prefix] queries cannot be executed when 'search.allow_expensive_queries' is set to false. For optimised prefix queries on text fields please enable [index_prefixes].\"}},\"status\":400}"
     }
   },
   "stem_highlights": [
@@ -2364,8 +2412,9 @@
       "_id": "french_stem",
       "_score": 1.8021824,
       "_source": {
+        "kind": "file",
         "name": "Journaux.pdf",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       },
       "highlight": {
         "stemmed.fr.name": [
@@ -2378,8 +2427,9 @@
       "_id": "metadata_french_stem",
       "_score": 0.56098,
       "_source": {
+        "kind": "file",
         "name": "Documents",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       }
     },
     {
@@ -2387,8 +2437,9 @@
       "_id": "bilingual",
       "_score": 0.4256689,
       "_source": {
+        "kind": "file",
         "name": "Reports.pdf",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       },
       "highlight": {
         "stemmed.fr.content_text": [
@@ -2401,8 +2452,9 @@
       "_id": "mixed_body",
       "_score": 0.4256689,
       "_source": {
+        "kind": "file",
         "name": "Bilingual bulletin",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       },
       "highlight": {
         "stemmed.fr.content_text": [
@@ -2417,8 +2469,9 @@
       "_id": "name_prefix",
       "_score": 1.0,
       "_source": {
+        "kind": "file",
         "name": "Reports.pdf",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       },
       "highlight": {
         "name": [
@@ -2431,8 +2484,9 @@
       "_id": "name_components",
       "_score": 1.0,
       "_source": {
+        "kind": "file",
         "name": "Q4_Reports-final_v2.pdf",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       },
       "highlight": {
         "name": [
@@ -2445,8 +2499,9 @@
       "_id": "camel",
       "_score": 1.0,
       "_source": {
+        "kind": "file",
         "name": "AnnualReports.pdf",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       },
       "highlight": {
         "name": [
@@ -2459,8 +2514,9 @@
       "_id": "singular",
       "_score": 1.0,
       "_source": {
+        "kind": "file",
         "name": "Report.pdf",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       },
       "highlight": {
         "name": [
@@ -2473,8 +2529,9 @@
       "_id": "reverse_cross_prefix",
       "_score": 1.0,
       "_source": {
+        "kind": "file",
         "name": "Reports.pdf",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       },
       "highlight": {
         "name": [
@@ -2487,8 +2544,9 @@
       "_id": "exact_phrase",
       "_score": 1.0,
       "_source": {
+        "kind": "file",
         "name": "Annual reports.pdf",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       },
       "highlight": {
         "name": [
@@ -2501,8 +2559,9 @@
       "_id": "inexact_inflection",
       "_score": 1.0,
       "_source": {
+        "kind": "file",
         "name": "Annual report.pdf",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       },
       "highlight": {
         "name": [
@@ -2515,8 +2574,9 @@
       "_id": "inexact_order",
       "_score": 1.0,
       "_source": {
+        "kind": "file",
         "name": "Reports annual.pdf",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       },
       "highlight": {
         "name": [
@@ -2529,8 +2589,9 @@
       "_id": "inexact_gap",
       "_score": 1.0,
       "_source": {
+        "kind": "file",
         "name": "Annual revised reports.pdf",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       },
       "highlight": {
         "name": [
@@ -2543,8 +2604,9 @@
       "_id": "bilingual",
       "_score": 1.0,
       "_source": {
+        "kind": "file",
         "name": "Reports.pdf",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       },
       "highlight": {
         "name": [
@@ -2557,8 +2619,9 @@
       "_id": "composite",
       "_score": 1.0,
       "_source": {
+        "kind": "file",
         "name": "Annual reports.pdf",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       },
       "highlight": {
         "name": [
@@ -2571,8 +2634,9 @@
       "_id": "composite_wrong_type",
       "_score": 1.0,
       "_source": {
+        "kind": "file",
         "name": "Annual reports.pdf",
-        "file_type": "txt"
+        "mime_type": "text/plain"
       },
       "highlight": {
         "name": [
@@ -2585,8 +2649,9 @@
       "_id": "composite_wrong_form",
       "_score": 1.0,
       "_source": {
+        "kind": "file",
         "name": "Annual report.pdf",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       },
       "highlight": {
         "name": [
@@ -2599,8 +2664,9 @@
       "_id": "draft",
       "_score": 1.0,
       "_source": {
+        "kind": "file",
         "name": "Reports draft.pdf",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       },
       "highlight": {
         "name": [
@@ -2613,8 +2679,9 @@
       "_id": "supplementary",
       "_score": 1.0,
       "_source": {
+        "kind": "file",
         "name": "𠮷report",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       },
       "highlight": {
         "name": [
@@ -2627,12 +2694,13 @@
       "_id": "folder",
       "_score": 1.0,
       "_source": {
-        "name": "Reports.pdf",
-        "file_type": "folder"
+        "kind": "directory",
+        "name": "Budget reports.pdf",
+        "mime_type": "application/pdf"
       },
       "highlight": {
         "name": [
-          "<em>Reports.pdf</em>"
+          "Budget <em>reports.pdf</em>"
         ]
       }
     },
@@ -2641,8 +2709,9 @@
       "_id": "report_annee",
       "_score": 1.0,
       "_source": {
+        "kind": "file",
         "name": "report année 2026",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       },
       "highlight": {
         "name": [
@@ -2655,8 +2724,9 @@
       "_id": "attribute_prefix",
       "_score": 0.75,
       "_source": {
+        "kind": "file",
         "name": "Reference",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       }
     },
     {
@@ -2664,8 +2734,9 @@
       "_id": "tag_prefix",
       "_score": 0.5,
       "_source": {
+        "kind": "file",
         "name": "Tagged item",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       }
     },
     {
@@ -2673,8 +2744,9 @@
       "_id": "cross_metadata",
       "_score": 0.375,
       "_source": {
+        "kind": "file",
         "name": "Budget",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       }
     },
     {
@@ -2682,8 +2754,9 @@
       "_id": "inexact_value_boundary",
       "_score": 0.375,
       "_source": {
+        "kind": "file",
         "name": "Notes",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       }
     },
     {
@@ -2691,8 +2764,9 @@
       "_id": "body_prefix",
       "_score": 0.25,
       "_source": {
+        "kind": "file",
         "name": "Minutes.txt",
-        "file_type": "txt"
+        "mime_type": "text/plain"
       },
       "highlight": {
         "content_text": [
@@ -2705,8 +2779,9 @@
       "_id": "cross_prefix",
       "_score": 0.25,
       "_source": {
+        "kind": "file",
         "name": "Budget.pdf",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       },
       "highlight": {
         "content_text": [
@@ -2719,8 +2794,9 @@
       "_id": "exact_body_phrase",
       "_score": 0.25,
       "_source": {
+        "kind": "file",
         "name": "Board notes",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       },
       "highlight": {
         "content_text": [
@@ -2733,8 +2809,9 @@
       "_id": "inexact_split",
       "_score": 0.25,
       "_source": {
+        "kind": "file",
         "name": "Annual",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       },
       "highlight": {
         "content_text": [
@@ -2747,10 +2824,11 @@
     {
       "_index": "codex-dfs-object-search-v1",
       "_id": "length_short",
-      "_score": 16.555742,
+      "_score": 16.675787,
       "_source": {
+        "kind": "file",
         "name": "Quasar budget",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       },
       "fields": {
         "content_text.token_count": [
@@ -2767,10 +2845,11 @@
     {
       "_index": "codex-dfs-object-search-v1",
       "_id": "length_long",
-      "_score": 16.555742,
+      "_score": 16.675787,
       "_source": {
+        "kind": "file",
         "name": "Quasar budget",
-        "file_type": "pdf"
+        "mime_type": "application/pdf"
       },
       "fields": {
         "content_text.token_count": [
@@ -3760,8 +3839,21 @@
             }
           },
           {
-            "term": {
-              "file_type": "pdf"
+            "bool": {
+              "filter": [
+                {
+                  "term": {
+                    "kind": "file"
+                  }
+                },
+                {
+                  "terms": {
+                    "mime_type": [
+                      "application/pdf"
+                    ]
+                  }
+                }
+              ]
             }
           }
         ],

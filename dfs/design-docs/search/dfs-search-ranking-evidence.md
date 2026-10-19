@@ -104,7 +104,7 @@ The following are proposed signals grounded in the [existing index proposal](dfs
 | Folder affinity | `ancestor_ids` plus query context, only inside the authorized search scope |
 | Size-related feature | `size_bytes`. Logical file size is not extracted text length and should not be treated as equivalent |
 
-The proposal does not contain click counts, per-user opens, author, favorites, or historical query/document judgments. `atime_ms` is not a substitute for per-user engagement, and `projected_at` describes indexing activity rather than document relevance. Source-only timestamps such as `created_at_ms` currently disable indexing and doc values. Do not assume cheap script access without changing the feature implementation.
+The proposal does not contain click counts, per-user opens, author, favorites, or historical query/document judgments. `atime_ms` is not a substitute for per-user engagement. Freshness features use the object's `modified_at` or `attributes.source_modified_at`, with raw `mtime_ms` retained when a date cannot be represented.
 
 Before adopting LTR, build representative judgments for filename lookup, prefixes, content questions, missing extraction, long files, and directory results, covering both human and LLM queries. Keep feature extraction consistent between training and inference. Those measurements should choose retrieval fields, weights, and candidate-window size. [8.16 training guidance](https://github.com/elastic/elasticsearch/blob/v8.16.0/docs/reference/reranking/learning-to-rank-model-training.asciidoc)
 

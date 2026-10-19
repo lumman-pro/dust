@@ -106,9 +106,6 @@
     "mime_type": {
       "type": "keyword"
     },
-    "file_type": {
-      "type": "keyword"
-    },
     "extension": {
       "type": "keyword"
     },
@@ -135,9 +132,6 @@
       "type": "date"
     },
     "created_at": {
-      "type": "date"
-    },
-    "projected_at": {
       "type": "date"
     },
     "attributes": {

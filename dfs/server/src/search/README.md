@@ -14,6 +14,10 @@ plus self. Subtree filters use `ancestor_ids`, with an `object_id` alternative w
 selected object. Current read grants select candidates, then DFS must recheck permission once per
 distinct object before returning its title or content.
 
+`kind` is `file` or `directory`. `mime_type` retains the normalized format. Friendly type aliases
+such as `type:pdf` or `type:spreadsheet` belong to application query compilation and resolve to
+filters on those fields. They do not require a separate indexed category.
+
 The versioned JSON files in `indices/` are embedded in the Rust bootstrap command. All cells
 share the same mapping and analysis. Local settings use one primary and no replica. Production
 settings use three primaries, one replica, and a five-second refresh. Each cell has its own settings

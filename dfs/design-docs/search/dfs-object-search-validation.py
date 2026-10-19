@@ -94,9 +94,19 @@ LEXEME = re.compile(
     r'(?:"(?P<phrase>(?:\\.|[^"\\])*)"|(?P<word>[^\s"]+))'
 )
 MODIFIER_FIELDS = {
-    "type": "file_type", "mime": "mime_type", "ext": "extension",
+    "mime": "mime_type", "ext": "extension",
     "tag": "attributes.tags", "owner": "attributes.owner_ids",
     "source": "attributes.source", "filename": "name.folded"
+}
+
+
+# These aliases exercise query-side grouping. The application will own the full registry.
+TYPE_MIME_TYPES = {
+    "pdf": ["application/pdf"],
+    "spreadsheet": [
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ],
 }
 
 
@@ -132,8 +142,14 @@ def compile_query(text, interactive=False, read_grant_ids=("grant-a",), scope_id
                 query = {"range": {"modified_at": {
                     "lt" if modifier == "before" else "gte": value + "T00:00:00Z"
                 }}}
-            elif modifier == "type" and value == "folder":
-                query = {"term": {"kind": "directory"}}
+            elif modifier == "type":
+                if value == "folder":
+                    query = {"term": {"kind": "directory"}}
+                else:
+                    query = {"bool": {"filter": [
+                        {"term": {"kind": "file"}},
+                        {"terms": {"mime_type": TYPE_MIME_TYPES[value]}},
+                    ]}}
             else:
                 query = {"term": {MODIFIER_FIELDS[modifier]: value}}
             (prohibited if token["negative"] else filters).append(query)
@@ -147,14 +163,14 @@ def compile_query(text, interactive=False, read_grant_ids=("grant-a",), scope_id
 
 def search(text, interactive=False, index=INDEX, query=None, **extra):
     body = {"query": query or compile_query(text, interactive), "size": 100,
-            "track_total_hits": True, "_source": ["name", "file_type"], **extra}
+            "track_total_hits": True, "_source": ["name", "kind", "mime_type"], **extra}
     return request("POST", "/" + index + "/_search", body)
 
 
 def document(name, content=None, **extra):
     result = {"tenant_id": "tenant-a", "object_id": name,
               "is_deleted": False,
-              "kind": "file", "name": name, "file_type": "pdf",
+              "kind": "file", "name": name,
               "mime_type": "application/pdf", "extension": "pdf",
               "modified_at": "2026-10-01T00:00:00Z", **extra}
     if content is not None:
@@ -173,7 +189,7 @@ recreate(INDEX, {"settings": settings, "mappings": mappings})
 
 documents = {
     "name_prefix": document("Reports.pdf", "Budget approved."),
-    "body_prefix": document("Minutes.txt", "Reports from the committee.", file_type="txt", mime_type="text/plain"),
+    "body_prefix": document("Minutes.txt", "Reports from the committee.", mime_type="text/plain"),
     "attribute_prefix": document("Reference", attributes={"title": "Reports from France"}),
     "name_components": document("Q4_Reports-final_v2.pdf", "Forecast approved."),
     "camel": document("AnnualReports.pdf"),
@@ -208,13 +224,13 @@ documents = {
     "metadata_french_stem": document("Documents", attributes={"title": "Les journaux des sociétés"}),
     "tag_prefix": document("Tagged item", attributes={"tags": ["Reports"]}),
     "composite": document("Annual reports.pdf", "Budget notes."),
-    "composite_wrong_type": document("Annual reports.pdf", "Budget notes.", file_type="txt", mime_type="text/plain"),
+    "composite_wrong_type": document("Annual reports.pdf", "Budget notes.", mime_type="text/plain"),
     "composite_wrong_form": document("Annual report.pdf", "Budget notes."),
     "large_timestamp": document("Distant timestamp", mtime_ms=18446744073709551615, modified_at=None),
     "filter_pdf": document("Forecast.pdf", "Budget", attributes={"tags": ["Réseau sécurité"], "owner_ids": ["alice-id"], "source": "gdrive"}),
-    "filter_false_extension": document("Forecast.pdf", "Budget", file_type="txt", mime_type="text/plain"),
+    "filter_false_extension": document("Forecast.pdf", "Budget", mime_type="text/plain"),
     "filter_pdf_not_text": document("Forecast", "Budget approval"),
-    "filter_type_word": document("PDF budget.txt", "Budget", file_type="txt", mime_type="text/plain"),
+    "filter_type_word": document("PDF budget.txt", "Budget", mime_type="text/plain"),
     "filter_other_owner": document("Forecast.pdf", "Budget", attributes={"owner_ids": ["bob-id"]}),
     "wrong_tenant": document("Reports.pdf", "Budget", tenant_id="tenant-b"),
     "no_permission": document("Reports.pdf", "Budget", ancestor_ids=["root", "grant-b"],
@@ -228,7 +244,12 @@ documents = {
     "supplementary": document("𠮷report"),
     "exact_name": document("Literal-v1.2.PDF"),
     "nonexact_name": document("Literal v1 2 PDF"),
-    "folder": document("Reports.pdf", kind="directory", file_type="folder"),
+    "folder": document("Budget reports.pdf", kind="directory"),
+    "unknown_mime_pdf": document("Unknown format.pdf", "Budget", mime_type=None),
+    "spreadsheet_xls": document("Workbook.xls", mime_type="application/vnd.ms-excel", extension="xls"),
+    "spreadsheet_xlsx": document("Workbook.xlsx",
+                                mime_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                extension="xlsx"),
     "length_short": document("Quasar budget", "unrelated"),
     "length_long": document("Quasar budget", "unrelated " * 10000),
 }
@@ -329,7 +350,13 @@ check("mixed-language cross-field conjunction", "report société", present=["bi
 check("accent and case normalization", "REUNION equipe", present=["accent"])
 check("quoted accented name", '"reunion equipe"', present=["accent"])
 check("type is a hard filter, not lexical text", "budget type:pdf", present=["filter_pdf", "filter_pdf_not_text"],
-      absent=["filter_false_extension", "filter_type_word"])
+      absent=["filter_false_extension", "filter_type_word", "unknown_mime_pdf", "folder"])
+check("a type alias groups multiple MIME values", "type:spreadsheet",
+      exact=["spreadsheet_xls", "spreadsheet_xlsx"])
+check("exact MIME selects one member of a type category", "mime:application/vnd.ms-excel",
+      exact=["spreadsheet_xls"])
+check("extension matching remains available when MIME is unknown", 'filename:"Unknown format.pdf" ext:pdf',
+      exact=["unknown_mime_pdf"])
 check("modifier at cursor does not prefix an earlier word", "budget repo type:pdf", interactive=True, exact=[])
 check("filter and prefix together at cursor", "type:pdf budget repo", interactive=True,
       present=["cross_prefix", "reverse_cross_prefix"], absent=["filter_false_extension", "filter_type_word"])

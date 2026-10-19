@@ -33,11 +33,11 @@ The active, executable definition is in the [mapping](../../server/src/search/in
 and settings for [cell-00000](../../server/src/search/indices/objects_1.settings.cell-00000.json),
 [cell-00001](../../server/src/search/indices/objects_1.settings.cell-00001.json), and
 [cell-00002](../../server/src/search/indices/objects_1.settings.cell-00002.json). The
-original proposed JSON files remain alongside this note as research snapshots. The
+earlier analyzer examples remain alongside this note for reference. The
 [verification harness](dfs-object-search-validation.py)
 loaded the active mapping and `cell-00000` settings into a disposable ES 8.16 instance, changing
 only shard/replica counts and removing the production allocation constraint.
-[Results](dfs-object-search-validation-results.json): **70 checks passed on 144 synthetic objects**,
+[Results](dfs-object-search-validation-results.json): **73 checks passed on 147 synthetic objects**,
 plus a separate comparison of five prefix/indexing configurations. This establishes mechanics. It is not a production relevance or capacity benchmark.
 
 All five [Rust bootstrap tests](../../server/tests/search.rs) passed, covering creation, preflight
@@ -104,7 +104,9 @@ text in `_source`. Measure this storage tradeoff with real extracted sizes.
 | `stemmed.en.content_text`, `stemmed.fr.content_text` | Text accepted for that language: the whole field when appropriate, or independently classified segments in a mixed body. |
 | `attributes.title`, `attributes.description` | Selected unstemmed text attributes. Optional language projections live under `stemmed.en.attributes` / `stemmed.fr.attributes`. Each field retains its own score. |
 | `attributes.tags` | Normalized keyword array for filtering plus neutral `.text` for lexical search. Only reliably classified tag values populate `stemmed.en.attributes.tags` / `stemmed.fr.attributes.tags`. |
-| `mime_type`, `file_type`, `extension`, `kind` | Separate keywords with explicit meanings. Not copied into natural-language text. |
+| `kind` | Keyword containing `file` or `directory`. |
+| `mime_type` | Normalized MIME type/subtype. Friendly type categories compile to filters on this field. |
+| `extension` | Explicit filename-extension keyword for `ext:` filters. |
 | `attributes.owner_ids`, `attributes.source` | Exact keywords. IDs are not stemmed or accent-folded. |
 | `modified_at`, `created_at`, `attributes.source_modified_at` | Validated date values with doc values for filters and future freshness features. |
 | `name.token_count`, `content_text.token_count` | Numeric doc values for future length features. Not precomputed relevance scores. |
@@ -238,7 +240,7 @@ comparison, not the current selective-language projection or its `_source` stora
 **Compile text into required groups, with filters outside them.** For the combined example:
 
 ```text
-FILTER tenant, current-readable scope, not-deleted, file_type=pdf
+FILTER tenant, current-readable scope, not-deleted, kind=file, mime_type=application/pdf
 AND PHRASE("annual reports", in any one unstemmed field/value)
 AND (
   WORD_OR_STEM("budg", in name OR content OR selected attributes)
@@ -272,14 +274,22 @@ design. Likewise, combined_fields can be useful under a shared analysis strategy
 length statistics is not the desired filename score. The live test confirms that adding 10,000
 unrelated body tokens leaves a filename-only score unchanged with the proposed query.
 
-**Modifiers are a typed projection of metadata, not analysis rules.** Maintain a small registry
-that specifies source key(s), byte decoding, cardinality, normalization, ES destination, and
-supported operators. Producers may use xattributes for most of this metadata. DFS MIME and kind
-already have native fields. Unrecognized/binary/internal xattributes do not enter lexical search.
+**The application compiles modifiers into metadata filters.** The lexer/parser recognizes
+syntax such as `type:pdf`. The query compiler resolves aliases and emits filters on stored fields.
+Type categories live in an application registry of MIME values, so changing a category does not
+require reindexing. The index stores `kind` and normalized `mime_type`, as listed in the
+[original design](https://github.com/dust-tt/dust/blob/b37e616/dfs/design-docs/SEARCH.md#fields).
+There is no derived `file_type` field.
+
+Selected xattributes use a separate projection registry that specifies source key(s), byte
+decoding, cardinality, normalization, ES destination, and supported operators. Producers may use
+xattributes for most of this metadata. DFS MIME and kind already have native fields.
+Unrecognized/binary/internal xattributes do not enter lexical search.
 
 | Modifier | Destination/semantics |
 | --- | --- |
-| `type:pdf` | term filter on file_type=pdf, derived from normalized MIME. Known authoritative MIME takes precedence over a disagreeing filename suffix. |
+| `type:pdf` | `kind=file` and `mime_type=application/pdf`. |
+| `type:spreadsheet` | `kind=file` and a `terms` filter on the MIME values in the application category registry. |
 | `type:folder` | kind=directory. |
 | `mime:application/pdf` | Exact normalized MIME type/subtype. |
 | `ext:pdf` | Explicit extension metadata. Separate from MIME-derived type. |
@@ -287,10 +297,13 @@ already have native fields. Unrecognized/binary/internal xattributes do not ente
 | `owner:<id>`, `source:gdrive` | Exact registered metadata, with a user/alias-resolution layer if needed. |
 | `before:2026-01-01`, `after:2026-01-01` | Typed modified_at range. Define UTC/date-zone boundaries consistently. |
 
-For missing/generic MIME, any fallback from a recognized extension to file_type must be specified
-in that same registry. It is not guessed by an analyzer. Dotfiles, version suffixes, compound
-extensions, and directories have explicit extension-extraction rules. The diagnostic verifies
-that a .pdf filename with a known text/plain type does not pass type:pdf. Optional attribute
+The diagnostic category `spreadsheet` groups the XLS and XLSX MIME values. The application
+registry will define the complete product categories. Missing or generic MIME does not silently
+acquire a type from the filename. `ext:pdf` remains available as an explicit suffix filter. Any
+future extension fallback belongs in query compilation and must preserve authoritative MIME
+precedence. Dotfiles, version suffixes, compound extensions, and directories have explicit
+extension-extraction rules. The diagnostic verifies that unknown MIME, a known text/plain type,
+or directory kind cannot pass `type:pdf` because of a .pdf filename. Optional attribute
 projections are absent when no registered producer value exists. Do not invent owners or sources.
 
 **Prepare for LTR by retaining data and independent features, not by adding a model now.** Preserve
@@ -300,6 +313,10 @@ These query-dependent match features should be computed for the query, not store
 document scores. A future feature builder/reranker can consume the same parsed query and candidate
 objects while the retrieval/filtering stage stays stable. The current mapping/query adds no
 freshness boost or LTR model.
+
+`name.token_count` counts tokens produced by `dfs_filename`, and `content_text.token_count` uses
+`dfs_text`. These explicit numeric fields are optional inputs for later LTR. BM25 already has its
+own internal length normalization, and the current query does not use these counts as boosts.
 
 `mtime_ms` is an unsigned source value. `modified_at` is its validated date projection, omitted
 when it is outside the supported date domain. The diagnostic indexes the maximum u64 with no

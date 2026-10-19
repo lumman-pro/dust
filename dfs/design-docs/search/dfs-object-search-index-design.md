@@ -166,7 +166,6 @@ results. Silently taking the first 65,536 IDs is incorrect.
 | `attr_version`, `content_version` | Original object's `u64` versions, retained in `_source` for freshness checks |
 | `text_source_object_id`, `text_source_content_version` | Optional source-only provenance for the exact bytes used as text |
 | `is_deleted` | `boolean`. Live records explicitly use false, retained tombstones use true |
-| `projected_at` | `date`, server-generated time this projection payload was built. Independent of ES refresh visibility |
 
 The source stores `u64` sizes, versions, and Unix-millisecond timestamps. Keeping `*_ms` as
 `unsigned_long` preserves its full accepted domain. `date` would introduce a signed-range
@@ -313,8 +312,7 @@ cost. Fields used only for freshness or provenance disable both indexing and doc
     "text_source_content_version": {
       "type": "unsigned_long", "index": false, "doc_values": false
     },
-    "is_deleted": { "type": "boolean" },
-    "projected_at": { "type": "date", "format": "strict_date_optional_time||epoch_millis" }
+    "is_deleted": { "type": "boolean" }
   }
 }
 ```
@@ -437,9 +435,9 @@ each revision to a validated source snapshot and immutable payload, and reuse it
 Assigning a higher revision after reading stale data would defeat the ordering guarantee.
 [External versioning](https://www.elastic.co/guide/en/elasticsearch/reference/8.16/docs-index_.html)
 
-Retain deletion as a minimal document with `tenant_id`, `object_id`, `is_deleted=true`, and
-`projected_at`, protected by that same revision. Live searches explicitly filter
-`is_deleted=false`. Keep revisions across object deletion/recreation and keep tombstones until
+Retain deletion as a minimal document with `tenant_id`, `object_id`, and `is_deleted=true`,
+protected by that same revision. Live searches explicitly filter `is_deleted=false`. Keep revisions
+across object deletion/recreation and keep tombstones until
 all older writers, retries, and rebuilds are fenced out. A hard delete alone forgets its version
 after ES's default 60-second delete retention and can allow a delayed old write to recreate it.
 These records/revisions require implementation in the durable publication path. They are not
