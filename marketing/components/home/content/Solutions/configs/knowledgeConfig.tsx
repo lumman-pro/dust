@@ -3,7 +3,10 @@ import type {
   BenefitsProps,
   MetricProps,
 } from "@marketing/components/home/content/Solutions/BenefitsSection";
-import type { QuoteProps } from "@marketing/components/home/content/Solutions/CustomerStoriesSection";
+import type {
+  CustomerStory,
+  QuoteProps,
+} from "@marketing/components/home/content/Solutions/CustomerStoriesSection";
 import type { DemoVideoProps } from "@marketing/components/home/content/Solutions/DemoVideoSection";
 import type { UseCaseProps } from "@marketing/components/home/content/Solutions/UseCasesSection";
 import type {
@@ -158,3 +161,36 @@ export const DemoVideo: DemoVideoProps = {
   videoUrl: "https://fast.wistia.net/embed/iframe/qtnvwgyt0o",
   showCaptions: true,
 };
+
+/** @public Kept for the commented-out customer stories section of the solutions page. */
+export const Stories: CustomerStory[] = [
+  {
+    title: "Clay creates scalable knowledge hub with Dust AI agents",
+    content:
+      "Clay uses Dust AI agents to solve team scaling challenges with instant knowledge access for rapid growth.",
+    href: "/customers/clay-scaling-gtme-team",
+    src: "https://blog.dust.tt/content/images/size/w2000/2025/06/clay_dust_agents.jpg",
+  },
+  {
+    title: "Kyriba's adoption of Dust across all functions",
+    content:
+      "43% of Kyriba employees save more than 3 hours weekly leveraging Dust for RFPs.",
+    href: "/customers/kyriba-accelerating-innovation-with-dust",
+    src: "https://blog.dust.tt/content/images/size/w2000/2025/07/Kyriba-__-Dust.png",
+  },
+  {
+    title:
+      "PayFit Accelerates Content Creation and Knowledge Sharing with Dust",
+    content:
+      "PayFit leverages Dust AI assistants to improve their internal processes across the board.",
+    href: "/customers/dust-ai-payfit-efficiency",
+    src: "https://blog.dust.tt/content/images/size/w2000/2025/07/Payfit-__-Dust.png",
+  },
+  {
+    title: "November Five's journey to minimizing routine tasks with Dust",
+    content:
+      "Discover how November Five accelerates work with Dust, turning 3-hour tasks into 30 minutes.",
+    href: "/customers/november-five-ai-transformation-dust",
+    src: "https://blog.dust.tt/content/images/size/w2000/2025/07/Pennylane-__-Dust-1.jpg",
+  },
+];

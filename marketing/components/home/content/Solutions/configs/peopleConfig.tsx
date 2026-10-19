@@ -3,7 +3,10 @@ import type {
   BenefitsProps,
   MetricProps,
 } from "@marketing/components/home/content/Solutions/BenefitsSection";
-import type { QuoteProps } from "@marketing/components/home/content/Solutions/CustomerStoriesSection";
+import type {
+  CustomerStory,
+  QuoteProps,
+} from "@marketing/components/home/content/Solutions/CustomerStoriesSection";
 import type { DemoVideoProps } from "@marketing/components/home/content/Solutions/DemoVideoSection";
 import type { UseCaseProps } from "@marketing/components/home/content/Solutions/UseCasesSection";
 import type {
@@ -154,3 +157,28 @@ export const DemoVideo: DemoVideoProps = {
   videoUrl: "https://fast.wistia.net/embed/iframe/eu73efeak9",
   showCaptions: true,
 };
+
+/** @public Kept for the commented-out customer stories section of the solutions page. */
+export const Stories: CustomerStory[] = [
+  {
+    title: "Creating an AI-first culture at Doctolib: the People team's role",
+    content:
+      "Doctolib's People team laid the foundations for AI transformation, driving 70% weekly usage across 3,000 employees through cultural change.",
+    href: "/customers/why-doctolib-made-company-wide-enterprise-ai-a-national-cause",
+    src: "https://blog.dust.tt/content/images/size/w2000/2025/07/Doctolib-__-Dust---Part-1.jpg",
+  },
+  {
+    title: "30% time savings in HR: How Alan's People team scaled with Dust",
+    content:
+      "Alan's HR team quadrupled AI adoption and saved 30% of time spent on employee queries by deploying custom Dust agents for people operations.",
+    href: "/customers/how-lucas-people-analyst-at-alan-introduced-dust-to-his-hr-team",
+    src: "https://blog.dust.tt/content/images/size/w2000/2025/07/Alan-__-Dust-1--1-.png",
+  },
+  {
+    title: "Clay accelerates team onboarding with Dust AI agents",
+    content:
+      "Clay uses Dust AI agents to onboard new GTM engineers faster and reduce bottlenecks, achieving 100% adoption and saving 58 hours monthly across their growing team",
+    href: "/customers/clay-scaling-gtme-team",
+    src: "https://blog.dust.tt/content/images/size/w2000/2025/06/clay_dust_agents.jpg",
+  },
+];

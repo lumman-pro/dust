@@ -3,7 +3,10 @@ import type {
   BenefitsProps,
   MetricProps,
 } from "@marketing/components/home/content/Solutions/BenefitsSection";
-import type { QuoteProps } from "@marketing/components/home/content/Solutions/CustomerStoriesSection";
+import type {
+  CustomerStory,
+  QuoteProps,
+} from "@marketing/components/home/content/Solutions/CustomerStoriesSection";
 import type { DemoVideoProps } from "@marketing/components/home/content/Solutions/DemoVideoSection";
 import type { UseCaseProps } from "@marketing/components/home/content/Solutions/UseCasesSection";
 import type {
@@ -158,3 +161,35 @@ export const DemoVideo: DemoVideoProps = {
   videoUrl: "https://fast.wistia.net/embed/iframe/r0dwaexoez",
   showCaptions: true,
 };
+
+/** @public Kept for the commented-out customer stories section of the solutions page. */
+export const Stories: CustomerStory[] = [
+  {
+    title: "Blueground accelerates customer support resolution time with Dust",
+    content:
+      "Discover how Blueground boosted satisfaction and cut resolution time using Dust agents.",
+    href: "/customers/customer-support-blueground",
+    src: "https://blog.dust.tt/content/images/size/w2000/2025/06/Blueground_dust.jpg",
+  },
+  {
+    title: "Malt cuts support ticket closing time by 50% with Dust",
+    content:
+      "Malt streamlines customer support using Dust's AI platform for rapid, consistent multilingual responses.",
+    href: "/customers/malt-customer-support",
+    src: "https://blog.dust.tt/content/images/size/w2000/2025/07/malt_dust.png",
+  },
+  {
+    title: "Pennylane's journey to deploy Dust for Customer Care teams",
+    content:
+      "Dust evolved from a simple support tool into an integral part of Pennylane's operations.",
+    href: "/customers/pennylane-customer-support-journey",
+    src: "https://blog.dust.tt/content/images/size/w2000/2025/07/Pennylane-__-Dust.jpg",
+  },
+  {
+    title: "Lifen uses Dust AI agents to boost team productivity",
+    content:
+      "Lifen uses Dust AI agents to boost team productivity and save hours of work each week.",
+    href: "/customers/customer-story-lifen",
+    src: "https://blog.dust.tt/content/images/size/w2000/2025/07/Lifen-__-Dust.png",
+  },
+];
