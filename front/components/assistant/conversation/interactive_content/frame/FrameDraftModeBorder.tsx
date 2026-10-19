@@ -16,7 +16,7 @@ export function FrameDraftModeBorder({
     <div
       className={cn(
         "relative h-full",
-        isDraftMode && "border-2 border-golden-500"
+        isDraftMode && "border-4 border-golden-500"
       )}
     >
       {children}
