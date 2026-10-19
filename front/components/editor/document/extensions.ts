@@ -18,6 +18,7 @@ import {
   DocumentTableRow,
 } from "@app/components/editor/document/DocumentTable";
 import { createDocumentMarked } from "@app/components/editor/document/marked_instance";
+import { codeFence } from "@app/lib/markdown/code_fence";
 import { cn } from "@dust-tt/sparkle";
 import type { AnyExtension } from "@tiptap/core";
 import { Code } from "@tiptap/extension-code";
@@ -25,7 +26,6 @@ import { CodeBlock } from "@tiptap/extension-code-block";
 import { Markdown } from "@tiptap/markdown";
 import type { StarterKitOptions } from "@tiptap/starter-kit";
 import { StarterKit } from "@tiptap/starter-kit";
-import { longestStreak } from "longest-streak";
 
 /**
  * @cc [owner:tdraier,label:product] document-link-click
@@ -77,15 +77,6 @@ const starterKitOptions: Partial<StarterKitOptions> = {
 const DocumentCode = Code.extend({ excludes: COMMENT_MARK_NAME });
 
 /**
- * The shortest fence that no run of its character in the code can close. Backticks, unless the
- * info string holds one, which only a tilde fence allows.
- */
-const fenceFor = (code: string, language: string) => {
-  const char = language.includes("`") ? "~" : "`";
-  return char.repeat(Math.max(longestStreak(code, char) + 1, 3));
-};
-
-/**
  * @cc [owner:avervaet,label:product] document-code-block-fences
  * Every code block marked reads MUST open with its code, whatever its fence. A save MUST fence it
  * with backticks, or tildes when its info string holds a backtick, longer than any run of that
@@ -101,7 +92,8 @@ const DocumentCodeBlock = CodeBlock.extend({
   renderMarkdown: (node, helpers) => {
     const language = node.attrs?.language || "";
     const code = node.content ? helpers.renderChildren(node.content) : "";
-    const fence = fenceFor(code, language);
+    // A backtick fence cannot carry a backtick in its info string; a tilde fence can.
+    const fence = codeFence(code, language.includes("`") ? "~" : "`");
     // An info string starting with the fence character would lengthen the fence instead.
     const info = language.startsWith(fence[0]) ? ` ${language}` : language;
     return `${fence}${info}\n${code}\n${fence}`;

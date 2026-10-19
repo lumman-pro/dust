@@ -52,6 +52,8 @@
     "longest-streak": "^3.1.0",
     "marked": "^17.0.6",
     "mdast-util-from-markdown": "^2.0.3",
+    "mdast-util-gfm-task-list-item": "^2.0.0",
+    "micromark-extension-gfm-task-list-item": "^2.1.0",
     "openai": "^6.46.0",
     "peggy": "^5.1.0",
     "snowflake-sdk": "2.3.4",

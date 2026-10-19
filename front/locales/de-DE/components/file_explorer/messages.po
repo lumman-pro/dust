@@ -87,12 +87,10 @@ msgid "More options"
 msgstr "Weitere Optionen"
 
 #: front/components/file_explorer/FileExplorerItem.tsx
-#: front/components/file_explorer/FilePreviewDialog.tsx
 msgid "Downloading…"
 msgstr "Wird heruntergeladen…"
 
 #: front/components/file_explorer/FileExplorerItem.tsx
-#: front/components/file_explorer/FilePreviewDialog.tsx
 #: front/components/file_explorer/FilePreviewFallback.tsx
 msgid "Download"
 msgstr "Herunterladen"
@@ -184,30 +182,6 @@ msgstr "Anzeige: {displayed} von {total, plural, one {# Datensatz} other {# Date
 #: front/components/file_explorer/FilePreviewContent.tsx
 msgid "Showing {displayed} of {total, plural, one {# record} other {# records}}"
 msgstr "Anzeige: {displayed} von {total, plural, one {# Datensatz} other {# Datensätzen}}"
-
-#: front/components/file_explorer/FilePreviewDialog.tsx
-msgid "Preview data"
-msgstr "Datenvorschau"
-
-#: front/components/file_explorer/FilePreviewDialog.tsx
-msgid "Close"
-msgstr "Schließen"
-
-#: front/components/file_explorer/FilePreviewDialog.tsx
-msgid "Previous"
-msgstr "Vorherige"
-
-#: front/components/file_explorer/FilePreviewDialog.tsx
-msgid "Next"
-msgstr "Weiter"
-
-#: front/components/file_explorer/FilePreviewDialog.tsx
-msgid "Save"
-msgstr "Speichern"
-
-#: front/components/file_explorer/FilePreviewDialog.tsx
-msgid "Revert"
-msgstr "Zurücksetzen"
 
 #: front/components/file_explorer/MarkdownFilePreview.tsx
 msgctxt "markdown file view mode"

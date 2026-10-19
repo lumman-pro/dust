@@ -25,6 +25,7 @@ import {
   AGENT_MEMORY_LIMIT,
   AgentMemoryResource,
 } from "@app/lib/resources/agent_memory_resource";
+import { conversationalBuildingSkill } from "@app/lib/resources/skill/code_defined/global/conversational_building";
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -35,9 +36,17 @@ const USER_MEMORY_EDIT_TOOL = getPrefixedToolName(
   USER_MEMORY_EDIT_TOOL_NAME
 );
 
+// Agent memory mixed facts about the user with how the agent should do its job: the message routes
+// each to its replacement, and defers to the User Memory skill on when to update the personal
+// memory rather than inviting the agent to save there whatever it would have saved here.
 export const AGENT_MEMORY_WRITE_DISABLED_MESSAGE =
-  `This tool is disabled. Use the \`${USER_MEMORY_EDIT_TOOL}\` tool to add or ` +
-  `update the user's personal memory instead.`;
+  `This tool is disabled: agent memory is being phased out. Where to save something depends on ` +
+  `what it is about:\n` +
+  `- The user: their personal memory, with the \`${USER_MEMORY_EDIT_TOOL}\` tool, as the User ` +
+  `Memory skill instructs.\n` +
+  `- How this agent should do its job: the agent's instructions, by suggesting an update with ` +
+  `the \`${conversationalBuildingSkill.name}\` skill.\n` +
+  `If the matching tool or skill is not available, do not save it.`;
 
 async function agentMemoryWriteDisabledError(
   auth: Authenticator
@@ -95,6 +104,12 @@ const renderMemory = (
   ]);
 };
 
+/**
+ * @cc [owner:aubin-tchoi,label:product] writes-disabled-with-user-memory
+ * On workspaces with the `user_memory` feature flag, `record_entries`, `edit_entries` and
+ * `compact_memory` MUST fail without writing, with `AGENT_MEMORY_WRITE_DISABLED_MESSAGE`.
+ * `retrieve` and `erase_entries` keep working.
+ */
 const handlers: ToolHandlers<typeof AGENT_MEMORY_TOOLS_METADATA> = {
   [AGENT_MEMORY_RETRIEVE_TOOL_NAME]: async (_, { auth, runContext }) => {
     const user = auth.user();
@@ -203,6 +218,12 @@ const handlers: ToolHandlers<typeof AGENT_MEMORY_TOOLS_METADATA> = {
   },
 
   [AGENT_MEMORY_COMPACT_TOOL_NAME]: async ({ edits }, { auth, runContext }) => {
+    // Compaction rewrites entries with arbitrary content: it is a write like edit.
+    const writeDisabled = await agentMemoryWriteDisabledError(auth);
+    if (writeDisabled) {
+      return new Err(writeDisabled);
+    }
+
     const user = auth.user();
     if (!user) {
       return new Err(

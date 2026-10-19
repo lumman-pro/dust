@@ -69,7 +69,7 @@ export type RenderAuthorAvatar = DocumentProps["renderCommentAuthorAvatar"];
 
 /** The pill the comment and reply fields sit in. */
 export const COMMENT_FIELD_CLASS =
-  "rounded-xl bg-muted-background py-0.5 pl-3 pr-1 ring-highlight-300 focus-within:ring-1";
+  "rounded-xl bg-muted-background py-2 pl-3 pr-2 ring-highlight-300 focus-within:ring-1";
 
 /** The commented text, in quotation marks unless it already opens with one. */
 export const quoted = (text: string) =>

@@ -196,7 +196,9 @@ Suggestions are the next one. The steps are the same for any directive:
   an insertion that would change the parse tree, a node's properties included: a quote inside
   a link destination, an image's alt text or raw HTML is refused. HTML blocks are not treated as code: a
   directive inside raw HTML is interpreted. GFM extensions such as tables and autolink
-  literals are not parsed, so a directive inside them is interpreted too.
+  literals are not parsed, so a directive inside them is interpreted too. GFM task markers are
+  the exception: the structure `anchorComment` compares reads them, so it refuses an anchor
+  that would turn a task (`- [ ] `, `1. [x] `) into a plain item whose text starts with `[ ]`.
 - A backslash before an anchor escapes it, as CommonMark does for any punctuation:
   `\:comment-start{id=x}` is text. The codec applies this everywhere outside code, including
   raw HTML and autolinks where CommonMark would not. An escaped anchor whose pair is live is

@@ -70,6 +70,7 @@ fn mount() -> Result<()> {
         read_returns_file_ranges(&channel, &tenant).await?;
         root_lists_readable_folders(&channel, &tenant).await?;
         root_looks_up_readable_folders(&channel, &tenant).await?;
+        folders_look_up_readable_children(&channel, &tenant).await?;
         list_returns_every_page(&channel, &tenant).await?;
         apply_returns_one_ordered_result_per_operation(&channel, &tenant).await?;
         read_files_returns_one_ordered_result_per_object(&channel, &tenant).await?;
@@ -340,8 +341,7 @@ async fn root_looks_up_readable_folders(channel: &Channel, tenant: &Tenant) -> R
     assert_eq!(workspace.permissions, 0o700);
     assert_eq!(fs.readdir(ROOT_INO).await?[0].ino, workspace.ino);
     assert_eq!(fs.getattr(workspace.ino).await?, workspace);
-    // The server does not support `Lookup` and `List` yet.
-    assert_eq!(fs.lookup(workspace.ino, "a").await, Err(Errno::EOPNOTSUPP));
+    // The mount does not list dfs directories yet.
     assert_eq!(fs.readdir(workspace.ino).await, Err(Errno::EOPNOTSUPP));
 
     // Like the listing: not a directory, unreadable, missing, and not configured.
@@ -352,6 +352,40 @@ async fn root_looks_up_readable_folders(channel: &Channel, tenant: &Tenant) -> R
             "{name}"
         );
     }
+    Ok(())
+}
+
+async fn folders_look_up_readable_children(channel: &Channel, tenant: &Tenant) -> Result<()> {
+    let fs = Fs::new(
+        tenant.remote(channel).await?,
+        vec![folder("workspace", tenant.root_id)],
+    )?;
+    let workspace = fs.lookup(ROOT_INO, "workspace").await?;
+
+    let report = fs.lookup(workspace.ino, "report.txt").await?;
+    assert_eq!(report.kind, Kind::File);
+    assert_eq!(report.size, FILE_CONTENT.len() as u64);
+    assert!(![ROOT_INO, workspace.ino].contains(&report.ino));
+    assert_eq!(fs.getattr(report.ino).await?, report);
+    // Looked up again, the object keeps its inode number.
+    assert_eq!(
+        fs.lookup(workspace.ino, "report.txt").await?.ino,
+        report.ino
+    );
+
+    // Unreadable and missing names look missing, and a file has no children.
+    for name in ["secret.txt", "missing"] {
+        assert_eq!(
+            fs.lookup(workspace.ino, name).await,
+            Err(Errno::ENOENT),
+            "{name}"
+        );
+    }
+    assert_eq!(fs.lookup(report.ino, "a").await, Err(Errno(libc::ENOTDIR)));
+
+    // Once the kernel forgets both lookups, the mount drops the inode.
+    fs.forget(report.ino, 2);
+    assert_eq!(fs.getattr(report.ino).await, Err(Errno::ENOENT));
     Ok(())
 }
 
@@ -586,28 +620,27 @@ async fn files_read_in_ranges(channel: &Channel, tenant: &Tenant) -> Result<()> 
     let resource = TenantResource::fetch(&tx, &tenant_id)
         .await?
         .context("missing tenant")?;
-    let mut sparse = ObjectResource::new_root(&resource)?;
-    sparse.object_id = ObjectId::new_v7();
-    sparse.parent_id = Some(tenant.root_id);
-    sparse.name = "sparse.bin".to_owned();
-    sparse.kind = ObjectKind::File;
+    let root = ObjectResource::fetch(&tx, &resource, &tenant.root_id)
+        .await?
+        .context("missing root")?;
+    let mut sparse = DirectoryResource::try_from(root)?
+        .create_child(
+            &tx,
+            ObjectId::new_v7(),
+            "sparse.bin".to_owned(),
+            ObjectKind::File,
+            None,
+            HashMap::new(),
+        )
+        .await?;
     sparse.size = u64::from(READ_MAX_BYTES) + 2;
-    sparse.create(&tx, &[]).await?;
+    sparse.record_content_change(&tx, clock::now_ms()?);
     tx.commit().await?;
 
-    // The mount does not look up names in dfs directories yet, so files get inode numbers as
-    // folders: in order, after the root.
-    let fs = Fs::new(
-        remote,
-        vec![
-            folder("report", tenant.file_id),
-            folder("sparse", sparse.object_id),
-            folder("secret", tenant.unreadable_id),
-            folder("workspace", tenant.root_id),
-        ],
-    )?;
-    let [report, sparse, secret, workspace] = [1, 2, 3, 4].map(|index| ROOT_INO + index);
-    assert_eq!(fs.getattr(report).await?.kind, Kind::File);
+    let fs = Fs::new(remote, vec![folder("workspace", tenant.root_id)])?;
+    let workspace = fs.lookup(ROOT_INO, "workspace").await?.ino;
+    let report = fs.lookup(workspace, "report.txt").await?.ino;
+    let sparse = fs.lookup(workspace, "sparse.bin").await?.ino;
 
     assert_eq!(fs.read(report, 1, 3).await?, &FILE_CONTENT[1..4]);
     // Reads stop at the end of the file.
@@ -622,8 +655,9 @@ async fn files_read_in_ranges(channel: &Channel, tenant: &Tenant) -> Result<()> 
     assert!(data.iter().all(|byte| *byte == 0));
     assert_eq!(fs.read(sparse, 1, READ_MAX_BYTES + 5).await?.len(), rest);
 
-    // An object the session cannot read looks missing.
-    assert_eq!(fs.read(secret, 0, 1).await, Err(Errno::ENOENT));
     assert_eq!(fs.read(workspace, 0, 1).await, Err(Errno(libc::EISDIR)));
+    // Once the kernel forgets it, the inode is unknown.
+    fs.forget(report, 1);
+    assert_eq!(fs.read(report, 0, 1).await, Err(Errno::ENOENT));
     Ok(())
 }

@@ -1,4 +1,5 @@
 import { DEFAULT_RIGHT_PANEL_SIZE } from "@app/components/assistant/conversation/constant";
+import type { FilePreviewTarget } from "@app/components/assistant/conversation/ConversationSidePanelContext";
 import {
   parseFilePreviewData,
   useConversationSidePanelContext,
@@ -29,7 +30,10 @@ import {
   useFileMetadata,
 } from "@app/lib/swr/files";
 import { useIsMobile } from "@app/lib/swr/useIsMobile";
-import type { FileSystemFileEntry } from "@app/types/api/file_system/types";
+import type {
+  FileSystemEntry,
+  FileSystemFileEntry,
+} from "@app/types/api/file_system/types";
 import type { ConversationWithoutContentType } from "@app/types/assistant/conversation";
 import { contentTypeFromFileName } from "@app/types/files";
 import { resolveCanonicalScopedPath } from "@app/types/mount_path";
@@ -43,41 +47,30 @@ import {
   Spinner,
 } from "@dust-tt/sparkle";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { useState } from "react";
+import { useCallback, useState } from "react";
+
+export function findListedFile(
+  files: FileSystemEntry[],
+  path: string | null
+): FileSystemFileEntry | undefined {
+  return path
+    ? files.find(
+        (f): f is FileSystemFileEntry => !f.isDirectory && f.path === path
+      )
+    : undefined;
+}
 
 interface FilePreviewPanelProps {
   conversation: ConversationWithoutContentType;
   owner: LightWorkspaceType;
 }
 
-/**
- * @cc [owner:tdraier,label:product] file-preview-panel-full-screen
- * The full screen toggle MUST show only for a file open in the rich document editor, or in its
- * source mode, behind the co_edition flag; other previews MUST keep the panel without it.
- */
 export function FilePreviewPanel({
   conversation,
   owner,
 }: FilePreviewPanelProps) {
-  const { t } = useLingui();
   const { data } = useConversationSidePanelContext();
-  const { isFullScreen, enterFullScreen, exitFullScreen, closePanel } =
-    useSidePanelFullScreen(DEFAULT_RIGHT_PANEL_SIZE);
-  const isMobile = useIsMobile();
-  const clientType = useClientType();
-  const [documentControls, setDocumentControls] =
-    useState<HTMLDivElement | null>(null);
-  const [documentStatus, setDocumentStatus] = useState<HTMLSpanElement | null>(
-    null
-  );
   const target = parseFilePreviewData(data);
-  const fileId = target?.kind === "id" ? target.fileId : null;
-
-  const { fileMetadata, isFileMetadataLoading } = useFileMetadata({
-    fileId,
-    owner,
-    disabled: !fileId,
-  });
 
   // Agents write legacy scoped paths; the files API only resolves canonical ones.
   const path =
@@ -93,30 +86,94 @@ export function FilePreviewPanel({
   // and window focus, so the preview refreshes after the file is touched (and
   // the reload button forces an immediate revalidation).
   // TODO: use E2B events of "files are updated", when they are merged
-  const { sandboxFiles } = useConversationSandboxFiles({
+  const { sandboxFiles, isSandboxFilesLoading } = useConversationSandboxFiles({
     conversationId: conversation.sId,
     owner,
     options: { disabled: !path },
   });
 
+  return (
+    <FilePreviewPanelView
+      owner={owner}
+      target={target}
+      path={path}
+      listedFile={findListedFile(sandboxFiles, path)}
+      isListingLoading={isSandboxFilesLoading}
+    />
+  );
+}
+
+interface FilePreviewPanelViewProps {
+  owner: LightWorkspaceType;
+  target: FilePreviewTarget | null;
+  path: string | null;
+  listedFile: FileSystemFileEntry | undefined;
+  isListingLoading: boolean;
+}
+
+/**
+ * @cc [owner:tdraier,label:product] file-preview-panel-full-screen
+ * The full screen toggle MUST show only for a file open in the rich document editor, or in its
+ * source mode, behind the co_edition flag; other previews MUST keep the panel without it.
+ */
+export function FilePreviewPanelView({
+  owner,
+  target,
+  path,
+  listedFile,
+  isListingLoading,
+}: FilePreviewPanelViewProps) {
+  const { t } = useLingui();
+  const { openPanel } = useConversationSidePanelContext();
+  const { isFullScreen, enterFullScreen, exitFullScreen, closePanel } =
+    useSidePanelFullScreen(DEFAULT_RIGHT_PANEL_SIZE);
+  const isMobile = useIsMobile();
+  const clientType = useClientType();
+  const [documentControls, setDocumentControls] =
+    useState<HTMLDivElement | null>(null);
+  const [documentStatus, setDocumentStatus] = useState<HTMLSpanElement | null>(
+    null
+  );
+  const fileId = target?.kind === "id" ? target.fileId : null;
+  const filePath = target?.kind === "path" ? target.filePath : null;
+  const openCommentId = target?.kind === "path" ? target.commentId : undefined;
+  const onActiveCommentChange = useCallback(
+    (commentId: string | null) => {
+      if (!filePath) {
+        return;
+      }
+      openPanel({
+        type: "file_preview",
+        kind: "path",
+        filePath,
+        commentId: commentId ?? undefined,
+      });
+    },
+    [openPanel, filePath]
+  );
+  const activeComment = filePath
+    ? { id: openCommentId ?? null, onChange: onActiveCommentChange }
+    : undefined;
+
+  const { fileMetadata, isFileMetadataLoading } = useFileMetadata({
+    fileId,
+    owner,
+    disabled: !fileId,
+  });
+
   const fileName = path
     ? (path.split("/").pop() ?? path)
     : (fileMetadata?.fileName ?? "");
-  // Reuse the file-explorer entry when the sandbox listing has loaded so we get
-  // the real content type, fileId, and version. Before it loads (or for files
+  // Reuse the file-explorer entry when the listing has loaded so we get the
+  // real content type, fileId, and version. Before it loads (or for files
   // missing from the listing) fall back to a minimal entry derived from the
   // file name — Office documents have no in-browser renderer, so the content
   // type is needed to pick the right preview strategy and icon.
-  const sandboxFile = path
-    ? sandboxFiles.find(
-        (f): f is FileSystemFileEntry => !f.isDirectory && f.path === path
-      )
-    : undefined;
   const urls = path
     ? {
         baseUrl: getFilePathViewUrl(owner, path),
         downloadUrl: getFilePathDownloadUrl(owner, path, {
-          lastModifiedMs: sandboxFile?.lastModifiedMs,
+          lastModifiedMs: listedFile?.lastModifiedMs,
         }),
       }
     : fileId
@@ -126,13 +183,13 @@ export function FilePreviewPanel({
         }
       : null;
   const contentType =
-    sandboxFile?.contentType ??
+    listedFile?.contentType ??
     fileMetadata?.contentType ??
     contentTypeFromFileName(fileName) ??
     "";
 
-  const entry: FileEntry | null = sandboxFile
-    ? { ...sandboxFile, kind: "file" }
+  const entry: FileEntry | null = listedFile
+    ? { ...listedFile, kind: "file" }
     : path || fileMetadata
       ? {
           kind: "file",
@@ -167,12 +224,12 @@ export function FilePreviewPanel({
     processedContent: preview.processedContent,
   });
 
-  if (!entry || !urls) {
+  if (isListingLoading || !entry || !urls) {
     return (
       <div className="flex h-panel flex-col">
         <ConversationSidePanelHeader onClose={closePanel} />
         <CenteredState>
-          {isFileMetadataLoading ? (
+          {isFileMetadataLoading || isListingLoading ? (
             <Spinner />
           ) : (
             <p className="text-sm text-muted-foreground">
@@ -284,6 +341,7 @@ export function FilePreviewPanel({
           markdown={markdown}
           markdownHeaderControlsContainer={documentControls}
           markdownStatusContainer={documentStatus}
+          markdownActiveComment={activeComment}
           owner={owner}
           preview={preview}
         />

@@ -1,5 +1,8 @@
-import { PodFrameSheet } from "@app/components/pod/files/PodFrameSheet";
+import { PodFramePanel } from "@app/components/pod/files/PodFramePanel";
+import { FileSystemEntryFactory } from "@app/tests/utils/FileSystemEntryFactory";
 import { LightWorkspaceFactory } from "@app/tests/utils/LightWorkspaceFactory";
+import type { FileSystemEntry } from "@app/types/api/file_system/types";
+import type { PodType } from "@app/types/space";
 import { cleanup, render, screen } from "@testing-library/react";
 import type { PropsWithChildren, ReactNode } from "react";
 import { createElement } from "react";
@@ -13,6 +16,7 @@ const frameV2Metadata = {
 
 interface Mocks {
   canWriteFrameSource: boolean;
+  hasAuthorizedRequiredTools: boolean;
   contentCalls: Record<string, unknown>[];
   fileMetadata: Record<string, unknown>;
   hasFrameFunctions: boolean;
@@ -23,17 +27,24 @@ interface Mocks {
     stagedEditMode?: string;
   } | null;
   metadataCalls: { disabled?: boolean; fileId: string | null }[];
+  podActions: { fileName?: string; framePath: string | null } | null;
   permissionsCalls: { disabled?: boolean; frameId: string }[];
+  podFiles: FileSystemEntry[];
+  isPodFilesLoading: boolean;
 }
 
 const mocks = vi.hoisted<Mocks>(() => ({
   canWriteFrameSource: true,
+  hasAuthorizedRequiredTools: true,
   contentCalls: [],
   fileMetadata: {},
   hasFrameFunctions: false,
   iframeProps: null,
   metadataCalls: [],
+  podActions: null,
   permissionsCalls: [],
+  podFiles: [],
+  isPodFilesLoading: false,
 }));
 
 vi.mock(
@@ -80,8 +91,43 @@ vi.mock(
   })
 );
 
+interface PinPodBannerButtonMockProps {
+  fileName?: string;
+  framePath: string | null;
+}
+
 vi.mock("@app/components/pod/files/PinPodBannerButton", () => ({
-  PinPodBannerButton: () => null,
+  PinPodBannerButton: (props: PinPodBannerButtonMockProps) => {
+    mocks.podActions = props;
+    return null;
+  },
+}));
+
+vi.mock(
+  "@app/components/assistant/conversation/ConversationSidePanelHeader",
+  () => ({
+    ConversationSidePanelHeader: ({ children }: PropsWithChildren) =>
+      createElement("div", null, children),
+  })
+);
+
+vi.mock(
+  "@app/components/assistant/conversation/useSidePanelFullScreen",
+  () => ({
+    useSidePanelFullScreen: () => ({
+      closePanel: vi.fn(),
+      enterFullScreen: vi.fn(),
+      exitFullScreen: vi.fn(),
+      isFullScreen: false,
+    }),
+  })
+);
+
+vi.mock("@app/lib/swr/pods", () => ({
+  usePodFiles: () => ({
+    files: mocks.podFiles,
+    isPodFilesLoading: mocks.isPodFilesLoading,
+  }),
 }));
 
 vi.mock("@app/components/pod/files/PodFileTabButton", () => ({
@@ -145,7 +191,7 @@ vi.mock("@app/lib/swr/frames", () => ({
       hasFrameFunctions: mocks.hasFrameFunctions,
       requiredTools: [],
       isLastPublisher: false,
-      hasAuthorizedRequiredTools: true,
+      hasAuthorizedRequiredTools: mocks.hasAuthorizedRequiredTools,
       isFramePermissionsLoading: false,
       packageRoot: null,
       mutateFramePermissions: vi.fn(),
@@ -159,10 +205,6 @@ vi.mock("@app/lib/swr/useIsMobile", () => ({
 
 vi.mock("@dust-tt/sparkle", async () => {
   const { createElement } = await import("react");
-  const Container = ({ children }: PropsWithChildren) =>
-    createElement("div", null, children);
-  const Sheet = ({ children, open }: PropsWithChildren<{ open?: boolean }>) =>
-    open ? createElement("div", null, children) : null;
   const Empty = () => null;
 
   return {
@@ -191,11 +233,6 @@ vi.mock("@dust-tt/sparkle", async () => {
     Minimize01: Empty,
     RefreshCw01: Empty,
     ReverseLeft: Empty,
-    Sheet,
-    SheetClose: Container,
-    SheetContent: Container,
-    SheetHeader: Container,
-    SheetTitle: Container,
     Spinner: Empty,
     Terminal: Empty,
     Tooltip: ({ trigger }: { trigger: ReactNode }) =>
@@ -208,10 +245,32 @@ vi.mock("@dust-tt/sparkle", async () => {
 
 const owner = LightWorkspaceFactory.build();
 
+const pod: PodType = {
+  archivedAt: null,
+  createdAt: 0,
+  description: null,
+  groupIds: [],
+  isEditor: true,
+  isMember: true,
+  isRestricted: false,
+  kind: "project",
+  name: "Project",
+  sId: "vlt_project",
+  updatedAt: 0,
+};
+
 beforeEach(() => {
   mocks.fileMetadata = { ...frameV2Metadata };
+  mocks.podFiles = [
+    FileSystemEntryFactory.file({
+      fileId: "fil_frame",
+      path: "pod-vlt_project/App/manifest.json",
+    }),
+  ];
+  mocks.isPodFilesLoading = false;
   mocks.hasFrameFunctions = false;
   mocks.canWriteFrameSource = true;
+  mocks.hasAuthorizedRequiredTools = true;
 });
 
 afterEach(() => {
@@ -219,69 +278,77 @@ afterEach(() => {
   mocks.iframeProps = null;
   mocks.contentCalls = [];
   mocks.metadataCalls = [];
+  mocks.podActions = null;
   mocks.permissionsCalls = [];
 });
 
-const openSheetProps = {
+const panelProps = {
   fileId: "fil_frame",
-  fileName: "App",
-  framePath: "pod-vlt_project/App/manifest.json",
-  fileTabs: [],
-  isArchived: false,
-  isEditor: true,
-  isMember: true,
-  isOpen: true,
-  onClose: vi.fn(),
   owner,
-  pinnedFramePath: null,
-  podId: "vlt_project",
+  pod,
 };
 
-describe("PodFrameSheet", () => {
-  it("renders shared chrome without a sheet title for Frames v2 and legacy Frames", () => {
-    const { rerender } = render(createElement(PodFrameSheet, openSheetProps));
+describe("PodFramePanel", () => {
+  it("names a Frame v2 after the folder holding its manifest", () => {
+    render(createElement(PodFramePanel, panelProps));
 
-    expect(screen.getByLabelText("Close")).toBeInTheDocument();
-    expect(screen.queryByText("App")).not.toBeInTheDocument();
+    expect(mocks.podActions).toMatchObject({
+      fileName: "App",
+      framePath: "pod-vlt_project/App/manifest.json",
+    });
+  });
 
+  it("names a legacy Frame, which has no manifest, after its file", () => {
     mocks.fileMetadata = {
       contentType: "text/vnd.dust.attachment.slack.thread",
       fileName: "Legacy.tsx",
       useCaseMetadata: { spaceId: "vlt_project" },
     };
-    rerender(
-      createElement(PodFrameSheet, {
-        ...openSheetProps,
-        framePath: "pod-vlt_project/Legacy.tsx",
-      })
-    );
+    mocks.podFiles = [
+      FileSystemEntryFactory.file({
+        fileId: "fil_frame",
+        path: "pod-vlt_project/Legacy.tsx",
+      }),
+    ];
 
-    expect(screen.getByLabelText("Close")).toBeInTheDocument();
-    expect(screen.queryByText("Legacy.tsx")).not.toBeInTheDocument();
+    render(createElement(PodFramePanel, panelProps));
+
+    expect(mocks.podActions).toMatchObject({ fileName: "Legacy.tsx" });
+  });
+
+  it("holds a Frames v2 behind tool consent until its tools are authorized", () => {
+    mocks.hasAuthorizedRequiredTools = false;
+
+    render(createElement(PodFramePanel, panelProps));
+
+    expect(screen.getByText("tool-consent-gate")).toBeInTheDocument();
+    expect(mocks.iframeProps).toBeNull();
+  });
+
+  it("waits for the Pod listing before rendering the Frame", () => {
+    mocks.isPodFilesLoading = true;
+
+    render(createElement(PodFramePanel, panelProps));
+
+    expect(mocks.iframeProps).toBeNull();
   });
 
   it("marks a Frame declaring functions as beta", () => {
     mocks.hasFrameFunctions = true;
 
-    render(createElement(PodFrameSheet, openSheetProps));
+    render(createElement(PodFramePanel, panelProps));
 
     expect(screen.getByText("Beta")).toBeInTheDocument();
   });
 
   it("does not mark a Frame without functions as beta", () => {
-    render(createElement(PodFrameSheet, openSheetProps));
+    render(createElement(PodFramePanel, panelProps));
 
     expect(screen.queryByText("Beta")).not.toBeInTheDocument();
   });
 
-  it("asks for Frame permissions only for an open Frames v2 sheet", () => {
-    const { rerender } = render(
-      createElement(PodFrameSheet, { ...openSheetProps, isOpen: false })
-    );
-
-    expect(mocks.permissionsCalls.at(-1)).toMatchObject({ disabled: true });
-
-    rerender(createElement(PodFrameSheet, openSheetProps));
+  it("asks for Frame permissions only for a Frames v2", () => {
+    const { rerender } = render(createElement(PodFramePanel, panelProps));
 
     expect(mocks.permissionsCalls.at(-1)).toMatchObject({
       disabled: false,
@@ -293,26 +360,14 @@ describe("PodFrameSheet", () => {
       fileName: "Legacy.tsx",
       useCaseMetadata: { spaceId: "vlt_project" },
     };
-    rerender(
-      createElement(PodFrameSheet, {
-        ...openSheetProps,
-        framePath: "pod-vlt_project/Legacy.tsx",
-      })
-    );
+    rerender(createElement(PodFramePanel, panelProps));
 
     expect(mocks.permissionsCalls.at(-1)).toMatchObject({ disabled: true });
   });
 
-  it("loads metadata only while open and forwards the Frames v2 identity and package root", () => {
-    const props = { ...openSheetProps, isOpen: false };
-    const { rerender } = render(createElement(PodFrameSheet, props));
+  it("forwards the Frames v2 identity and package root", () => {
+    render(createElement(PodFramePanel, panelProps));
 
-    expect(mocks.metadataCalls.at(-1)).toMatchObject({ disabled: true });
-    expect(mocks.iframeProps).toBeNull();
-
-    rerender(createElement(PodFrameSheet, { ...props, isOpen: true }));
-
-    expect(mocks.metadataCalls.at(-1)).toMatchObject({ disabled: false });
     expect(mocks.iframeProps).toMatchObject({
       frameId: "fil_frame",
       framePackageRoot: "pod-vlt_project/App",
@@ -322,7 +377,7 @@ describe("PodFrameSheet", () => {
   });
 
   it("shows edit controls for a source writer and hides them for other viewers", () => {
-    const { rerender } = render(createElement(PodFrameSheet, openSheetProps));
+    const { rerender } = render(createElement(PodFramePanel, panelProps));
 
     expect(screen.getByText("edit-controls")).toBeInTheDocument();
     expect(
@@ -330,7 +385,7 @@ describe("PodFrameSheet", () => {
     ).toBeInTheDocument();
 
     mocks.canWriteFrameSource = false;
-    rerender(createElement(PodFrameSheet, openSheetProps));
+    rerender(createElement(PodFramePanel, panelProps));
 
     expect(screen.queryByText("edit-controls")).not.toBeInTheDocument();
     expect(
@@ -342,7 +397,7 @@ describe("PodFrameSheet", () => {
   });
 
   it("serves the live publication: no latest bundle, functions or function target", () => {
-    render(createElement(PodFrameSheet, openSheetProps));
+    render(createElement(PodFramePanel, panelProps));
 
     expect(mocks.contentCalls.at(-1)).not.toHaveProperty("publication");
     expect(mocks.permissionsCalls.at(-1)).not.toHaveProperty("publication");

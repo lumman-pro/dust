@@ -7,7 +7,7 @@ import { EditorContent } from "@app/components/editor/EditorContent";
 import type { DfmAuthor } from "@app/lib/markdown/dfm";
 import { SUGGESTION_LANGUAGE } from "@app/lib/markdown/dfm";
 import type { Result } from "@app/types/shared/result";
-import { ArrowUp, cn, Edit04, Icon, Spinner, Tooltip } from "@dust-tt/sparkle";
+import { ArrowUp, Button, cn, Edit04, Tooltip } from "@dust-tt/sparkle";
 import { useLingui } from "@lingui/react/macro";
 import type { Editor, Extensions } from "@tiptap/core";
 import { useEditor } from "@tiptap/react";
@@ -155,7 +155,7 @@ export const DocumentCommentInput = ({
         "aria-label": label,
         "aria-multiline": "true",
         class: cn(
-          "max-h-60 min-h-7 overflow-y-auto py-1 text-sm leading-5 wrap-anywhere outline-none",
+          "max-h-60 min-h-6 overflow-y-auto py-0.5 text-sm leading-5 wrap-anywhere outline-none",
           "[&_.is-empty]:before:pointer-events-none [&_.is-empty]:before:float-left [&_.is-empty]:before:h-0 [&_.is-empty]:before:text-muted-foreground [&_.is-empty]:before:content-[attr(data-placeholder)]"
         ),
       },
@@ -293,46 +293,36 @@ export const DocumentCommentInput = ({
           </span>
         )}
         <EditorContent editor={editor} className="min-w-0 flex-1" />
-        {onSuggest && (
-          <Tooltip
-            label={t`Suggest a change`}
-            tooltipTriggerAsChild
-            mountPortalContainer={mountPortalContainer}
-            trigger={
-              <button
-                type="button"
-                aria-label={t`Suggest a change`}
-                aria-disabled={pending}
-                onClick={suggest}
-                disabled={pending}
-                className={cn(
-                  "mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-hover hover:text-foreground motion-reduce:transition-none",
-                  "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                )}
-              >
-                <Icon visual={Edit04} size="xs" />
-              </button>
-            }
+        <div className="flex shrink-0 gap-1.5">
+          {onSuggest && (
+            <Tooltip
+              label={t`Suggest a change`}
+              tooltipTriggerAsChild
+              mountPortalContainer={mountPortalContainer}
+              trigger={
+                <Button
+                  variant="outline"
+                  size="xs"
+                  isRounded
+                  icon={Edit04}
+                  aria-label={t`Suggest a change`}
+                  onClick={suggest}
+                  disabled={pending}
+                />
+              }
+            />
+          )}
+          <Button
+            variant="highlight"
+            size="xs"
+            isRounded
+            icon={ArrowUp}
+            aria-label={pending ? t`Sending` : t`Send`}
+            isLoading={pending}
+            disabled={!filled}
+            onClick={() => void submit()}
           />
-        )}
-        <button
-          type="button"
-          aria-label={pending ? t`Sending` : t`Send`}
-          aria-disabled={pending}
-          tabIndex={filled ? 0 : -1}
-          onClick={() => void submit()}
-          className={cn(
-            "mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-50 transition-opacity motion-reduce:transition-none",
-            "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-            filled || pending ? "opacity-100" : "pointer-events-none opacity-0"
-          )}
-        >
-          {pending ? (
-            <Spinner size="xs" variant="revert" />
-          ) : (
-            <Icon visual={ArrowUp} size="xs" />
-          )}
-        </button>
+        </div>
       </div>
       {error && (
         <p role="alert" className="pb-1 text-xs text-warning-500">

@@ -1,3 +1,4 @@
+import { codeFence } from "@app/lib/markdown/code_fence";
 import {
   checkInputBounds,
   topLevelCodeBlocks,
@@ -14,7 +15,6 @@ import { Err, Ok } from "@app/types/shared/result";
  */
 
 export const SUGGESTION_LANGUAGE = "suggestion";
-const BACKTICK_RUN_PATTERN = /`+/g;
 
 export type DfmMessagePart =
   | { kind: "text"; text: string }
@@ -62,11 +62,7 @@ export function readMessageSuggestions(
  * whose opening fence is line 1.
  */
 export function suggestionBlock(suggestion: string): Result<string, DfmError> {
-  let longestRun = 0;
-  for (const run of suggestion.match(BACKTICK_RUN_PATTERN) ?? []) {
-    longestRun = Math.max(longestRun, run.length);
-  }
-  const fence = "`".repeat(Math.max(3, longestRun + 1));
+  const fence = codeFence(suggestion);
   // A final CR followed by LF would read as one line ending and drop the CR.
   const lineEnding = suggestion.endsWith("\r") ? "\r" : "\n";
   const block =

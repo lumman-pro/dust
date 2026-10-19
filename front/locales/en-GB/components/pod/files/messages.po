@@ -88,7 +88,6 @@ msgid "There is no data available in Company Data yet. Go to Company Data to add
 msgstr ""
 
 #: front/components/pod/files/PodFileExplorer.tsx
-#: front/components/pod/files/PodFrameSheet.tsx
 msgid "Close"
 msgstr ""
 
@@ -178,10 +177,10 @@ msgstr ""
 msgid "Add data from Company Data"
 msgstr ""
 
-#: front/components/pod/files/PodFrameSheet.tsx
+#: front/components/pod/files/PodFramePanel.tsx
 msgid "This frame is no longer available in the Pod files."
 msgstr ""
 
-#: front/components/pod/files/PodFrameSheet.tsx
+#: front/components/pod/files/PodFramePanel.tsx
 msgid "Publishing your changes..."
 msgstr ""

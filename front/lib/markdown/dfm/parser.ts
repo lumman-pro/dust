@@ -1,11 +1,14 @@
 import type { DfmError } from "@app/lib/markdown/dfm/types";
-import type { Nodes } from "mdast";
+import type { Nodes, Root } from "mdast";
 import { fromMarkdown } from "mdast-util-from-markdown";
+import { gfmTaskListItemFromMarkdown } from "mdast-util-gfm-task-list-item";
+import { gfmTaskListItem } from "micromark-extension-gfm-task-list-item";
 
 /**
  * What the codec asks a real Markdown parser: where code is, and what the block structure
  * is. CommonMark decides both before inline syntax, so neither can be read off the text by a
  * scanner. The body itself stays opaque: nothing here interprets it beyond those two answers.
+ * The structure includes GFM task markers, which the document editor shows as checkboxes.
  */
 
 export interface Range {
@@ -93,9 +96,15 @@ interface Visit {
   depth: number;
 }
 
+const parseWithTaskListItems = (text: string): Root =>
+  fromMarkdown(text, {
+    extensions: [gfmTaskListItem()],
+    mdastExtensions: [gfmTaskListItemFromMarkdown()],
+  });
+
 /** The parse tree in document order, walked with an explicit stack so depth cannot overflow. */
-function* nodes(text: string): Generator<Visit> {
-  const stack: Visit[] = [{ node: fromMarkdown(text), depth: 0 }];
+function* nodes(tree: Root): Generator<Visit> {
+  const stack: Visit[] = [{ node: tree, depth: 0 }];
   let visit = stack.pop();
   while (visit !== undefined) {
     yield visit;
@@ -125,7 +134,7 @@ export function isEscaped(text: string, index: number): boolean {
  */
 export function codeRanges(text: string): Range[] {
   const ranges: Range[] = [];
-  for (const { node } of nodes(text)) {
+  for (const { node } of nodes(fromMarkdown(text))) {
     if (node.type !== "code" && node.type !== "inlineCode") {
       continue;
     }
@@ -169,14 +178,14 @@ export function endsInsideFence(text: string): boolean {
 
 /**
  * The nodes of `text` in document order, text nodes aside, each as its depth, type and own
- * properties (a link's url, a heading's depth, a code block's lang). Inserting plain text into
- * a body splits or merges text nodes and nothing else, so two bodies with equal structures
- * render the same way around the insertion; a change in a property means the insertion landed
- * in Markdown syntax, such as a link destination.
+ * properties (a link's url, a heading's depth, a code block's lang, a GFM task item's
+ * `checked`). Inserting plain text into a body splits or merges text nodes and nothing else, so
+ * two bodies with equal structures render the same way around the insertion; a change in a
+ * property means the insertion landed in Markdown syntax, such as a link destination.
  */
 export function structure(text: string): string[] {
   const entries: string[] = [];
-  for (const { node, depth } of nodes(text)) {
+  for (const { node, depth } of nodes(parseWithTaskListItems(text))) {
     if (node.type === "text") {
       continue;
     }

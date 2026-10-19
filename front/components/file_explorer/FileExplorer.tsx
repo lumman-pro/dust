@@ -5,7 +5,6 @@ import { FileExplorerFilters } from "@app/components/file_explorer/FileExplorerF
 import type { ViewMode } from "@app/components/file_explorer/FileExplorerItem";
 import { getFileExplorerPipeline } from "@app/components/file_explorer/fileExplorerPipeline";
 import { FileExplorerToolbar } from "@app/components/file_explorer/FileExplorerToolbar";
-import { FilePreviewDialog } from "@app/components/file_explorer/FilePreviewDialog";
 import { MoveFileToFolderDialog } from "@app/components/file_explorer/MoveFileToFolderDialog";
 import type {
   ContentNodeEntry,
@@ -31,11 +30,9 @@ import {
 import type { FileExplorerScopedPreferences } from "@app/hooks/useScopedUIPreferences";
 import { useScopedPodUiPreferences } from "@app/hooks/useScopedUIPreferences";
 import { openSourceUrl } from "@app/lib/utils/source_urls";
-import { isFilePreviewableContentType } from "@app/types/file_preview";
 import { isInteractiveContentType } from "@app/types/files";
 import type { Result } from "@app/types/shared/result";
 import { Err } from "@app/types/shared/result";
-import type { LightWorkspaceType } from "@app/types/user";
 import { cn, Edit04, FolderOpen, Trash01 } from "@dust-tt/sparkle";
 import { useLingui } from "@lingui/react/macro";
 import type React from "react";
@@ -50,7 +47,6 @@ interface FileExplorerProps {
   currentFolderPath: string;
   displayFramePackages?: boolean;
   files: FileExplorerPathEntry[];
-  getFileUrl: (path: string) => string;
   toolbarExtraActions?: React.ReactNode;
   isLoading: boolean;
   onCurrentFolderChange: (relativePath: string) => void;
@@ -63,9 +59,8 @@ interface FileExplorerProps {
     parentRelativePath: string
   ) => Promise<Result<void, Error>>;
   onOpenInteractive?: (entry: FileEntryWithId | FramePackageEntry) => void;
-  onOpenInPanel?: (entry: FileEntry) => boolean;
+  onOpenInPanel: (entry: FileEntry) => void;
   onRename?: (entry: FileEntry | FolderEntry | FramePackageEntry) => void;
-  owner?: LightWorkspaceType;
   getExtraFileMenuItems?: (
     entry: FileExplorerEntry
   ) => FileExplorerMenuAction[];
@@ -81,7 +76,6 @@ export function FileExplorer({
   emptyState,
   currentFolderPath,
   files,
-  getFileUrl,
   toolbarExtraActions,
   hideBreadcrumbAtRoot = false,
   isLoading,
@@ -93,7 +87,6 @@ export function FileExplorer({
   onOpenInteractive,
   onOpenInPanel,
   onRename,
-  owner,
   getExtraFileMenuItems,
   virtualScopeRoots,
 }: FileExplorerProps) {
@@ -126,8 +119,6 @@ export function FileExplorer({
     searchQuery.trim() || activeFilter !== "all"
       ? currentFolderPath
       : undefined;
-  const [previewFile, setPreviewFile] = useState<FileEntry | null>(null);
-  const [showPreviewSheet, setShowPreviewSheet] = useState(false);
   const [fileToMove, setFileToMove] = useState<FileEntry | null>(null);
   const [showMoveDialog, setShowMoveDialog] = useState(false);
 
@@ -136,7 +127,6 @@ export function FileExplorer({
     filterCounts,
     folderCount,
     fileCount,
-    filesAtLevel,
     entryByRelativePath,
   } = useMemo(
     () =>
@@ -314,11 +304,7 @@ export function FileExplorer({
       onOpenInteractive({ ...entry, fileId: entry.fileId });
       return;
     }
-    if (onOpenInPanel?.(entry)) {
-      return;
-    }
-    setPreviewFile(entry);
-    setShowPreviewSheet(true);
+    onOpenInPanel(entry);
   };
 
   const handleFramePackageOpen = (entry: FramePackageEntry) => {
@@ -328,23 +314,6 @@ export function FileExplorer({
   const handleNodeOpen = (entry: ContentNodeEntry) => {
     openSourceUrl(entry.sourceUrl);
   };
-
-  // Only file entries participate in prev/next navigation.
-  const fileEntriesAtLevel = filesAtLevel.filter(
-    (entry): entry is FileEntry =>
-      entry.kind === "file" && isFilePreviewableContentType(entry.contentType)
-  );
-  const previewIndex = previewFile
-    ? fileEntriesAtLevel.findIndex((f) => f.path === previewFile.path)
-    : -1;
-  const handlePreviewPrev =
-    previewIndex > 0
-      ? () => setPreviewFile(fileEntriesAtLevel[previewIndex - 1] ?? null)
-      : undefined;
-  const handlePreviewNext =
-    previewIndex >= 0 && previewIndex < fileEntriesAtLevel.length - 1
-      ? () => setPreviewFile(fileEntriesAtLevel[previewIndex + 1] ?? null)
-      : undefined;
 
   const showBreadcrumb = !(hideBreadcrumbAtRoot && currentFolderPath === "");
 
@@ -417,17 +386,6 @@ export function FileExplorer({
           />
         </div>
       </div>
-
-      <FilePreviewDialog
-        entry={previewFile}
-        fileUrl={previewFile ? getFileUrl(previewFile.path) : null}
-        isOpen={showPreviewSheet}
-        onOpenChange={setShowPreviewSheet}
-        onDownload={onDownload}
-        onPrev={handlePreviewPrev}
-        onNext={handlePreviewNext}
-        owner={owner}
-      />
 
       {onMoveFile && (
         <MoveFileToFolderDialog

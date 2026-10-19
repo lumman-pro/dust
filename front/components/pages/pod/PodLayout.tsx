@@ -1,8 +1,10 @@
 import { BlockedActionsProvider } from "@app/components/assistant/conversation/BlockedActionsProvider";
 import { ErrorDisplay } from "@app/components/assistant/conversation/ConversationError";
+import { ConversationSidePanelProvider } from "@app/components/assistant/conversation/ConversationSidePanelContext";
 import { FileDropProvider } from "@app/components/assistant/conversation/FileUploaderContext";
 import { GenerationContextProvider } from "@app/components/assistant/conversation/GenerationContextProvider";
 import { ErrorBoundary } from "@app/components/error_boundary/ErrorBoundary";
+import { PodSidePanelContainer } from "@app/components/pod/PodSidePanelContainer";
 import {
   useSetHasTitle,
   useSetPageTitle,
@@ -33,13 +35,16 @@ export function PodLayout({ children, owner }: PodLayoutProps) {
 
   return (
     <BlockedActionsProvider owner={owner}>
-      <ErrorBoundary fallback={<UncaughtPodErrorFallback />}>
-        <div className="flex h-panel w-full flex-col">
-          <FileDropProvider>
-            <GenerationContextProvider>{children}</GenerationContextProvider>
-          </FileDropProvider>
-        </div>
-      </ErrorBoundary>
+      {/* Keyed so a panel opened in one Pod does not follow into the next. */}
+      <ConversationSidePanelProvider key={activePodId}>
+        <ErrorBoundary fallback={<UncaughtPodErrorFallback />}>
+          <PodSidePanelContainer owner={owner} pod={spaceInfo ?? null}>
+            <FileDropProvider>
+              <GenerationContextProvider>{children}</GenerationContextProvider>
+            </FileDropProvider>
+          </PodSidePanelContainer>
+        </ErrorBoundary>
+      </ConversationSidePanelProvider>
     </BlockedActionsProvider>
   );
 }

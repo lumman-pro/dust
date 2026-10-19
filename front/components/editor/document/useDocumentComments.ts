@@ -16,6 +16,7 @@ import {
   scrollToCommentHighlight,
   withoutOrphanCommentMarks,
 } from "@app/components/editor/document/DocumentComments";
+import type { ActiveCommentBinding } from "@app/components/editor/document/types";
 import type { CommentChannel } from "@app/lib/client/collab/comments";
 import type { DfmMessageVerifier } from "@app/lib/client/dfm_signatures";
 import type { DfmAuthor, DfmComment, DfmMessage } from "@app/lib/markdown/dfm";
@@ -45,6 +46,7 @@ interface UseDocumentCommentsProps {
   isSavable: (document: JSONContent) => boolean;
   verify?: DfmMessageVerifier;
   live?: CommentChannel;
+  activeComment?: ActiveCommentBinding;
 }
 
 interface Verification {
@@ -82,6 +84,11 @@ const EMPTY_STATE: EditorCommentsState = {
 const UNAVAILABLE_MESSAGE = msg`Commenting is unavailable.`;
 const UNANCHORED_MESSAGE = msg`The selected text can no longer take a comment. Select other text to comment.`;
 const UNSAVABLE_MESSAGE = msg`This comment can't be saved in this document. Try shortening or simplifying it.`;
+
+const jumpToComment = (editor: Editor, id: string) => {
+  editor.commands.setActiveComment(id);
+  scrollToCommentHighlight(editor, id);
+};
 
 /** The draft's text, shown as its quote and sent as the one agents get. */
 const getDraftQuote = (doc: Node, draft: DocumentCommentDraft) =>
@@ -215,6 +222,19 @@ export interface CommentsFocusRequest {
  * MUST be returned with a reason, never thrown; applying a suggestion whose resolution the session
  * refuses MUST keep the text change and return that reason.
  */
+/**
+ * @cc [owner:adrien,label:react] document-comment-reveal-on-open
+ * When `activeComment.id` names a loaded thread whose text is in the document and that differs
+ * from the last thread the hook opened or reported, the hook MUST activate it and scroll its
+ * highlight into view, without moving focus, even if an earlier request asked to focus it. While a
+ * draft is pending, or for a thread not loaded or not in the document, it MUST change nothing.
+ */
+/**
+ * @cc [owner:adrien,label:react] document-comment-report-active
+ * Each time the active thread changes, including to none, other than by opening `activeComment.id`,
+ * the hook MUST call `activeComment.onChange` with the new id once; it MUST NOT call it on mount. A
+ * change made without `activeComment` MUST be reported once it is given again.
+ */
 export const useDocumentComments = ({
   editor,
   canComment,
@@ -222,6 +242,7 @@ export const useDocumentComments = ({
   isSavable,
   verify,
   live,
+  activeComment,
 }: UseDocumentCommentsProps) => {
   const { t } = useLingui();
   const state =
@@ -357,6 +378,39 @@ export const useDocumentComments = ({
     setListOpen(false);
     requestFocus(id);
   };
+
+  const linkedCommentId = activeComment?.id;
+  const onLinkedCommentChange = activeComment?.onChange;
+  const syncedCommentId = useRef(state.activeId);
+  useEffect(() => {
+    if (!editor || !onLinkedCommentChange) {
+      return;
+    }
+    if (state.activeId !== syncedCommentId.current) {
+      syncedCommentId.current = state.activeId;
+      onLinkedCommentChange(state.activeId);
+      return;
+    }
+    if (
+      linkedCommentId &&
+      linkedCommentId !== state.activeId &&
+      !state.draft &&
+      state.quotes.has(linkedCommentId) &&
+      comments.some(({ id }) => id === linkedCommentId)
+    ) {
+      syncedCommentId.current = linkedCommentId;
+      setFocusRequest(null);
+      jumpToComment(editor, linkedCommentId);
+    }
+  }, [
+    editor,
+    linkedCommentId,
+    onLinkedCommentChange,
+    state.activeId,
+    state.draft,
+    state.quotes,
+    comments,
+  ]);
 
   const liveErrorMessage = (code: CommentRequestErrorCode): string => {
     switch (code) {
@@ -625,9 +679,8 @@ export const useDocumentComments = ({
     },
     /** Activates a thread from the list and scrolls to its text. */
     jumpTo: (id: string) => {
-      select(id);
       if (editor) {
-        scrollToCommentHighlight(editor, id);
+        jumpToComment(editor, id);
       }
     },
     /** Starts a comment on the selection, in a card floating under it. */

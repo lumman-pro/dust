@@ -36,9 +36,11 @@ export const DOCUMENTS_TOOLS_METADATA = [
       "The comment opens a new thread attributed to you, signed by Dust so readers see it as " +
       "verified, and shows next to the quoted passage in the document editor. " +
       `Read the document first with \`${getPrefixedToolName(DOCUMENTS_SERVER_NAME, DOCUMENTS_READ_DOCUMENT_ACTION_NAME)}\` ` +
-      "and quote its Markdown source exactly as returned, syntax included (such as `**` or " +
-      "link targets) but leaving out existing `:comment-start{…}` and `:comment-end{…}` " +
-      "anchors; a quote cannot span code. " +
+      "and quote its Markdown source exactly as returned, inline syntax included (such as `**` " +
+      "or link targets) but leaving out existing `:comment-start{…}` and `:comment-end{…}` " +
+      "anchors; a quote cannot span code. Start and end the quote on text, never on the " +
+      "marker opening a line: a heading's `#`, a list's `-` or `1.`, a quote's `>` or a task's " +
+      "`[ ]`. A quote that cuts into one is refused: quote the text after it instead. " +
       "Never write comment directives by hand with a file edit: they would read as unverified.",
     schema: {
       path: PATH_SCHEMA,

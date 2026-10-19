@@ -21,16 +21,11 @@ import { useFolderPathUrlState } from "@app/hooks/useFolderPathUrlState";
 import { usePinPodBanner } from "@app/hooks/usePinPodBanner";
 import { usePodFileTabs } from "@app/hooks/usePodFileTabs";
 import { useFeatureFlags } from "@app/lib/auth/AuthContext";
-import {
-  downloadFile,
-  getFilePathViewUrl,
-  useDeleteFileByPath,
-} from "@app/lib/swr/files";
+import { downloadFile, useDeleteFileByPath } from "@app/lib/swr/files";
 import { usePodFiles } from "@app/lib/swr/pods";
 import { useSpaceInfo } from "@app/lib/swr/spaces";
 import type { ConversationWithoutContentType } from "@app/types/assistant/conversation";
 import { isPodConversation } from "@app/types/assistant/conversation";
-import { isFilePreviewableContentType } from "@app/types/file_preview";
 import type { PodFileTab } from "@app/types/pod_file_tab";
 import {
   DEFAULT_POD_FILE_TAB_ICON,
@@ -219,11 +214,6 @@ export function ConversationFileExplorer({
     ]
   );
 
-  const getFileUrl = useCallback(
-    (path: string) => getFilePathViewUrl(owner, path),
-    [owner]
-  );
-
   const getFileResponse = useCallback(
     (path: string) => downloadFile(owner, path),
     [owner]
@@ -238,13 +228,8 @@ export function ConversationFileExplorer({
   );
 
   const onOpenInPanel = useCallback(
-    (entry: FileEntry): boolean => {
-      if (isFilePreviewableContentType(entry.contentType)) {
-        openPanel({ type: "file_preview", kind: "path", filePath: entry.path });
-        return true;
-      }
-      return false;
-    },
+    (entry: FileEntry) =>
+      openPanel({ type: "file_preview", kind: "path", filePath: entry.path }),
     [openPanel]
   );
 
@@ -334,14 +319,12 @@ export function ConversationFileExplorer({
               ? isSandboxFilesLoading || isPodFilesLoading
               : isSandboxFilesLoading
           }
-          getFileUrl={getFileUrl}
           onCurrentFolderChange={setCurrentFolderPath}
           onDelete={onDelete}
           onRename={onRename}
           onDownload={onDownload}
           onOpenInteractive={onOpenInteractive}
           onOpenInPanel={onOpenInPanel}
-          owner={owner}
           virtualScopeRoots={virtualScopeRoots}
         />
       </div>

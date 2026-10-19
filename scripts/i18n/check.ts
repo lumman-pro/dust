@@ -71,8 +71,10 @@ async function listStaleCatalogs(): Promise<string[]> {
   ];
 }
 
-async function listUntranslatedMessages(locale: string): Promise<string[]> {
-  const untranslated: string[] = [];
+async function listUntranslatedMessages(
+  locale: string
+): Promise<{ file: string; msgid: string }[]> {
+  const untranslated: { file: string; msgid: string }[] = [];
   for (const filename of await listCatalogPaths(locale)) {
     if (!existsSync(filename)) {
       continue;
@@ -87,7 +89,10 @@ async function listUntranslatedMessages(locale: string): Promise<string[]> {
     untranslated.push(
       ...Object.entries(catalog)
         .filter(([, entry]) => !entry.obsolete && !entry.translation)
-        .map(([id, entry]) => entry.message ?? id)
+        .map(([id, entry]) => ({
+          file: path.relative(ROOT_DIR, filename),
+          msgid: entry.message ?? id,
+        }))
     );
   }
   return untranslated;
@@ -184,9 +189,10 @@ async function main() {
     if (untranslated.length > 0) {
       hasMissingTranslations = true;
       logger.error(
-        { locale, untranslated },
+        { locale, untranslatedCount: untranslated.length },
         "Missing translations: fill every empty `msgstr` of the catalogs."
       );
+      console.table(untranslated);
     }
   }
   if (hasMissingTranslations) {

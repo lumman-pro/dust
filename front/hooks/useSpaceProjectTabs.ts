@@ -31,12 +31,18 @@ function isSystemPodTab(tab: string): tab is SystemPodTab {
   return SYSTEM_POD_TAB_HASHES.has(tab);
 }
 
+// The side panel keeps its state after `?` in the hash (`#files?spt=...`).
+function splitLocationHash(): [string, string | undefined] {
+  const [tabHash, query] = window.location.hash.slice(1).split("?");
+  return [tabHash, query];
+}
+
 /** Hash segment → tab when the user navigates with the hash (same pod). */
 function parsePodTabFromLocationHash(fallbackTab: PodTab): PodTab {
   if (typeof window === "undefined") {
     return fallbackTab;
   }
-  const hash = window.location.hash.slice(1);
+  const [hash] = splitLocationHash();
   if (isSystemPodTab(hash)) {
     return hash;
   }
@@ -70,7 +76,8 @@ function replaceUrlWithTab(tab: PodTab) {
       url.searchParams.delete(key);
     }
   }
-  url.hash = tabToHash(tab);
+  const [, query] = splitLocationHash();
+  url.hash = query ? `${tabToHash(tab)}?${query}` : tabToHash(tab);
   window.history.replaceState(null, "", url.pathname + url.search + url.hash);
 }
 
@@ -104,16 +111,16 @@ export function usePodTabs({
   onHashChangeRef.current = () => {
     const tabFromHash = parsePodTabFromLocationHash(podUiPreferences.tab);
     const resolved = tabFromHash;
-    const expectedHash = `#${tabToHash(podUiPreferences.tab)}`;
+    const [tabHash] = splitLocationHash();
     if (resolved !== podUiPreferences.tab) {
       setPodUiPreferences({ ...podUiPreferences, tab: resolved });
       if (
-        window.location.hash !== `#${tabToHash(resolved)}` ||
+        tabHash !== tabToHash(resolved) ||
         (resolved !== "connected_data" && hasConnectedDataQueryParams())
       ) {
         replaceUrlWithTab(resolved);
       }
-    } else if (window.location.hash !== expectedHash) {
+    } else if (tabHash !== tabToHash(podUiPreferences.tab)) {
       const newTab = podUiPreferences.tab;
       window.setTimeout(() => replaceUrlWithTab(newTab), 0);
     } else if (resolved !== "connected_data" && hasConnectedDataQueryParams()) {

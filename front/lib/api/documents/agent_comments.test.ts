@@ -205,6 +205,27 @@ describe("addAgentComment", () => {
     );
   });
 
+  it("refuses a quote starting on a task's checkbox without writing, then anchors the task's text", async () => {
+    vi.mocked(readCanonicalFileContent).mockImplementation(async () =>
+      stored("- [ ] Ship it\n- [x] Test it\n", "7")
+    );
+    vi.mocked(writeCanonicalFileContent).mockResolvedValue(
+      new Ok({ created: false, revision: "8" })
+    );
+
+    const refused = await comment(auth, dustFs, "[ ] Ship it");
+    expect(refused.isErr() && refused.error.code).toBe("cannot_anchor");
+    expect(writeCanonicalFileContent).not.toHaveBeenCalled();
+
+    const result = await comment(auth, dustFs, "Ship it");
+    expect(result.isOk()).toBe(true);
+    const commentId = result.isOk() ? result.value.commentId : "";
+    const after = parseDfm(written(0).content);
+    expect(after.isOk() && after.value.body).toBe(
+      `- [ ] :comment-start{id=${commentId}}Ship it:comment-end{id=${commentId}}\n- [x] Test it`
+    );
+  });
+
   it("comments on `.markdown` files", async () => {
     vi.mocked(readCanonicalFileContent).mockResolvedValue(stored(SOURCE, "7"));
     vi.mocked(writeCanonicalFileContent).mockResolvedValue(

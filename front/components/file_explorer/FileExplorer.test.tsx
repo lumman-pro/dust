@@ -23,10 +23,6 @@ import {
   vi,
 } from "vitest";
 
-const mockClientFetch = vi.fn();
-vi.mock("@app/lib/egress/client", () => ({
-  clientFetch: (...args: unknown[]) => mockClientFetch(...args),
-}));
 vi.mock("@app/lib/swr/useIsMobile", () => ({
   useIsMobile: () => false,
 }));
@@ -59,17 +55,22 @@ function makeFile({
 
 type ControlledFileExplorerProps = Omit<
   ComponentProps<typeof FileExplorer>,
-  "currentFolderPath" | "onCurrentFolderChange"
->;
+  "currentFolderPath" | "onCurrentFolderChange" | "onOpenInPanel"
+> &
+  Partial<Pick<ComponentProps<typeof FileExplorer>, "onOpenInPanel">>;
 
 // `FileExplorer` is a controlled component: folder navigation lives in the
 // parent (in the app, in the URL). Tests hold it in local state.
-function ControlledFileExplorer(props: ControlledFileExplorerProps) {
+function ControlledFileExplorer({
+  onOpenInPanel = vi.fn(),
+  ...props
+}: ControlledFileExplorerProps) {
   const [currentFolderPath, setCurrentFolderPath] = useState("");
 
   return (
     <FileExplorer
       {...props}
+      onOpenInPanel={onOpenInPanel}
       currentFolderPath={currentFolderPath}
       onCurrentFolderChange={setCurrentFolderPath}
     />
@@ -93,10 +94,9 @@ beforeAll(() => {
 describe("FileExplorer file opening", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockClientFetch.mockResolvedValue(new Response("preview content"));
   });
 
-  it("downloads binary files instead of opening the preview dialog", async () => {
+  it("downloads binary files instead of opening the panel", async () => {
     const archive = makeFile({
       contentType: "application/zip",
       fileName: "archive.zip",
@@ -109,14 +109,15 @@ describe("FileExplorer file opening", () => {
           finishDownload = resolve;
         })
     );
+    const onOpenInPanel = vi.fn();
 
     render(
       <ControlledFileExplorer
         defaultViewMode="list"
         files={[archive]}
-        getFileUrl={(path) => `/files/${path}`}
         isLoading={false}
         onDownload={onDownload}
+        onOpenInPanel={onOpenInPanel}
       />
     );
 
@@ -135,8 +136,7 @@ describe("FileExplorer file opening", () => {
     );
     fireEvent.click(archiveTitle);
     expect(onDownload).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(mockClientFetch).not.toHaveBeenCalled();
+    expect(onOpenInPanel).not.toHaveBeenCalled();
 
     finishDownload?.();
     await waitFor(() =>
@@ -145,45 +145,6 @@ describe("FileExplorer file opening", () => {
         "false"
       )
     );
-  });
-
-  it("skips binary files in preview navigation", async () => {
-    const first = makeFile({
-      contentType: "text/plain",
-      fileName: "first.txt",
-      lastModifiedMs: 3,
-    });
-    const archive = makeFile({
-      contentType: "application/zip",
-      fileName: "archive.zip",
-      lastModifiedMs: 2,
-    });
-    const second = makeFile({
-      contentType: "text/plain",
-      fileName: "second.txt",
-      lastModifiedMs: 1,
-    });
-
-    render(
-      <ControlledFileExplorer
-        defaultViewMode="list"
-        files={[first, archive, second]}
-        getFileUrl={(path) => `/files/${path}`}
-        isLoading={false}
-        onDownload={vi.fn().mockResolvedValue(undefined)}
-      />
-    );
-
-    fireEvent.click(screen.getByText("first.txt"));
-    expect(
-      await screen.findByRole("dialog", { name: "first.txt" })
-    ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
-
-    expect(
-      await screen.findByRole("dialog", { name: "second.txt" })
-    ).toBeInTheDocument();
   });
 });
 
@@ -205,7 +166,6 @@ describe("FileExplorer navigation", () => {
       <ControlledFileExplorer
         defaultViewMode="list"
         files={[nestedFile, rootFile]}
-        getFileUrl={(path) => `/files/${path}`}
         isLoading={false}
         onDownload={vi.fn().mockResolvedValue(undefined)}
       />
@@ -231,7 +191,6 @@ describe("FileExplorer navigation", () => {
       <ControlledFileExplorer
         defaultViewMode="list"
         files={[nestedFile]}
-        getFileUrl={(path) => `/files/${path}`}
         isLoading={false}
         onDownload={vi.fn().mockResolvedValue(undefined)}
         onRename={onRename}
@@ -269,7 +228,6 @@ describe("FileExplorer navigation", () => {
       <ControlledFileExplorer
         defaultViewMode="list"
         files={[nestedFile]}
-        getFileUrl={(path) => `/files/${path}`}
         isLoading={false}
         onDownload={onDownload}
       />
@@ -310,7 +268,6 @@ describe("FileExplorer Frame packages", () => {
         defaultViewMode="list"
         displayFramePackages
         files={[manifest]}
-        getFileUrl={(path) => `/files/${path}`}
         isLoading={false}
         onDownload={vi.fn().mockResolvedValue(undefined)}
         onRename={onRename}
@@ -350,7 +307,6 @@ describe("FileExplorer Frame packages", () => {
         defaultViewMode="list"
         displayFramePackages
         files={[manifest]}
-        getFileUrl={(path) => `/files/${path}`}
         isLoading={false}
         onDownload={vi.fn().mockResolvedValue(undefined)}
       />
@@ -366,7 +322,6 @@ describe("FileExplorer Frame packages", () => {
 
   it("opens the Frame and downloads its source folder", async () => {
     const user = userEvent.setup();
-    mockClientFetch.mockResolvedValue(new Response("preview content"));
     const manifest = makeFile({
       contentType: "application/json",
       fileName: "manifest.json",
@@ -381,6 +336,7 @@ describe("FileExplorer Frame packages", () => {
       path: "status/index.tsx",
     });
     const onOpenInteractive = vi.fn();
+    const onOpenInPanel = vi.fn();
     const onDelete = vi.fn().mockResolvedValue(undefined);
     const onDownload = vi.fn().mockResolvedValue(undefined);
 
@@ -389,12 +345,12 @@ describe("FileExplorer Frame packages", () => {
         defaultViewMode="list"
         displayFramePackages
         files={[manifest, source]}
-        getFileUrl={(path) => `/files/${path}`}
         isLoading={false}
         onDelete={onDelete}
         onDownload={onDownload}
         onMoveFile={vi.fn().mockResolvedValue(new Ok(undefined))}
         onOpenInteractive={onOpenInteractive}
+        onOpenInPanel={onOpenInPanel}
         onRename={vi.fn()}
       />
     );
@@ -445,10 +401,9 @@ describe("FileExplorer Frame packages", () => {
     expect(screen.getByText("index.tsx")).toBeInTheDocument();
 
     fireEvent.click(manifestTitle);
-    expect(
-      await screen.findByRole("dialog", { name: "manifest.json" })
-    ).toBeInTheDocument();
-    expect(await screen.findByText("preview content")).toBeInTheDocument();
+    expect(onOpenInPanel).toHaveBeenCalledWith(
+      expect.objectContaining({ path: "conversation-c1/status/manifest.json" })
+    );
   });
 });
 
@@ -464,7 +419,6 @@ describe("FileExplorer preferences", () => {
       <ControlledFileExplorer
         defaultViewMode="grid"
         files={[file]}
-        getFileUrl={(path) => `/files/${path}`}
         isLoading={false}
         onDownload={vi.fn().mockResolvedValue(undefined)}
       />
@@ -537,7 +491,6 @@ describe("FileExplorer content node opening", () => {
           makeNode("Safe doc", "https://example.com/doc"),
           makeNode("Unsafe doc", "javascript:alert(1)"),
         ]}
-        getFileUrl={(path) => `/files/${path}`}
         isLoading={false}
         onDownload={vi.fn().mockResolvedValue(undefined)}
       />

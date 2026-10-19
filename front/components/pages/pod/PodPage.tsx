@@ -169,7 +169,7 @@ export function PodPage() {
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
       <NavTabPill
-        className="pt-2 flex min-h-0 flex-1 flex-col overflow-hidden"
+        className="flex min-h-0 flex-1 flex-col overflow-hidden"
         defaultValue="conversations"
         value={currentTab}
         onValueChange={(value) => {
@@ -180,7 +180,7 @@ export function PodPage() {
       >
         <div
           className={classNames(
-            "flex shrink-0 items-center justify-between border-b border-separator pb-2 px-2",
+            "flex h-title shrink-0 items-center justify-between border-b border-separator px-2",
             isMobile && "pl-12"
           )}
         >

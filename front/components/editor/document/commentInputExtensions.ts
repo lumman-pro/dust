@@ -1,3 +1,4 @@
+import { codeFence } from "@app/lib/markdown/code_fence";
 import { SUGGESTION_LANGUAGE, suggestionBlock } from "@app/lib/markdown/dfm";
 import type { Editor, Extensions, JSONContent } from "@tiptap/core";
 import { Extension } from "@tiptap/core";
@@ -68,11 +69,7 @@ const commentCodeBlock = (suggestionLabel: string) =>
           return block.value;
         }
       }
-      let longestRun = 0;
-      for (const run of text.match(/`+/g) ?? []) {
-        longestRun = Math.max(longestRun, run.length);
-      }
-      const fence = "`".repeat(Math.max(3, longestRun + 1));
+      const fence = codeFence(text);
       return `${fence}${language}\n${text}\n${fence}`;
     },
   });

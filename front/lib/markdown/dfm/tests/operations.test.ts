@@ -240,3 +240,71 @@ describe("anchorComment", () => {
     expectError(anchorComment(input), message);
   });
 });
+
+describe("anchorComment on GFM task lists", () => {
+  const START = ":comment-start{id=c1}";
+  const END = ":comment-end{id=c1}";
+
+  it.each([
+    ["starting before a task marker", "- [ ] Milk\n", "[ ] Milk"],
+    ["starting between a task marker and its space", "- [x] Milk\n", " Milk"],
+    ["ending before a task marker", "- [ ] Milk\n- [ ] Eggs\n", "Milk\n- "],
+    [
+      "ending between a task marker and its space",
+      "- [ ] Milk\n- [ ] Eggs\n",
+      "Milk\n- [ ]",
+    ],
+    ["on a nested task's marker", "- [ ] Launch\n  - [ ] Blog\n", "[ ] Blog"],
+    [
+      "on a numbered task's marker",
+      "1. [ ] Collect\n2. [x] Ship\n",
+      "[x] Ship",
+    ],
+    ["on a quoted task's marker", "> - [ ] Quoted\n", "[ ] Quoted"],
+    ["on an uppercase `[X]` marker", "- [X] Done\n", "[X] Done"],
+    ["covering only a task marker", "- [ ] Milk\n", "[ ] "],
+  ])(
+    "refuses a quote %s, which would make the task plain",
+    (_, body, quote) => {
+      expectError(
+        anchorComment({ body, id: "c1", quote }),
+        "without changing the document structure: a listItem would change"
+      );
+    }
+  );
+
+  it.each([
+    [
+      "inside a task's text",
+      "- [ ] Buy milk\n",
+      "milk",
+      `- [ ] Buy ${START}milk${END}\n`,
+    ],
+    [
+      "across tasks, with markers in the middle",
+      "- [ ] Milk\n- [x] Eggs\n- [ ] Bread\n",
+      "Milk\n- [x] Eggs\n- [ ] Bread",
+      `- [ ] ${START}Milk\n- [x] Eggs\n- [ ] Bread${END}\n`,
+    ],
+    [
+      "across a numbered task and a nested one",
+      "1. [ ] Collect\n   - [x] Notes\n2. Ship\n",
+      "Collect\n   - [x] Notes",
+      `1. [ ] ${START}Collect\n   - [x] Notes${END}\n2. Ship\n`,
+    ],
+    [
+      "on a task marker lookalike continuing a paragraph",
+      "Intro\n    - [ ] Milk\n",
+      "[ ] Milk",
+      `Intro\n    - ${START}[ ] Milk${END}\n`,
+    ],
+    [
+      "on the brackets of an item with no text",
+      "- [ ]\n- b\n",
+      "[ ]",
+      `- ${START}[ ]${END}\n- b\n`,
+    ],
+  ])("anchors a quote %s as asked", (_, body, quote, anchored) => {
+    expect(unwrap(anchorComment({ body, id: "c1", quote }))).toBe(anchored);
+  });
+});

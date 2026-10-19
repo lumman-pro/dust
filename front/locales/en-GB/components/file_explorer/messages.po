@@ -87,12 +87,10 @@ msgid "More options"
 msgstr ""
 
 #: front/components/file_explorer/FileExplorerItem.tsx
-#: front/components/file_explorer/FilePreviewDialog.tsx
 msgid "Downloading…"
 msgstr ""
 
 #: front/components/file_explorer/FileExplorerItem.tsx
-#: front/components/file_explorer/FilePreviewDialog.tsx
 #: front/components/file_explorer/FilePreviewFallback.tsx
 msgid "Download"
 msgstr ""
@@ -183,30 +181,6 @@ msgstr ""
 
 #: front/components/file_explorer/FilePreviewContent.tsx
 msgid "Showing {displayed} of {total, plural, one {# record} other {# records}}"
-msgstr ""
-
-#: front/components/file_explorer/FilePreviewDialog.tsx
-msgid "Preview data"
-msgstr ""
-
-#: front/components/file_explorer/FilePreviewDialog.tsx
-msgid "Close"
-msgstr ""
-
-#: front/components/file_explorer/FilePreviewDialog.tsx
-msgid "Previous"
-msgstr ""
-
-#: front/components/file_explorer/FilePreviewDialog.tsx
-msgid "Next"
-msgstr ""
-
-#: front/components/file_explorer/FilePreviewDialog.tsx
-msgid "Save"
-msgstr ""
-
-#: front/components/file_explorer/FilePreviewDialog.tsx
-msgid "Revert"
 msgstr ""
 
 #: front/components/file_explorer/MarkdownFilePreview.tsx

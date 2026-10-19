@@ -1,7 +1,7 @@
 use crate::{errno::Errno, inodes::Inodes, remote::Remote};
 use dfs_protocol::{
     ObjectId, ObjectRef, READ_MAX_BYTES, is_valid_name,
-    rpc::{Attr, ObjectKind},
+    rpc::{Attr, LookupTarget, ObjectKind},
 };
 use std::{
     collections::HashSet,
@@ -130,8 +130,7 @@ impl Fs {
      */
     pub async fn lookup(&self, parent: Ino, name: &str) -> Result<Attributes, Errno> {
         if parent != ROOT_INO {
-            // Needs the server's `Lookup`, not supported yet.
-            return Err(self.unsupported_in(parent).await);
+            return self.lookup_in(parent, name).await;
         }
         let entry = self
             .root_entries
@@ -148,6 +147,27 @@ impl Fs {
         Ok(attributes)
     }
 
+    /// Finds `name` in the dfs directory `parent`. A parent the session cannot read looks missing.
+    async fn lookup_in(&self, parent: Ino, name: &str) -> Result<Attributes, Errno> {
+        let parent = self.inodes().object(parent).ok_or(Errno::ENOENT)?;
+        let mut results = self
+            .remote
+            .lookup(&[LookupTarget {
+                parent_id: parent.into(),
+                name: name.to_owned(),
+            }])
+            .await?;
+        let attr = results.pop().ok_or(Errno::EIO)??;
+        // Only the virtual root and `shared` are not objects, and neither is in a dfs directory.
+        let ObjectRef::Object(object) = attr.id else {
+            return Err(Errno::EIO);
+        };
+        // Converted before the lookup is counted, so an object the mount cannot show counts none.
+        let mut attributes = Attributes::from_attr(ROOT_INO, &attr)?;
+        attributes.ino = self.inodes().lookup(object);
+        Ok(attributes)
+    }
+
     /**
      * @cc [owner:fontanierh,label:product] synthetic-root
      * The root MUST list, and `lookup` MUST find, only the configured folders that the server
@@ -155,7 +175,7 @@ impl Fs {
      */
     pub async fn readdir(&self, ino: Ino) -> Result<Vec<DirEntry>, Errno> {
         if ino != ROOT_INO {
-            // Needs the server's `List`, not supported yet.
+            // Listing through the server's `List` is not done yet.
             return Err(self.unsupported_in(ino).await);
         }
         let references: Vec<ObjectRef> = self
