@@ -165,7 +165,7 @@ live document (`LIVE_SESSION.md`, "Comments in the live document").
 
 ### Later (stream 5, extras)
 
-History and restore from file versions, themes and templates via front matter, embedding a
+History and restore from file versions (design in `HISTORY.md`), themes and templates via front matter, embedding a
 Frame, stable links between docs, images stored next to the doc, PDF and Markdown export with
 directives stripped, notifications on replies and mentions.
 
