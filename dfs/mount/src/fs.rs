@@ -197,9 +197,7 @@ impl Fs {
         let mut remaining = size;
         while remaining > 0 {
             let length = remaining.min(READ_MAX_BYTES);
-            let at = offset
-                .checked_add(data.len() as u64)
-                .ok_or(Errno::EINVAL)?;
+            let at = offset.checked_add(data.len() as u64).ok_or(Errno::EINVAL)?;
             let chunk = self.remote.read(object, at, length).await?.data;
             if chunk.len() > length as usize {
                 return Err(Errno::EIO);

@@ -2,14 +2,14 @@
 
 use dfs_mount::{Attributes, DirEntry, Errno, Fs, Ino, Kind};
 use dfs_protocol::READ_MAX_BYTES;
-use nix::fcntl::OFlag;
 use fuser::{
     AccessFlags, BsdFileFlags, Config, FileAttr, FileHandle, FileType, Filesystem, FopenFlags,
     Generation, INodeNo, InitFlags, IoctlFlags, KernelConfig, LockOwner, MountOption, OpenAccMode,
-    OpenFlags,
-    RenameFlags, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEmpty, ReplyEntry,
-    ReplyIoctl, ReplyOpen, ReplyStatfs, ReplyWrite, Request, SessionACL, TimeOrNow, WriteFlags,
+    OpenFlags, RenameFlags, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEmpty,
+    ReplyEntry, ReplyIoctl, ReplyOpen, ReplyStatfs, ReplyWrite, Request, SessionACL, TimeOrNow,
+    WriteFlags,
 };
+use nix::fcntl::OFlag;
 use std::{
     collections::HashMap,
     ffi::OsStr,
