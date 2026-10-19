@@ -21,6 +21,7 @@ import { createDocumentMarked } from "@app/components/editor/document/marked_ins
 import { cn } from "@dust-tt/sparkle";
 import type { AnyExtension } from "@tiptap/core";
 import { Code } from "@tiptap/extension-code";
+import { CodeBlock } from "@tiptap/extension-code-block";
 import { Markdown } from "@tiptap/markdown";
 import type { StarterKitOptions } from "@tiptap/starter-kit";
 import { StarterKit } from "@tiptap/starter-kit";
@@ -52,12 +53,7 @@ const starterKitOptions: Partial<StarterKitOptions> = {
         "my-6 border-l-2 border-foreground/30 px-4 py-0.5 text-foreground/85 [&>p]:my-1",
     },
   },
-  codeBlock: {
-    HTMLAttributes: {
-      class:
-        "my-6 overflow-x-auto whitespace-pre rounded-xl border border-border bg-muted-background px-5 py-4 font-mono text-sm leading-relaxed [tab-size:2] [&>code]:font-mono",
-    },
-  },
+  codeBlock: false,
   code: false,
   link: {
     openOnClick: false,
@@ -78,6 +74,17 @@ const starterKitOptions: Partial<StarterKitOptions> = {
  * MUST exclude the comment mark, since an anchor written inside a code span reads back as code.
  */
 const DocumentCode = Code.extend({ excludes: COMMENT_MARK_NAME });
+
+// marked reads tilde fences and fences indented by up to three spaces as code like any other, but
+// TipTap's handler drops their content.
+const DocumentCodeBlock = CodeBlock.extend({
+  parseMarkdown: (token, helpers) =>
+    helpers.createNode(
+      "codeBlock",
+      { language: token.lang || null },
+      token.text ? [helpers.createTextNode(token.text)] : []
+    ),
+});
 
 // TipTap builds each editor's parser from the extension's options, which every editor built from
 // the same extensions shares: setting the instance right before it does gives each its own.
@@ -128,6 +135,12 @@ export const buildSchemaExtensions = ({
     HTMLAttributes: {
       class:
         "pl-1 marker:text-muted-foreground marker:tabular-nums [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1",
+    },
+  }),
+  DocumentCodeBlock.configure({
+    HTMLAttributes: {
+      class:
+        "my-6 overflow-x-auto whitespace-pre rounded-xl border border-border bg-muted-background px-5 py-4 font-mono text-sm leading-relaxed [tab-size:2] [&>code]:font-mono",
     },
   }),
   DocumentTable.configure({

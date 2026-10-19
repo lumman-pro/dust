@@ -234,16 +234,6 @@ describe("loadDfm", () => {
       "The Markdown uses formatting the editor cannot keep: HTML.",
     ],
     [
-      "a tilde fence",
-      "Intro.\n\n~~~\ncode\n~~~\n",
-      "The Markdown uses formatting the editor cannot keep: a code block fenced with ~~~.",
-    ],
-    [
-      "an indented backtick fence",
-      "Intro.\n\n  ```\n  code\n  ```\n",
-      "The Markdown uses formatting the editor cannot keep: an indented code fence.",
-    ],
-    [
       "a numbered task list",
       "1. [ ] todo\n",
       "The Markdown uses formatting the editor cannot keep: a task list.",
@@ -257,11 +247,6 @@ describe("loadDfm", () => {
       "HTML in a quote",
       "> Intro.\n>\n> <div>x</div>\n",
       "The Markdown uses formatting the editor cannot keep: HTML.",
-    ],
-    [
-      "a tilde fence in a list item",
-      "- item\n\n  ~~~\n  code\n  ~~~\n",
-      "The Markdown uses formatting the editor cannot keep: a code block fenced with ~~~.",
     ],
   ])("refuses %s, naming it", (_, source, reason) => {
     const loaded = loadDfm(source);
@@ -322,6 +307,39 @@ describe("loadDfm", () => {
       " now[c1]",
     ]);
     expect(roundTrip(source)).toBe(source);
+  });
+
+  it.each([
+    [
+      "a tilde fence",
+      "~~~ts\nconst a = 1;\n~~~\n",
+      "```ts\nconst a = 1;\n```\n",
+    ],
+    [
+      "an indented backtick fence",
+      "  ```\n  code\n  ```\n",
+      "```\ncode\n```\n",
+    ],
+    [
+      "an indented code block",
+      "Intro.\n\n    code\n",
+      "Intro.\n\n```\ncode\n```\n",
+    ],
+    [
+      "a tilde fence in a list item",
+      "- item\n\n  ~~~\n  code\n  ~~~\n",
+      "- item\n  ```\n  code\n  ```\n",
+    ],
+  ])("opens %s and saves it with backticks", (_, source, saved) => {
+    expect(roundTrip(source)).toBe(saved);
+  });
+
+  it("refuses a tilde fence holding a backtick fence, which a save would break", () => {
+    const loaded = loadDfm("~~~\n```\ncode\n```\n~~~\n");
+
+    expect(loaded.isErr() && loaded.error).toBe(
+      "The Markdown would not read back the same after editing."
+    );
   });
 
   it("opens a comment with inline code inside it", () => {

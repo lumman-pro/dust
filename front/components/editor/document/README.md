@@ -26,11 +26,12 @@ an element in the host's header bar, to show the comments button there instead.
 
 `loadDfm` in `dfm_persistence.ts` decides. Hosts mount the editor for every Markdown file
 they hand it; a file opens for editing when it is valid DFM, its body is Markdown the editor
-reproduces, and every comment anchor the codec reads is one the editor can highlight. Task lists, HTML, reference links
-and tilde fences are refused for now, since the TipTap Markdown parser cannot preserve
-them. Inline code can sit in bold, italic, struck or linked text, but never in a comment. A
-refused file is shown as read-only source with the reason. Line endings are not
-preserved: a CRLF file opens and is written back with LF.
+reproduces, and every comment anchor the codec reads is one the editor can highlight. Task lists, HTML and reference
+links are refused for now, since the TipTap Markdown parser cannot preserve them. Every code
+block opens, and saves fenced with backticks: a tilde or indented fence is rewritten, and one
+whose code would end a backtick fence is refused. Inline code can sit in bold, italic, struck or
+linked text, but never in a comment. A refused file is shown as read-only source
+with the reason. Line endings are not preserved: a CRLF file opens and is written back with LF.
 
 ## Tables
 

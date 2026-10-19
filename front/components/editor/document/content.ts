@@ -113,11 +113,8 @@ const isSupportedMarkdownToken = (token: MarkdownToken) =>
   token.type !== undefined &&
   (TEXT_ONLY_TOKENS.has(token.type) ||
     supportedMarkdownTokens.has(token.type)) &&
-  // Registered list and code handlers still discard task markers and tilde fences.
+  // The registered list handler still discards task markers.
   !(token.type === "list_item" && token.task) &&
-  (token.type !== "code" ||
-    token.raw?.startsWith("```") ||
-    token.codeBlockStyle === "indented") &&
   !(token.type === "table" && hasExtraCells(token));
 
 /** A Markdown element the editor cannot keep and can name. */
@@ -125,16 +122,12 @@ export type UnsupportedElement =
   | "table_extra_cells"
   | "html"
   | "task_list"
-  | "tilde_fence"
-  | "indented_fence"
   | "reference_definition";
 
 const UNSUPPORTED_ELEMENT_NAMES: Record<UnsupportedElement, string> = {
   table_extra_cells: "a table row with more cells than its header",
   html: "HTML",
   task_list: "a task list",
-  tilde_fence: "a code block fenced with ~~~",
-  indented_fence: "an indented code fence",
   reference_definition: "a reference link definition",
 };
 
@@ -145,10 +138,6 @@ const unsupportedElement = (
     return "task_list";
   }
   switch (token.type) {
-    case "code":
-      return token.raw?.trimStart().startsWith("~")
-        ? "tilde_fence"
-        : "indented_fence";
     case "table":
       return hasExtraCells(token) ? "table_extra_cells" : null;
     case "html":

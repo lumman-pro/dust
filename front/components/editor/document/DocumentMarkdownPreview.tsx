@@ -127,8 +127,6 @@ const UNSUPPORTED_ELEMENT_NOTES: Record<UnsupportedElement, MessageDescriptor> =
     table_extra_cells: msg`This document can't be edited here because a table row has more cells than its header.`,
     html: msg`This document can't be edited here yet because it has HTML.`,
     task_list: msg`This document can't be edited here yet because it has a task list.`,
-    tilde_fence: msg`This document can't be edited here yet because it has a code block fenced with ~~~.`,
-    indented_fence: msg`This document can't be edited here yet because it has an indented code fence.`,
     reference_definition: msg`This document can't be edited here yet because it has a reference link definition.`,
   };
 

@@ -105,6 +105,7 @@
     "@textea/json-viewer": "^3.1.1",
     "@tiptap/core": "^3.31.4",
     "@tiptap/extension-blockquote": "^3.31.4",
+    "@tiptap/extension-code-block": "^3.31.4",
     "@tiptap/extension-collaboration": "^3.31.4",
     "@tiptap/extension-collaboration-caret": "^3.31.4",
     "@tiptap/extension-document": "^3.31.4",
