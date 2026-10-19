@@ -36,7 +36,7 @@ The parts of DFS this design relies on:
 
 ## Storage
 
-Snapshots live in a `history/` folder at the tenant root, next to `users/`, keyed by the doc's
+Snapshots live in a `.history/` folder at the tenant root, next to `users/`, keyed by the doc's
 object ID:
 
 ```text
@@ -46,22 +46,22 @@ object ID:
       conversations/
         conv-<sId>/
           poem.md                 ← the live doc (object ID 0190…)
-  history/                        ← no grants for users or agents
+  .history/                       ← no grants for users or agents
     0190…/                        ← one folder per doc
       2026-10-13T10-00-00Z.md
       2026-10-13T14-30-00Z.md
 ```
 
-- **Hidden by construction.** No user or agent session has a grant on `history/`, so it never
+- **Hidden by construction.** No user or agent session has a grant on `.history/`, so it never
   shows up in sandboxes, search or listings, and agents cannot edit or delete history. Only
-  front's own session, with a grant on `history/`, reads and writes it.
+  front's own session, with a grant on `.history/`, reads and writes it.
 - **Follows the doc.** The folder is named after the doc's object ID, so renaming or moving the
   doc keeps its history.
 - **Metadata.** Each snapshot file carries xattrs: its reasons (session start, session end,
   before agent edit, before restore), everyone (people and agents) who edited the doc since the
   previous snapshot, the doc's `content_version` at that moment, and the time the snapshot was
   taken.
-- **References.** As for user folders, front stores the ID of `history/` once and resolves each
+- **References.** As for user folders, front stores the ID of `.history/` once and resolves each
   doc's folder from it. A doc's history folder is created with its first snapshot.
 
 ## When a snapshot is taken
@@ -162,7 +162,7 @@ content and applies it to the doc as an ordinary edit, the way agent edits reach
 ## Doc deletion
 
 When a doc is deleted through front, delete its history folder in the same call. A file deleted
-from a sandbox leaves its history behind. A rare sweep job can clean that up: list `history/`,
+from a sandbox leaves its history behind. A rare sweep job can clean that up: list `.history/`,
 look up each folder's doc ID, and remove the folders whose doc no longer exists. We can also
 accept the leftovers at first, since they're small Markdown files.
 
@@ -189,8 +189,8 @@ accept the leftovers at first, since they're small Markdown files.
 ## Open questions for the DFS team
 
 - **A new top-level folder.** The DFS design has front create only `users/` under the tenant
-  root. `history/` would be a second top-level namespace. Is this OK?
-- **Front's session.** Front would need a session whose grant covers `history/` and nothing users
+  root. `.history/` would be a second top-level namespace. Is this OK?
+- **Front's session.** Front would need a session whose grant covers `.history/` and nothing users
   can reach, distinct from the user and agent sessions.
 
 ## What was left aside
