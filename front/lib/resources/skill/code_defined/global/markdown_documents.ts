@@ -38,8 +38,9 @@ Markdown documents (\`.md\`) in the conversation's or pod's files open in an edi
 - Write alt text that says what the image shows.
 
 **Frames.** To show a Frame itself in a document, live and interactive, embed it on its own line, with a blank line before and after: \`::embed_frame{path="pod-<id>/dashboards/revenue.tsx"}\`.
-- \`path\` is the Frame file's full path, as for images. An optional \`height\` in pixels can follow \`path\`, 600 by default: \`::embed_frame{path="pod-<id>/dashboards/revenue.tsx" height="400"}\`.
-- Any other attribute, after \`path\` and \`height\`, is passed to the Frame's component as a string prop: \`::embed_frame{path="pod-<id>/dashboards/revenue.tsx" height="400" region="EU" year="2026"}\` renders it with \`{ region: "EU", year: "2026" }\`. Prop names are letters, digits and \`_\`, starting with a letter, other than \`key\` and \`ref\`. Quote every value and escape \`&\`, \`<\`, \`>\`, \`"\` and \`'\` as HTML entities. Anything else on the line keeps it as text.
+- \`path\` is the Frame file's full path, as for images. An optional \`height\` in pixels, 600 by default: \`::embed_frame{path="pod-<id>/dashboards/revenue.tsx" height="400"}\`.
+- Any other attribute is passed to the Frame's component as a string prop: \`::embed_frame{path="pod-<id>/dashboards/revenue.tsx" height="400" region="EU" year="2026"}\` renders it with \`{ region: "EU", year: "2026" }\`. Prop names are letters, digits and \`_\`, starting with a letter, other than \`key\` and \`ref\`.
+- Attributes come in any order, each once, separated by a single space. Quote every value with \`"\`, keep it on one line, and write \`&\`, \`<\`, \`>\`, \`"\` and \`'\` in it only as \`&amp;\`, \`&lt;\`, \`&gt;\`, \`&quot;\` and \`&#39;\`, the only entities read: \`title="Today&#39;s sales"\`. Anything else on the line keeps it as text.
 - Readers see the Frame only if they can read its file. In a document of a pod, embed a Frame of the pod.
 - Never write a Frame's code in the document: create the Frame as a file, then embed its path.
 

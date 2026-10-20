@@ -92,6 +92,31 @@ describe("DocumentFrameEmbed", () => {
     );
   });
 
+  it("gives each embed of the same Frame its own identifier", () => {
+    const path = "pod-spc_pod/dashboards/revenue.frame.json";
+    render(
+      <AuthContext.Provider value={AUTH}>
+        <DocumentFrameEmbed
+          owner={owner}
+          path={path}
+          height={600}
+          frameProps={{ region: "EU" }}
+        />
+        <DocumentFrameEmbed
+          owner={owner}
+          path={path}
+          height={600}
+          frameProps={{ region: "US" }}
+        />
+      </AuthContext.Provider>
+    );
+
+    const identifiers = vi
+      .mocked(PodFrameVisualization)
+      .mock.calls.map(([props]) => props.identifier);
+    expect(new Set(identifiers).size).toBe(2);
+  });
+
   it("waits for the reader's pod roles before rendering the Frame", () => {
     vi.mocked(useSpaceInfo).mockReturnValue({
       spaceInfo: null,

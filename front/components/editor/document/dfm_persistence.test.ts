@@ -700,10 +700,18 @@ describe("saveDfm", () => {
       'See ::embed_frame{path="pod-abc/x.tsx"} here.\n',
       'See::embed_frame{path="pod-abc/x.tsx"}\n',
       '::embed_frame{path="pod-abc/x.tsx" title=X}\n',
-      '::embed_frame{path="pod-abc/x.tsx" region="EU" height="400"}\n',
+      '::embed_frame{path="pod-abc/x.tsx" region="EU" region="US"}\n',
     ]) {
       expect(JSON.stringify(load(source).content)).not.toContain("frameEmbed");
     }
+  });
+
+  it("saves a Frame embed's attributes in order", () => {
+    expect(
+      roundTrip(
+        '::embed_frame{region="EU" height="400" path="pod-abc/x.tsx"}\n'
+      )
+    ).toBe('::embed_frame{path="pod-abc/x.tsx" height="400" region="EU"}\n');
   });
 
   it("saves a Frame inserted with only its path, as the / menu does", () => {

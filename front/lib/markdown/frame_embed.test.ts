@@ -1,13 +1,19 @@
 import {
+  FRAME_EMBED_PROP_NAME_REGEX,
   findFrameEmbedDirective,
   isFrameEmbedPath,
   parseFrameEmbedDirective,
   parseFrameEmbedHeight,
   parseFrameEmbedProps,
   parseFrameEmbedPropsJson,
+  REACT_RESERVED_PROP_NAMES,
   serializeFrameEmbedDirective,
 } from "@app/lib/markdown/frame_embed";
 import { describe, expect, it } from "vitest";
+import {
+  FRAME_PROP_NAME_REGEX,
+  REACT_RESERVED_PROP_NAMES as VIZ_REACT_RESERVED_PROP_NAMES,
+} from "../../../viz/app/lib/frame-props";
 
 describe("frame embed directive", () => {
   it("reads back the path it writes", () => {
@@ -55,11 +61,30 @@ describe("frame embed directive", () => {
   });
 
   it.each([
+    ['::embed_frame{height="400" path="pod-abc/x.tsx"}', {}],
+    [
+      '::embed_frame{region="EU" path="pod-abc/x.tsx" height="400"}',
+      { region: "EU" },
+    ],
+    [
+      '::embed_frame{path="pod-abc/x.tsx" region="EU" height="400"}',
+      { region: "EU" },
+    ],
+  ])("reads the attributes of %j in any order", (src, props) => {
+    const parsed = parseFrameEmbedDirective(src);
+    expect(parsed).toMatchObject({ path: "pod-abc/x.tsx", height: 400 });
+    expect(parsed?.props).toEqual(props);
+  });
+
+  it.each([
     '::embed_frame{path="pod-abc/x.tsx" title=X}',
     '::embed_frame{path="pod-abc/x.tsx" a="1" a="2"}',
     '::embed_frame{path="pod-abc/x.tsx" path="pod-abc/y.tsx"}',
-    '::embed_frame{path="pod-abc/x.tsx" region="EU" height="400"}',
     '::embed_frame{path="pod-abc/x.tsx" height="400" height="400"}',
+    '::embed_frame{height="400" region="EU"}',
+    "::embed_frame{}",
+    '::embed_frame{path="pod-abc/x.tsx" a="b\rc"}',
+    '::embed_frame{path="pod-abc/a\rb.tsx"}',
     '::embed_frame{path="pod-abc/x.tsx" key="x"}',
     '::embed_frame{path="pod-abc/x.tsx" ref="x"}',
     '::embed_frame{path="pod-abc/x.tsx" 1a="x"}',
@@ -73,7 +98,6 @@ describe("frame embed directive", () => {
     '::embed_frame{path="pod-abc/x.tsx" height="400px"}',
     '::embed_frame{path="pod-abc/x.tsx" height="100000"}',
     '::embed_frame{path="pod-abc/x.tsx" height=400}',
-    '::embed_frame{height="400" path="pod-abc/x.tsx"}',
     "::embed_frame{path=pod-abc/x.tsx}",
     '::embed_frame{path=""}',
     '::embed_frame{path="pod-abc/x.tsx"} trailing',
@@ -83,6 +107,13 @@ describe("frame embed directive", () => {
     '::embed_frame{path="pod-abc/it\'s.tsx"}',
   ])("does not read %j", (src) => {
     expect(parseFrameEmbedDirective(src)).toBeNull();
+  });
+
+  it("names props as viz reads them", () => {
+    expect(FRAME_EMBED_PROP_NAME_REGEX.source).toBe(
+      FRAME_PROP_NAME_REGEX.source
+    );
+    expect(REACT_RESERVED_PROP_NAMES).toEqual(VIZ_REACT_RESERVED_PROP_NAMES);
   });
 
   it("finds a directive only at the start of a line", () => {
