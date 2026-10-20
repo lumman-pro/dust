@@ -35,7 +35,7 @@ type SubmissionState = {
   phase: "pending" | "exiting";
 } | null;
 
-type QuestionLayout = "list" | "yes_no";
+type QuestionLayout = "list" | "yes_no" | "chips";
 
 /**
  * @cc [owner:aubin-tchoi,label:product] question-layout
@@ -43,6 +43,7 @@ type QuestionLayout = "list" | "yes_no";
  * hold, and as the default list otherwise, including when it has no `format` at all (stored before
  * the field existed) or one this client does not know:
  * - `yes_no`: single select with exactly 2 options, as two buttons.
+ * - `chips`: no option has a description, as wrapping pills.
  */
 function getQuestionLayout(question: UserQuestion): QuestionLayout {
   switch (question.format) {
@@ -51,6 +52,10 @@ function getQuestionLayout(question: UserQuestion): QuestionLayout {
     case "yes_no":
       return !question.multiSelect && question.options.length === 2
         ? "yes_no"
+        : "list";
+    case "chips":
+      return question.options.every((option) => !option.description)
+        ? "chips"
         : "list";
     default:
       assertNeverAndIgnore(question.format);
@@ -118,7 +123,8 @@ function getYesNoShortcutIndex(
   }
 }
 
-// Yes/no buttons have no active option: they are reached with Tab or their shortcuts.
+// Chips lay options out side by side, so left and right arrows also move between them. Yes/no
+// buttons have no active option: they are reached with Tab or their shortcuts.
 function getArrowKeyDirection(
   key: string,
   layout: QuestionLayout
@@ -126,10 +132,11 @@ function getArrowKeyDirection(
   if (layout === "yes_no") {
     return null;
   }
-  if (key === "ArrowDown") {
+  const isHorizontal = layout === "chips";
+  if (key === "ArrowDown" || (isHorizontal && key === "ArrowRight")) {
     return 1;
   }
-  if (key === "ArrowUp") {
+  if (key === "ArrowUp" || (isHorizontal && key === "ArrowLeft")) {
     return -1;
   }
   return null;
@@ -398,6 +405,8 @@ export function UserAnswerRequired({
       case "list":
       case "yes_no":
         return t`Tell the agent what to do differently`;
+      case "chips":
+        return t`Enter another value`;
       default:
         return assertNever(layout);
     }
@@ -478,6 +487,36 @@ export function UserAnswerRequired({
                   />
                 )
               )}
+            </div>
+          )}
+          {layout === "chips" && (
+            <div className="flex flex-wrap gap-2">
+              {question.options.map((option, index) => {
+                const isSelected = answerDraft.selectedOptions.includes(index);
+
+                return (
+                  <Button
+                    key={index}
+                    label={option.label}
+                    variant={isSelected ? "primary" : "outline"}
+                    size="sm"
+                    isRounded
+                    aria-pressed={isSelected}
+                    onFocus={() => activateOption(index)}
+                    onMouseEnter={() => activateOption(index)}
+                    // The list's active background does not show on outline buttons, so the
+                    // keyboard cursor shows as a ring.
+                    className={cn(
+                      isKeyboardNavigating &&
+                        activeOptionIndex === index &&
+                        !isCustomResponseActive &&
+                        "ring-2 ring-inset ring-ring"
+                    )}
+                    onClick={() => handleOptionClick(index)}
+                    disabled={isSubmitting}
+                  />
+                );
+              })}
             </div>
           )}
           <OptionCard

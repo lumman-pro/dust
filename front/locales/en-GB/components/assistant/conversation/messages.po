@@ -1073,6 +1073,10 @@ msgid "Tell the agent what to do differently"
 msgstr ""
 
 #: front/components/assistant/conversation/UserAnswerRequired.tsx
+msgid "Enter another value"
+msgstr ""
+
+#: front/components/assistant/conversation/UserAnswerRequired.tsx
 msgid "Skipping question"
 msgstr ""
 

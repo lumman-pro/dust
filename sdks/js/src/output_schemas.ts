@@ -650,7 +650,7 @@ export const UserQuestionItemSchema = z.object({
     })
   ),
   multiSelect: z.boolean(),
-  format: z.enum(["list", "yes_no"]).catch("list"),
+  format: z.enum(["list", "yes_no", "chips"]).catch("list"),
 });
 
 export type UserQuestionItemType = z.infer<typeof UserQuestionItemSchema>;
