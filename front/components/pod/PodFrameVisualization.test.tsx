@@ -1,4 +1,5 @@
 import { PodFrameVisualization } from "@app/components/pod/PodFrameVisualization";
+import { LightWorkspaceFactory } from "@app/tests/utils/LightWorkspaceFactory";
 import type { LightWorkspaceType } from "@app/types/user";
 import { render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -60,7 +61,7 @@ describe("PodFrameVisualization", () => {
   it("passes the Frame's props to its iframe", () => {
     render(
       <PodFrameVisualization
-        owner={{ sId: "w_current" } as LightWorkspaceType}
+        owner={LightWorkspaceFactory.build({ sId: "w_current" })}
         fileContent="export default function Frame() {}"
         frameProps={{ region: "EU" }}
         vizUrl="https://viz.dust.tt"
