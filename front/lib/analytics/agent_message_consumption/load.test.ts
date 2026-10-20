@@ -560,47 +560,6 @@ describe("loadAgentMessageConsumptionAnalyticsInput", () => {
     ).rejects.toThrow("Run usage billing classification is incomplete");
   });
 
-  it("returns null when a failed message was never billed", async () => {
-    const context = await setupSettledMessage();
-    await AgentMessageModel.update(
-      { costCredits: null, status: "failed" },
-      {
-        where: {
-          id: context.agentMessage.agentMessageId!,
-          workspaceId: context.workspace.id,
-        },
-      }
-    );
-
-    const input = await loadAgentMessageConsumptionAnalyticsInput(
-      context.auth,
-      { agentMessageId: context.agentMessage.sId }
-    );
-
-    expect(input).toBeNull();
-  });
-
-  it("returns null when only unavailable model calls ran and nothing was billed", async () => {
-    const context = await setupSettledMessage();
-    const { run } = await RunFactory.createWithUnavailableUsage(context.auth);
-    await AgentMessageModel.update(
-      { costCredits: null, runIds: [run.dustRunId] },
-      {
-        where: {
-          id: context.agentMessageModelId,
-          workspaceId: context.workspace.id,
-        },
-      }
-    );
-
-    const input = await loadAgentMessageConsumptionAnalyticsInput(
-      context.auth,
-      { agentMessageId: context.agentMessage.sId }
-    );
-
-    expect(input).toBeNull();
-  });
-
   it("loads a failed message that was billed before it failed", async () => {
     const context = await setupSettledMessage();
     await AgentMessageModel.update(

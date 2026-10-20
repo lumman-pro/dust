@@ -1,4 +1,3 @@
-import { isUnavailableRunUsage } from "@app/lib/api/assistant/agent_message_consumption_attribution/allocation";
 import { AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION } from "@app/lib/api/assistant/agent_message_consumption_attribution/attribution_builder";
 import {
   canEnableSkill,
@@ -39,10 +38,7 @@ import type {
   AgentMessageStatus,
   UserMessageOrigin,
 } from "@app/types/assistant/conversation";
-import {
-  AGENT_MESSAGE_STATUSES_TO_TRACK,
-  isTerminalAgentMessageStatus,
-} from "@app/types/assistant/conversation";
+import { isTerminalAgentMessageStatus } from "@app/types/assistant/conversation";
 import { CAP_ELIGIBLE_GROUP_KINDS } from "@app/types/groups";
 import type { ModelId } from "@app/types/shared/model_id";
 import { assertNever } from "@app/types/shared/utils/assert_never";
@@ -241,18 +237,6 @@ async function loadAnalyticsUser({
  * Otherwise `items` MUST be exactly the items of that version, and every one of them MUST be
  * reconciled.
  */
-/**
- * @cc [owner:sfriquet,label:product;backend] unbilled-execution-snapshot
- * A terminal message whose status is not tracked for billing (`failed`) MUST return null when its
- * `costCredits` is null. Otherwise it MUST be loaded like any other message: the indexed snapshot
- * is restricted to its reconciled attribution items, whose amounts add up to the bill of the
- * executions finalized before the message failed.
- */
-/**
- * @cc [owner:sfriquet,label:product;backend] unbilled-unavailable-calls-not-indexed
- * A message whose `costCredits` is null and whose billed run usages are all `unavailable` MUST
- * return null.
- */
 export async function loadAgentMessageConsumptionAnalyticsInput(
   auth: Authenticator,
   {
@@ -295,12 +279,6 @@ export async function loadAgentMessageConsumptionAnalyticsInput(
   if (!messageConversation) {
     throw new Error("Agent message conversation not found");
   }
-  const hasUnbilledExecution = !AGENT_MESSAGE_STATUSES_TO_TRACK.includes(
-    agentMessage.status
-  );
-  if (hasUnbilledExecution && agentMessage.costCredits === null) {
-    return null;
-  }
   // A paused message cancelled through `finalizeAgentMessagesWithoutWorkflow` is not re-indexed,
   // so its documents keep the `created` status and the pause time as `completed_at`. Credits stay
   // correct since cancelling adds none.
@@ -323,12 +301,6 @@ export async function loadAgentMessageConsumptionAnalyticsInput(
   // unreconciled items for their free usage.
   const billedUsages = usages.filter(isBilledRunUsage);
   if (billedUsages.length === 0) {
-    return null;
-  }
-  if (
-    agentMessage.costCredits === null &&
-    billedUsages.every(isUnavailableRunUsage)
-  ) {
     return null;
   }
 
