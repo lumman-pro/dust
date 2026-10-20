@@ -510,19 +510,51 @@ async function persistMessageConsumptionAttribution(
  * becomes terminal without another reported model run, that footprint is removed in place: the
  * result was produced, but never consumed.
  */
-export interface AgentMessageConsumptionAttributionComputation {
-  actions?: AgentMCPActionResource[];
-  consumptionUpdate?: { costCredits: number | null };
-}
-
-async function computeAndStoreAgentMessageConsumptionAttributionComputation(
+/**
+ * @cc [owner:sfriquet,label:product;backend] reconcile-current-version-or-fail
+ * For a message with runs, other than one skipped by `free-usage-not-attributed`,
+ * `unbilled-unavailable-calls-skipped` or `failed-message-attributed-when-billed`, the items of
+ * `AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION` MUST reconcile against the message's bill,
+ * otherwise the result MUST be an `Err` carrying the allocation skip reason. An older attribution
+ * version MUST NOT be reconciled in their place.
+ */
+/**
+ * @cc [owner:sfriquet,label:product;backend] free-usage-not-attributed
+ * A `free` run usage MUST NOT get any consumption item. When every run usage of the message is
+ * `free`, the result MUST be `Ok` with no consumption update, and no item MUST be written.
+ */
+/**
+ * @cc [owner:sfriquet,label:product;backend] failed-message-attributed-when-billed
+ * A message whose status is not tracked for billing (`failed`) MUST be attributed over all its runs
+ * when its `costCredits` is not null, like a message with a tracked status. When its `costCredits`
+ * is null, the result MUST be `Ok` with no consumption update, and no item MUST be written.
+ */
+/**
+ * @cc [owner:sfriquet,label:product;backend] unbilled-unavailable-calls-skipped
+ * When the message's `costCredits` is null and every one of its non-`free` run usages is
+ * `unavailable`, the result MUST be `Ok` with no consumption update, and no item MUST be written.
+ * For a message with a tracked status, a null `costCredits` alongside a reported, non-`free` run
+ * usage MUST fail with `no_billed_credits`.
+ */
+/**
+ * @cc [owner:sfriquet,label:product;backend] failed-reconciliation-keeps-evidence
+ * When reconciliation fails, the evidence written by the pass MUST still be committed, and the
+ * reconciled amounts already stored MUST be left unchanged.
+ */
+/**
+ * @cc [owner:sfriquet,label:product;backend] reconciled-amounts-cover-current-version
+ * When reconciliation succeeds, every item of `AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION` MUST
+ * store its reconciled amount, all from the same allocation and in the same transaction as the
+ * evidence.
+ */
+export async function computeAndStoreAgentMessageConsumptionAttribution(
   auth: Authenticator,
   {
     agentMessageId,
     conversationId,
   }: { agentMessageId: string; conversationId: string }
 ): Promise<
-  Result<AgentMessageConsumptionAttributionComputation, AllocationSkipReason>
+  Result<{ costCredits: number | null } | undefined, AllocationSkipReason>
 > {
   const workspaceId = auth.getNonNullableWorkspace().sId;
 
@@ -535,7 +567,7 @@ async function computeAndStoreAgentMessageConsumptionAttributionComputation(
       { workspaceId, agentMessageId },
       "[ConsumptionAttribution] Agent message not found."
     );
-    return new Ok({});
+    return new Ok(undefined);
   }
 
   const {
@@ -553,12 +585,12 @@ async function computeAndStoreAgentMessageConsumptionAttributionComputation(
     !AGENT_MESSAGE_STATUSES_TO_TRACK.includes(status) &&
     billedCredits === null
   ) {
-    return new Ok({});
+    return new Ok(undefined);
   }
 
   const dustRunIds = [...new Set(runIds ?? [])];
   if (dustRunIds.length === 0) {
-    return new Ok({});
+    return new Ok(undefined);
   }
 
   const conversation = await ConversationResource.fetchById(
@@ -574,7 +606,7 @@ async function computeAndStoreAgentMessageConsumptionAttributionComputation(
       { workspaceId, agentMessageId, conversationId },
       "[ConsumptionAttribution] Conversation not found."
     );
-    return new Ok({});
+    return new Ok(undefined);
   }
 
   // Tool results are re-rendered below to measure them, so they need the same attachment
@@ -590,11 +622,11 @@ async function computeAndStoreAgentMessageConsumptionAttributionComputation(
     runs,
   });
   if (messageUsages.length > 0 && messageUsages.every(isFreeRunUsage)) {
-    return new Ok({});
+    return new Ok(undefined);
   }
   const usages = messageUsages.filter((usage) => !isFreeRunUsage(usage));
   if (billedCredits === null && usages.every(isUnavailableRunUsage)) {
-    return new Ok({});
+    return new Ok(undefined);
   }
   const unconsumedToolResultRunUsageModelIds =
     runUsageModelIdsWithUnconsumedToolResults({ runs, status, usages });
@@ -742,63 +774,5 @@ async function computeAndStoreAgentMessageConsumptionAttributionComputation(
     return persistResult;
   }
 
-  return new Ok({
-    actions,
-    consumptionUpdate: { costCredits: billedCredits },
-  });
-}
-
-/**
- * @cc [owner:sfriquet,label:product;backend] reconcile-current-version-or-fail
- * For a message with runs, other than one skipped by `free-usage-not-attributed`,
- * `unbilled-unavailable-calls-skipped` or `failed-message-attributed-when-billed`, the items of
- * `AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION` MUST reconcile against the message's bill,
- * otherwise the result MUST be an `Err` carrying the allocation skip reason. An older attribution
- * version MUST NOT be reconciled in their place.
- */
-/**
- * @cc [owner:sfriquet,label:product;backend] free-usage-not-attributed
- * A `free` run usage MUST NOT get any consumption item. When every run usage of the message is
- * `free`, the result MUST be `Ok` with no consumption update, and no item MUST be written.
- */
-/**
- * @cc [owner:sfriquet,label:product;backend] failed-message-attributed-when-billed
- * A message whose status is not tracked for billing (`failed`) MUST be attributed over all its runs
- * when its `costCredits` is not null, like a message with a tracked status. When its `costCredits`
- * is null, the result MUST be `Ok` with no consumption update, and no item MUST be written.
- */
-/**
- * @cc [owner:sfriquet,label:product;backend] unbilled-unavailable-calls-skipped
- * When the message's `costCredits` is null and every one of its non-`free` run usages is
- * `unavailable`, the result MUST be `Ok` with no consumption update, and no item MUST be written.
- * For a message with a tracked status, a null `costCredits` alongside a reported, non-`free` run
- * usage MUST fail with `no_billed_credits`.
- */
-/**
- * @cc [owner:sfriquet,label:product;backend] failed-reconciliation-keeps-evidence
- * When reconciliation fails, the evidence written by the pass MUST still be committed, and the
- * reconciled amounts already stored MUST be left unchanged.
- */
-/**
- * @cc [owner:sfriquet,label:product;backend] reconciled-amounts-cover-current-version
- * When reconciliation succeeds, every item of `AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION` MUST
- * store its reconciled amount, all from the same allocation and in the same transaction as the
- * evidence.
- */
-export async function computeAndStoreAgentMessageConsumptionAttribution(
-  auth: Authenticator,
-  message: { agentMessageId: string; conversationId: string }
-): Promise<
-  Result<{ costCredits: number | null } | undefined, AllocationSkipReason>
-> {
-  const computationResult =
-    await computeAndStoreAgentMessageConsumptionAttributionComputation(
-      auth,
-      message
-    );
-  if (computationResult.isErr()) {
-    return computationResult;
-  }
-
-  return new Ok(computationResult.value.consumptionUpdate);
+  return new Ok({ costCredits: billedCredits });
 }
