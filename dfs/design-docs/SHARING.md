@@ -84,7 +84,9 @@ added to the pod, like `pending_project_membership` mentions today.
 **Sub-conversations** (`run_agent`, `depth > 0`) have no participants. TBD whether we nest their
 folder under the parent's so they inherit its grants (the parent is reachable through the sub's
 first message, `agenticOriginMessageId`), or handle them in the backfill by tracing back the user
-and adding grants.
+and adding grants. Nesting is a very trapdoory and opinionated solution: it bakes the parent/sub
+relationship into the folder layout and ties the sub's access to the parent's grants, and undoing
+it means moving folders.
 
 ## Spaces
 
