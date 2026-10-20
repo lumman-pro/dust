@@ -1,53 +1,37 @@
-import {
-  CUT_TEXT_SAVE_REFUSED,
-  FilePreviewContent,
-  useFilePreviewContent,
-} from "@app/components/file_explorer/FilePreviewContent";
-import { FilePreviewFallback } from "@app/components/file_explorer/FilePreviewFallback";
-import type { MarkdownFilePreviewViewMode } from "@app/components/file_explorer/MarkdownFilePreview";
+import { FilePreviewBody } from "@app/components/file_explorer/FilePreviewBody";
+import { useFilePreviewContent } from "@app/components/file_explorer/FilePreviewContent";
 import { MarkdownFilePreviewViewModeSwitch } from "@app/components/file_explorer/MarkdownFilePreview";
 import type { FileEntry } from "@app/components/file_explorer/types";
+import { useMarkdownFileEditor } from "@app/components/file_explorer/useMarkdownFileEditor";
 import { MissingPodFileTabCallout } from "@app/components/pod/MissingPodFileTabCallout";
 import {
-  useSendApiErrorNotification,
-  useSendNotification,
-} from "@app/hooks/useNotification";
-import { formatFileSize } from "@app/lib/i18n/format";
-import {
-  getFilePathContentApiPath,
   getFilePathDownloadUrl,
   getFilePathViewUrl,
   useFileMetadataFromPath,
-  writeFileContentByPath,
 } from "@app/lib/swr/files";
 import { contentTypeFromFileName } from "@app/types/files";
-import { parseCanonicalScopedPath } from "@app/types/mount_path";
 import type { LightWorkspaceType } from "@app/types/user";
 import { Button, cn, Spinner } from "@dust-tt/sparkle";
 import { useLingui } from "@lingui/react/macro";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useSWRConfig } from "swr";
+import { useMemo, useState } from "react";
 
 interface PodFileTabPreviewProps {
   owner: LightWorkspaceType;
   filePath: string;
-  canEdit: boolean;
 }
 
 /**
- * Full-height preview for a non-frame Pod tab. Reuses FilePreviewContent so
- * markdown and other previewable files behave the same as in the file dialog,
- * including inline edit + save when the path is writable.
+ * Full-height preview for a non-frame Pod tab. Reuses the file preview stack so
+ * markdown and other previewable files behave the same as in the side panel,
+ * including the live editor when the path is writable.
  */
-export function PodFileTabPreview({
-  owner,
-  filePath,
-  canEdit,
-}: PodFileTabPreviewProps) {
+export function PodFileTabPreview({ owner, filePath }: PodFileTabPreviewProps) {
   const { t } = useLingui();
-  const sendApiErrorNotification = useSendApiErrorNotification();
-  const sendNotification = useSendNotification();
-  const { mutate } = useSWRConfig();
+  const [documentControls, setDocumentControls] =
+    useState<HTMLDivElement | null>(null);
+  const [documentStatus, setDocumentStatus] = useState<HTMLSpanElement | null>(
+    null
+  );
 
   const { metadata, isFileMetadataLoading, isFileMetadataNotFound } =
     useFileMetadataFromPath({
@@ -86,139 +70,26 @@ export function PodFileTabPreview({
   ]);
 
   const fileUrl = getFilePathViewUrl(owner, filePath);
-  const contentApiPath = getFilePathContentApiPath(owner, filePath);
 
-  const [markdownViewMode, setMarkdownViewMode] =
-    useState<MarkdownFilePreviewViewMode>("preview");
-  const [markdownDraft, setMarkdownDraft] = useState("");
-  const [markdownSavedContent, setMarkdownSavedContent] = useState("");
-  const [markdownSourcePath, setMarkdownSourcePath] = useState<string | null>(
-    null
-  );
-  const [isMarkdownSaving, setIsMarkdownSaving] = useState(false);
-  const [previewKey, setPreviewKey] = useState(filePath);
-  const markdownInitKeyRef = useRef<string | null>(null);
-
-  if (filePath !== previewKey) {
-    setPreviewKey(filePath);
-    setMarkdownViewMode("preview");
-    setMarkdownSourcePath(null);
-    setMarkdownDraft("");
-    setMarkdownSavedContent("");
-    markdownInitKeyRef.current = null;
-  }
-
-  const {
-    category,
-    truncatedContent,
-    processedContent,
-    hasError,
-    isContentLoading,
-    isTooLarge,
-    isTruncated,
-    sizeBytes,
-  } = useFilePreviewContent({
+  const preview = useFilePreviewContent({
     entry,
     fileUrl,
     enabled: !!entry,
   });
 
-  const editableMarkdownFilePath =
-    entry && canEdit && parseCanonicalScopedPath(entry.path)
-      ? entry.path
-      : null;
-  const isMarkdownDirty = markdownDraft !== markdownSavedContent;
-  // Saving cut preview text would truncate the file. An open draft stays so it can be copied.
-  const canEditMarkdown =
-    category === "markdown" &&
-    !!editableMarkdownFilePath &&
-    !isTooLarge &&
-    (!isTruncated || isMarkdownDirty);
-
-  useEffect(() => {
-    if (
-      !canEditMarkdown ||
-      !entry?.path ||
-      isContentLoading ||
-      !processedContent
-    ) {
-      return;
-    }
-
-    const initKey = `${entry.path}:${processedContent.text}`;
-    if (markdownInitKeyRef.current === initKey) {
-      return;
-    }
-
-    const hadInitializedForPath = markdownInitKeyRef.current?.startsWith(
-      `${entry.path}:`
-    );
-    if (hadInitializedForPath && isMarkdownDirty) {
-      return;
-    }
-
-    setMarkdownSourcePath(entry.path);
-    setMarkdownDraft(processedContent.text);
-    setMarkdownSavedContent(processedContent.text);
-    markdownInitKeyRef.current = initKey;
-  }, [
-    canEditMarkdown,
-    entry?.path,
-    isContentLoading,
-    isMarkdownDirty,
-    processedContent,
-    processedContent?.text,
-  ]);
-
-  const handleMarkdownSave = async () => {
-    if (!editableMarkdownFilePath || !isMarkdownDirty || isMarkdownSaving) {
-      return;
-    }
-    if (isTruncated) {
-      sendNotification({
-        type: "error",
-        title: t(CUT_TEXT_SAVE_REFUSED.title),
-        description: t(CUT_TEXT_SAVE_REFUSED.description),
-      });
-      return;
-    }
-
-    setIsMarkdownSaving(true);
-    try {
-      const result = await writeFileContentByPath({
-        owner,
-        canonicalPath: editableMarkdownFilePath,
-        content: markdownDraft,
-        contentType: "text/markdown",
-      });
-      if (result.isErr()) {
-        sendApiErrorNotification({
-          title: t`Failed to save file`,
-          error: result.error,
-        });
-        return;
-      }
-      await mutate(
-        contentApiPath,
-        { kind: "loaded", content: markdownDraft },
-        { revalidate: false }
-      );
-      await mutate(
-        fileUrl,
-        { kind: "loaded", content: markdownDraft },
-        { revalidate: false }
-      );
-      setMarkdownSavedContent(markdownDraft);
-      if (entry?.path) {
-        markdownInitKeyRef.current = `${entry.path}:${markdownDraft}`;
-      }
-      sendNotification({ type: "success", title: t`File saved` });
-    } finally {
-      setIsMarkdownSaving(false);
-    }
-  };
-
-  const fileSize = formatFileSize(sizeBytes, { decimals: 1 });
+  const markdown = useMarkdownFileEditor({
+    category: preview.category,
+    entryPath: filePath,
+    fileUrl,
+    isActive: !!entry,
+    isContentLoading: preview.isContentLoading,
+    isTooLarge: preview.isTooLarge,
+    isTruncated: preview.isTruncated,
+    canWrite: preview.canWrite,
+    owner,
+    rawContent: preview.truncatedContent,
+    processedContent: preview.processedContent,
+  });
 
   if (isFileMetadataLoading) {
     return (
@@ -232,81 +103,70 @@ export function PodFileTabPreview({
     return <MissingPodFileTabCallout path={filePath} />;
   }
 
+  const hasHeader = markdown.canEdit || !!markdown.richEditor;
+
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden p-2">
       <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl ring-1 ring-border/60">
-        {canEditMarkdown && (
+        {hasHeader && (
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 px-4 py-2">
-            <MarkdownFilePreviewViewModeSwitch
-              key={entry.path}
-              viewMode={markdownViewMode}
-              onViewModeChange={setMarkdownViewMode}
-            />
             <div className="flex items-center gap-2">
-              <Button
-                label={t`Save`}
-                variant="highlight"
-                size="sm"
-                isLoading={isMarkdownSaving}
-                disabled={!isMarkdownDirty || isMarkdownSaving}
-                onClick={() => void handleMarkdownSave()}
-              />
-              <Button
-                label={t`Revert`}
-                variant="outline"
-                size="sm"
-                disabled={!isMarkdownDirty || isMarkdownSaving}
-                onClick={() => setMarkdownDraft(markdownSavedContent)}
-              />
+              {markdown.canEdit &&
+                !markdown.richEditor &&
+                !markdown.isSourceMode && (
+                  <MarkdownFilePreviewViewModeSwitch
+                    key={entry.path}
+                    viewMode={markdown.viewMode}
+                    onViewModeChange={markdown.setViewMode}
+                  />
+                )}
+              <span ref={setDocumentStatus} className="flex empty:hidden" />
+            </div>
+            <div className="flex items-center gap-2">
+              {markdown.canEdit && !markdown.richEditor && (
+                <>
+                  <Button
+                    label={t`Save`}
+                    variant="highlight"
+                    size="sm"
+                    isLoading={markdown.isSaving}
+                    disabled={!markdown.isDirty || markdown.isSaving}
+                    onClick={() => void markdown.save()}
+                  />
+                  <Button
+                    label={t`Revert`}
+                    variant="outline"
+                    size="sm"
+                    disabled={!markdown.isDirty || markdown.isSaving}
+                    onClick={markdown.revert}
+                  />
+                </>
+              )}
+              <div ref={setDocumentControls} className="flex empty:hidden" />
             </div>
           </div>
         )}
-        {isTooLarge ? (
-          <FilePreviewFallback
+        <div
+          className={cn(
+            "min-h-0 flex-1 p-4",
+            preview.category === "markdown"
+              ? "flex flex-col overflow-hidden"
+              : "overflow-y-auto"
+          )}
+        >
+          <FilePreviewBody
             download={{ href: getFilePathDownloadUrl(owner, filePath) }}
-            message={t`This file is too large to preview (${fileSize}).`}
+            entry={entry}
+            fileUrl={fileUrl}
+            isFullWidth
+            markdown={markdown}
+            markdownHeaderControlsContainer={documentControls}
+            markdownStatusContainer={documentStatus}
+            onMarkdownViewModeChange={markdown.setViewMode}
+            owner={owner}
+            preview={preview}
           />
-        ) : hasError ? (
-          <FilePreviewFallback
-            download={{ href: getFilePathDownloadUrl(owner, filePath) }}
-            message={t`Unable to preview this file.`}
-          />
-        ) : (
-          <div
-            className={cn(
-              "min-h-0 flex-1 p-4",
-              category === "markdown"
-                ? "flex flex-col overflow-hidden"
-                : "overflow-y-auto"
-            )}
-          >
-            <FilePreviewContent
-              category={category}
-              entry={entry}
-              fileContent={truncatedContent}
-              fileUrl={fileUrl}
-              isContentLoading={isContentLoading}
-              isFullWidth
-              markdownCanEdit={canEditMarkdown}
-              markdownContent={
-                canEditMarkdown
-                  ? markdownSourcePath === entry.path
-                    ? markdownDraft
-                    : processedContent?.text
-                  : processedContent?.text
-              }
-              markdownViewMode={canEditMarkdown ? markdownViewMode : "preview"}
-              onMarkdownContentChange={
-                canEditMarkdown ? setMarkdownDraft : undefined
-              }
-              onMarkdownViewModeChange={
-                canEditMarkdown ? setMarkdownViewMode : undefined
-              }
-              owner={owner}
-              processedContent={processedContent}
-            />
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
