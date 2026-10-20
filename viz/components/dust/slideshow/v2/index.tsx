@@ -125,15 +125,12 @@ interface SlideshowProps {
   children: React.ReactNode;
   className?: string;
   theme?: FrameTheme;
-  initialPage?: number | string;
+  currentPage?: number | string;
   onPageChange?: (page: number) => void;
 }
 
-function getInitialSlideIndex(
-  initialPage: number | string | undefined,
-  total: number
-): number {
-  const page = Number(initialPage);
+function getSlideIndex(currentPage: number | string, total: number): number {
+  const page = Number(currentPage);
   return Number.isInteger(page) && page >= 1 && total > 0
     ? Math.min(page, total) - 1
     : 0;
@@ -146,16 +143,17 @@ function getInitialSlideIndex(
  * Omitting the theme MUST preserve the existing appearance.
  */
 /**
- * @cc [owner:tdraier,label:product] slideshow-initial-page
- * `initialPage`, a 1-based page number or its string, MUST select the initial slide, clamped to the
- * last slide; a missing or invalid value MUST select the first. `onPageChange` MUST be called with
- * the new 1-based page each time navigation changes the active slide, and never otherwise.
+ * @cc [owner:tdraier,label:product] slideshow-controlled-page
+ * When `currentPage` is set, a 1-based page number or its string, it MUST alone select the shown
+ * slide, clamped to the last slide, an invalid value selecting the first; navigation MUST NOT
+ * change the shown slide by itself. Without it, navigation MUST change the shown slide.
+ * Navigation to another slide MUST call `onPageChange` with its 1-based page, and nothing else MUST.
  */
 export function Slideshow({
   children,
   className,
   theme,
-  initialPage,
+  currentPage,
   onPageChange,
 }: SlideshowProps) {
   const { isPdfMode } = useVizContext();
@@ -173,7 +171,7 @@ export function Slideshow({
     <InteractiveSlideshow
       className={className}
       theme={theme}
-      initialPage={initialPage}
+      currentPage={currentPage}
       onPageChange={onPageChange}
     >
       {slides}
@@ -216,13 +214,15 @@ function InteractiveSlideshow({
   children,
   className,
   theme,
-  initialPage,
+  currentPage,
   onPageChange,
 }: SlideshowContentProps) {
   const { t } = useLingui();
-  const [activeIndex, setActiveIndex] = useState(() =>
-    getInitialSlideIndex(initialPage, children.length)
-  );
+  const [uncontrolledIndex, setUncontrolledIndex] = useState(0);
+  const isControlled = currentPage !== undefined;
+  const activeIndex = isControlled
+    ? getSlideIndex(currentPage, children.length)
+    : uncontrolledIndex;
   const slideshowRef = useRef<HTMLDivElement>(null);
 
   const goToSlide = useCallback(
@@ -231,10 +231,12 @@ function InteractiveSlideshow({
       if (nextIndex === activeIndex) {
         return;
       }
-      setActiveIndex(nextIndex);
+      if (!isControlled) {
+        setUncontrolledIndex(nextIndex);
+      }
       onPageChange?.(nextIndex + 1);
     },
-    [activeIndex, children.length, onPageChange]
+    [activeIndex, children.length, isControlled, onPageChange]
   );
 
   const onPrev = useCallback(

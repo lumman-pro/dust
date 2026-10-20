@@ -2,6 +2,7 @@
 
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { Slide, Slideshow } from "@viz/components/dust/slideshow/v2";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 beforeEach(() => {
@@ -20,16 +21,35 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderSlideshow(props: {
-  initialPage?: number | string;
+interface DeckProps {
+  currentPage?: number | string;
   onPageChange?: (page: number) => void;
-}) {
-  render(
+}
+
+function Deck(props: DeckProps) {
+  return (
     <Slideshow {...props}>
       <Slide>First</Slide>
       <Slide>Second</Slide>
       <Slide>Third</Slide>
     </Slideshow>
+  );
+}
+
+function StatefulDeck({
+  onPageChange,
+}: {
+  onPageChange: (page: number) => void;
+}) {
+  const [currentPage, setCurrentPage] = useState(2);
+  return (
+    <Deck
+      currentPage={currentPage}
+      onPageChange={(page) => {
+        onPageChange(page);
+        setCurrentPage(page);
+      }}
+    />
   );
 }
 
@@ -41,23 +61,39 @@ function pressKey(key: string) {
 
 describe("Slideshow page", () => {
   it.each([
-    [undefined, "First"],
     [2, "Second"],
     ["2", "Second"],
     ["99", "Third"],
     ["0", "First"],
     ["1.5", "First"],
     ["abc", "First"],
-  ])("starts on the slide of initialPage=%s", (initialPage, expectedSlide) => {
-    renderSlideshow({ initialPage });
+  ])("shows the slide of currentPage=%s", (currentPage, expectedSlide) => {
+    render(<Deck currentPage={currentPage} />);
 
     expect(screen.getByText(expectedSlide)).toBeDefined();
   });
 
-  it("reports each page change, but not the initial page or no-op navigation", () => {
+  it("follows currentPage changes", () => {
+    const { rerender } = render(<Deck currentPage={1} />);
+
+    rerender(<Deck currentPage={3} />);
+
+    expect(screen.getByText("Third")).toBeDefined();
+  });
+
+  it("requests navigation without moving when controlled", () => {
     const onPageChange = vi.fn();
-    renderSlideshow({ initialPage: "2", onPageChange });
-    expect(onPageChange).not.toHaveBeenCalled();
+    render(<Deck currentPage={2} onPageChange={onPageChange} />);
+
+    pressKey("ArrowRight");
+
+    expect(screen.getByText("Second")).toBeDefined();
+    expect(onPageChange.mock.calls).toEqual([[3]]);
+  });
+
+  it("moves when the caller applies the requested page, ignoring no-op navigation", () => {
+    const onPageChange = vi.fn();
+    render(<StatefulDeck onPageChange={onPageChange} />);
 
     pressKey("ArrowRight");
     pressKey("ArrowRight");
@@ -67,5 +103,16 @@ describe("Slideshow page", () => {
 
     expect(screen.getByText("First")).toBeDefined();
     expect(onPageChange.mock.calls).toEqual([[3], [2], [1]]);
+  });
+
+  it("navigates on its own and reports pages when uncontrolled", () => {
+    const onPageChange = vi.fn();
+    render(<Deck onPageChange={onPageChange} />);
+    expect(screen.getByText("First")).toBeDefined();
+
+    pressKey("ArrowRight");
+
+    expect(screen.getByText("Second")).toBeDefined();
+    expect(onPageChange.mock.calls).toEqual([[2]]);
   });
 });
