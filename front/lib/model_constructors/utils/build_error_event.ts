@@ -3,6 +3,7 @@ import type {
   ErrorEvent,
   ErrorSource,
   ErrorType,
+  RefusalDetails,
 } from "@app/lib/model_constructors/types/output/events";
 
 export function buildErrorEvent({
@@ -11,16 +12,24 @@ export function buildErrorEvent({
   message,
   originalError,
   errorSource,
+  refusal,
 }: {
   metadata: EndpointMetadata;
   type: ErrorType;
   message: string;
   originalError?: unknown;
   errorSource: ErrorSource;
+  refusal?: RefusalDetails;
 }): ErrorEvent {
   return {
     type: "error",
-    content: { type, message, originalError, errorSource },
+    content: {
+      type,
+      message,
+      originalError,
+      errorSource,
+      ...(refusal ? { refusal } : {}),
+    },
     metadata,
   };
 }

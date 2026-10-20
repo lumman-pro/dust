@@ -630,6 +630,7 @@ export function convertToOldEvent(
           isRetryable,
           originalError: event.content.originalError,
           errorSource: event.content.errorSource,
+          refusal: event.content.refusal,
         },
         metadata
       );

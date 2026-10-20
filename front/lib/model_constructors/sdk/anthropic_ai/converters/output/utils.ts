@@ -16,6 +16,7 @@ import type {
   BetaRawMessageDeltaEvent,
   BetaRawMessageStartEvent,
   BetaRawMessageStreamEvent,
+  BetaRefusalStopDetails,
 } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { parseToolArguments } from "@app/lib/model_constructors/sdk/anthropic_ai/converters/input/utils";
 import {
@@ -232,7 +233,8 @@ export interface OutputEventConverters {
   ): TokenUsageEvent;
   stopReasonToErrorEvent(
     metadata: EndpointMetadata,
-    stopReason: string
+    stopReason: string,
+    stopDetails: BetaRefusalStopDetails | null
   ): ErrorEvent | null;
   streamErrorToErrorEvent(
     metadata: EndpointMetadata,
@@ -391,9 +393,18 @@ export function messageDeltaUsageToTokenUsageEvent(
   };
 }
 
+/**
+ * @cc [owner:fontanierh,label:error-handling;logging] refusal-carries-stop-details
+ * For `stopReason === "refusal"`, the returned `refusal_error` event MUST carry
+ * `content.refusal` with `category` and `explanation` copied from `stopDetails`, each `null` when
+ * `stopDetails` is `null` or the field is null or absent. Category strings unknown to the SDK
+ * MUST be kept verbatim. `stopDetails` MUST NOT change the event `type`, `message` or
+ * `errorSource`, and non-refusal events MUST NOT carry `content.refusal`.
+ */
 export function stopReasonToErrorEvent(
   metadata: EndpointMetadata,
-  stopReason: string
+  stopReason: string,
+  stopDetails: BetaRefusalStopDetails | null
 ): ErrorEvent | null {
   switch (stopReason) {
     case "max_tokens":
@@ -410,6 +421,11 @@ export function stopReasonToErrorEvent(
         type: "refusal_error",
         message:
           "Claude safety filters prevented this response. Try starting a new conversation or rephrasing your request.",
+        // `stop_details` fields can be absent at runtime despite the SDK type.
+        refusal: {
+          category: stopDetails?.category ?? null,
+          explanation: stopDetails?.explanation ?? null,
+        },
       });
     default:
       return null;
@@ -805,7 +821,11 @@ export function messageDeltaToEvents(
         "Anthropic pause_turn stop reason, turn ended with partial content"
       );
     }
-    const errorEvent = converters.stopReasonToErrorEvent(metadata, stopReason);
+    const errorEvent = converters.stopReasonToErrorEvent(
+      metadata,
+      stopReason,
+      event.delta.stop_details ?? null
+    );
     if (errorEvent) {
       return [[errorEvent], event.usage];
     }
@@ -1085,7 +1105,8 @@ export function messageToEvents(
   if (message.stop_reason) {
     const errorEvent = converters.stopReasonToErrorEvent(
       metadata,
-      message.stop_reason
+      message.stop_reason,
+      message.stop_details ?? null
     );
     if (errorEvent) {
       events.push(errorEvent);

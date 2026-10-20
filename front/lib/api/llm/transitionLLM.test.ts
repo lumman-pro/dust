@@ -781,6 +781,31 @@ describe("convertToOldEvent — errors", () => {
       },
     });
   });
+
+  it("keeps refusal details on a non-retryable refusal_error", () => {
+    expect(
+      convertToOldEvent(
+        {
+          type: "error",
+          content: {
+            type: "refusal_error",
+            message: "refused",
+            errorSource: "dust",
+            refusal: { category: "cyber", explanation: null },
+          },
+          metadata: endpointMetadata,
+        },
+        llmMetadata
+      )
+    ).toMatchObject({
+      type: "error",
+      content: {
+        type: "refusal_error",
+        isRetryable: false,
+        refusal: { category: "cyber", explanation: null },
+      },
+    });
+  });
 });
 
 describe("withRetryableErrors", () => {

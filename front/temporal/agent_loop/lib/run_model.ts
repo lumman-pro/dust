@@ -987,7 +987,7 @@ export async function runModel(
 
     switch (error.type) {
       case "shouldRetryMessage": {
-        const { type, isRetryable } = error.content;
+        const { type, isRetryable, refusal } = error.content;
         const errorDustRunId = llm?.getTraceId();
         const plan = auth.getNonNullablePlan();
 
@@ -1044,6 +1044,13 @@ export async function runModel(
                 llmErrorType: type,
                 provider: USERFACING_CLIENT_ID[metadata.clientId],
                 isByok,
+                // Diagnostics only, not rendered to the user.
+                ...(refusal
+                  ? { refusalCategory: refusal.category ?? "none" }
+                  : {}),
+                ...(refusal?.explanation
+                  ? { refusalExplanation: refusal.explanation }
+                  : {}),
               },
             },
             errorDustRunId
