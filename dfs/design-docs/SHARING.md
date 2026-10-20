@@ -112,11 +112,11 @@ Pod conversations keep their ceiling: read on the pod.
 
 `canAccess` results:
 
-| Result                           | When                          | UI                                |
-| -------------------------------- | ----------------------------- | --------------------------------- |
-| `conversation_not_found`         | No such conversation.         | "Conversation not found".         |
-| `conversation_access_restricted` | Fails the ceiling.            | Today's restricted page.          |
-| `conversation_not_shared`        | Passes the ceiling, no grant. | No-access message (below).        |
+| Result                           | When                          | UI                         |
+| -------------------------------- | ----------------------------- | -------------------------- |
+| `conversation_not_found`         | No such conversation.         | "Conversation not found".  |
+| `conversation_access_restricted` | Fails the ceiling.            | Today's restricted page.   |
+| `conversation_not_shared`        | Passes the ceiling, no grant. | No-access message (below). |
 
 The no-access message is something like "You don't have access to this conversation. Ask the
 person who shared the link to add you." Only workspace members reach it, and it shows no title,
@@ -204,10 +204,11 @@ enlarge. Keeping link access would mean making everything readable, so searchabl
 
 ### Access requests
 
-Not planned. Links get shared outside Dust (mostly Slack), so asking for access already happens
-there, in the thread where the link was posted, with the person who shared it. Request flows like
-Google Drive's are rarely used for the same reason: the request goes to the owner rather than the
-sharer, without context, through a slower channel.
+Not planned. Links get shared outside Dust (Slack for instance), so asking for access can already
+happen there, in the thread where the link was posted, with the person who shared it. Request flows
+like Google Drive's tend to not be consistently used for a similar reason: the request goes to the
+owner rather than the sharer, without much context, through a slower channel that is often
+overflooded (emails).
 
 If we ever build it:
 
