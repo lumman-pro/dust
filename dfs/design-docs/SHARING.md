@@ -43,16 +43,16 @@ that we will need to bite the bullet at some point so there is no need for a tem
 
 ### Permissions
 
-| Level       | Dfs                                             | Allows                                         |
-| ----------- | ----------------------------------------------- | ---------------------------------------------- |
-| View        | `r`                                             | Read messages and files.                       |
-| Participate | `rw`                                            | Post, react, mention, run agents, write files. |
-| Manage      | `rw` as owner or through an explicit `u:` grant | Change sharing.                                |
+| Level       | Dfs  | Allows                                                         |
+| ----------- | ---- | -------------------------------------------------------------- |
+| View        | `r`  | Read messages and files. Read-only.                            |
+| Participate | `rw` | Post, react, mention, run agents, write files, change sharing. |
 
+- We lose a level of granularity (no participating without managing), but it keeps the model
+  simple. Anyone with `rw` can share further and remove others.
 - The owner is the creator (`isConversationCreator`). The folder lives under their user folder, so
   their access is inherited and the popover, which only edits local grants, can't remove it.
-- `rw` through a pod's groups lets you participate, not manage.
-- You can't grant above your own level. Nobody can remove the owner.
+  Nobody can remove the owner.
 - Leaving removes your grant and participant row. The owner can't leave, only delete.
 
 ### Grant layout
@@ -149,7 +149,7 @@ A "Share" button in `ConversationTitle`, built like `ShareFramePopover`:
   it applies.
 - Copy link.
 
-Read-only for non-managers.
+Read-only for viewers (`r`).
 
 ```text
 GET /api/w/:wId/assistant/conversations/:cId/sharing
@@ -168,7 +168,7 @@ PATCH /api/w/:wId/assistant/conversations/:cId/sharing
 }
 ```
 
-`GET` is `ListGrants` plus the owner and pod from front. `PATCH` checks the caller manages the
+`GET` is `ListGrants` plus the owner and pod from front. `PATCH` checks the caller has `rw` on the
 conversation, validates subjects (active members) and sends one `UpdateGrants`. Adding
 someone upserts their participant row (`subscribed`) and notifies them. Removing someone deletes
 the row. Audit event: `conversation.sharing_updated`.
@@ -195,18 +195,16 @@ enlarge. Keeping link access would mean making everything readable, so searchabl
 
 ## Open decisions
 
-1. **Who manages.** Rec: owner and explicit `u:` rw. Alt: any `rw` (including through pod groups),
-   or owner only.
-2. **Pod conversations.** Rec: pod membership only. Alt: local grants for outsiders.
-3. **Migration.** Rec: narrow link access to participants. Alt: a temporary patch keeping link
+1. **Pod conversations.** Rec: pod membership only. Alt: local grants for outsiders.
+2. **Migration.** Rec: narrow link access to participants. Alt: a temporary patch keeping link
    access (see [Motivation](#motivation)).
-4. **API-created conversations.** Which folder and owner without a user?
-5. **Sub-conversations.** TBD: nest the folder under the parent's, or handle them in the backfill
+3. **API-created conversations.** Which folder and owner without a user?
+4. **Sub-conversations.** TBD: nest the folder under the parent's, or handle them in the backfill
    by tracing back the user and adding grants.
-6. **Session cache.** Rec: in memory, per process. Creating a session per request means an FDB
+5. **Session cache.** Rec: in memory, per process. Creating a session per request means an FDB
    write and a session record living an hour each, and misses the server's 30s auth cache.
    Alt: Redis, shared across pods, but session keys are bearer credentials.
-7. **Ownership transfer.** Move the folder under another user?
+6. **Ownership transfer.** Move the folder under another user?
 
 ## Maybe one day
 
@@ -224,8 +222,7 @@ If we ever build it:
   no rights on the object), modeled on `membership_upgrade_requests`: requester, conversation,
   requested level, optional message, `pending | approved | denied | canceled`, resolver. At most
   one pending request per user and conversation.
-- A "Request access" button on the no-access page, a Novu notification to the managers, and a
-  pending requests section in the popover.
-- Approving checks that the approver manages the conversation, attaches the grant, then marks the
-  request approved. For pod conversations, approving
-  adds the requester to the pod.
+- A "Request access" button on the no-access page, a Novu notification to the people with `rw`,
+  and a pending requests section in the popover.
+- Approving checks that the approver has `rw`, attaches the grant, then marks the request
+  approved. For pod conversations, approving adds the requester to the pod.
