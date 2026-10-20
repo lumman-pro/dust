@@ -69,7 +69,9 @@ const UserQuestionOptionSchema = z.object({
     ),
 });
 
-const USER_QUESTION_FORMATS = ["list"] as const;
+export type UserQuestionOption = z.infer<typeof UserQuestionOptionSchema>;
+
+const USER_QUESTION_FORMATS = ["list", "yes_no"] as const;
 
 /**
  * @cc [owner:aubin-tchoi,label:product] fields-added-with-defaults
@@ -98,7 +100,10 @@ export const UserQuestionSchema = z.object({
     .enum(USER_QUESTION_FORMATS)
     .default("list")
     .describe(
-      "How the question is displayed. 'list' (default) fits most questions."
+      "How the question is displayed. 'list' (default) fits most questions. " +
+        "'yes_no' is for a yes/no or go/no-go decision (confirm an action, approve " +
+        "a plan): single choice with exactly 2 short options whose labels are the " +
+        "answers themselves ('Yes'/'No', 'Send'/'Cancel')."
     ),
 });
 

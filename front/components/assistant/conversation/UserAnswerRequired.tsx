@@ -2,7 +2,11 @@ import { useBlockedActionsContext } from "@app/components/assistant/conversation
 import { useAnswerUserQuestion } from "@app/hooks/useAnswerUserQuestion";
 import { useUserAnswerDraft } from "@app/hooks/useUserAnswerDraft";
 import type { AgentLoopBlockedToolExecution } from "@app/lib/actions/mcp";
-import type { UserQuestion, UserQuestionAnswer } from "@app/lib/actions/types";
+import type {
+  UserQuestion,
+  UserQuestionAnswer,
+  UserQuestionOption,
+} from "@app/lib/actions/types";
 import { canCurrentUserRespondToParentUserMessage } from "@app/lib/api/assistant/conversation/can_current_user_respond";
 import { useAuth } from "@app/lib/auth/AuthContext";
 import { isEditableTarget } from "@app/lib/utils/dom";
@@ -31,18 +35,23 @@ type SubmissionState = {
   phase: "pending" | "exiting";
 } | null;
 
-type QuestionLayout = "list";
+type QuestionLayout = "list" | "yes_no";
 
 /**
  * @cc [owner:aubin-tchoi,label:product] question-layout
  * A question MUST render with its `format`'s layout only when all of that format's constraints
  * hold, and as the default list otherwise, including when it has no `format` at all (stored before
- * the field existed) or one this client does not know.
+ * the field existed) or one this client does not know:
+ * - `yes_no`: single select with exactly 2 options, as two buttons.
  */
 function getQuestionLayout(question: UserQuestion): QuestionLayout {
   switch (question.format) {
     case "list":
       return "list";
+    case "yes_no":
+      return !question.multiSelect && question.options.length === 2
+        ? "yes_no"
+        : "list";
     default:
       assertNeverAndIgnore(question.format);
       return "list";
@@ -55,7 +64,68 @@ function isPrintableKey(e: KeyboardEvent<HTMLDivElement>) {
   );
 }
 
-function getArrowKeyDirection(key: string): 1 | -1 | null {
+const RECOMMENDED_SUFFIX = "(Recommended)";
+
+interface YesNoButton {
+  optionIndex: number;
+  label: string;
+  isRecommended: boolean;
+}
+
+// The recommended answer is shown by the button style, so its label drops the suffix. As in
+// dialogs, it goes on the right.
+function getYesNoButtons(options: UserQuestionOption[]): YesNoButton[] {
+  const buttons = options.map((option, optionIndex) => {
+    const isRecommended = option.label.endsWith(RECOMMENDED_SUFFIX);
+
+    return {
+      optionIndex,
+      label: isRecommended
+        ? option.label.slice(0, -RECOMMENDED_SUFFIX.length).trimEnd()
+        : option.label,
+      isRecommended,
+    };
+  });
+
+  return [
+    ...buttons.filter((button) => !button.isRecommended),
+    ...buttons.filter((button) => button.isRecommended),
+  ];
+}
+
+// Yes/no buttons answer with 1 and 2 from left to right, and with Y and N when their labels are
+// literally Yes and No.
+function getYesNoShortcutIndex(
+  key: string,
+  buttons: YesNoButton[]
+): number | null {
+  if (key === "1" || key === "2") {
+    return buttons[Number(key) - 1].optionIndex;
+  }
+
+  const labels = buttons.map((button) => button.label.toLowerCase());
+  if (!labels.includes("yes") || !labels.includes("no")) {
+    return null;
+  }
+
+  switch (key.toLowerCase()) {
+    case "y":
+      return buttons[labels.indexOf("yes")].optionIndex;
+    case "n":
+      return buttons[labels.indexOf("no")].optionIndex;
+    default:
+      return null;
+  }
+}
+
+// Yes/no buttons have no active option: they are reached with Tab or their shortcuts.
+function getArrowKeyDirection(
+  key: string,
+  layout: QuestionLayout
+): 1 | -1 | null {
+  if (layout === "yes_no") {
+    return null;
+  }
   if (key === "ArrowDown") {
     return 1;
   }
@@ -267,11 +337,19 @@ export function UserAnswerRequired({
     if (isPrintableKey(e)) {
       e.preventDefault();
       setIsKeyboardNavigating(true);
-      handleStartCustomResponse(e.key);
+      const yesNoShortcutIndex =
+        layout === "yes_no"
+          ? getYesNoShortcutIndex(e.key, getYesNoButtons(question.options))
+          : null;
+      if (yesNoShortcutIndex !== null) {
+        handleOptionClick(yesNoShortcutIndex);
+      } else {
+        handleStartCustomResponse(e.key);
+      }
       return;
     }
 
-    const arrowKeyDirection = getArrowKeyDirection(e.key);
+    const arrowKeyDirection = getArrowKeyDirection(e.key, layout);
     if (arrowKeyDirection !== null) {
       e.preventDefault();
       setIsKeyboardNavigating(true);
@@ -284,7 +362,7 @@ export function UserAnswerRequired({
     switch (e.key) {
       case "Enter":
       case " ":
-        if (e.currentTarget === e.target) {
+        if (e.currentTarget === e.target && layout !== "yes_no") {
           e.preventDefault();
           setIsKeyboardNavigating(true);
           handleActiveOptionSelection();
@@ -318,6 +396,7 @@ export function UserAnswerRequired({
   function getCustomResponsePlaceholder() {
     switch (layout) {
       case "list":
+      case "yes_no":
         return t`Tell the agent what to do differently`;
       default:
         return assertNever(layout);
@@ -384,6 +463,23 @@ export function UserAnswerRequired({
                 disabled={isSubmitting}
               />
             ))}
+          {layout === "yes_no" && (
+            <div className="grid grid-cols-2 gap-2">
+              {getYesNoButtons(question.options).map(
+                ({ optionIndex, label, isRecommended }) => (
+                  <Button
+                    key={optionIndex}
+                    label={label}
+                    variant={isRecommended ? "primary" : "outline"}
+                    size="md"
+                    className="w-full"
+                    onClick={() => handleOptionClick(optionIndex)}
+                    disabled={isSubmitting}
+                  />
+                )
+              )}
+            </div>
+          )}
           <OptionCard
             type="input"
             selected={isCustomResponseActive}
