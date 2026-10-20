@@ -123,6 +123,7 @@ app.get("/", async (ctx): HandlerResult<PublicVizContentResponseBodyType> => {
       spaceId: result.file.useCaseMetadata?.spaceId,
     },
     isAuthenticatedMember: !!userId,
+    canInvokePublicFunctions: !!tokenPayload.canInvokePublicFunctions,
   });
 });
 

@@ -102,4 +102,69 @@ describe("shared-view file access", () => {
       await expect(dataAPI.fetchCode()).resolves.toBe("Published code");
     }
   );
+
+  it("sends only function calls over the bridge for an anonymous viewer of public functions", async () => {
+    render(
+      <ServerVisualizationWrapperClient
+        identifier="frame"
+        allowedOrigins={["https://app.dust.tt"]}
+        canInvokePublicFunctions
+        catalog={getVizCatalog("en-US")}
+        prefetchedCode="Published code"
+        prefetchedFiles={[
+          {
+            fileId: "./content.json",
+            data: btoa("Cached content"),
+            mimeType: "application/json",
+          },
+        ]}
+      />
+    );
+    const { dataAPI } = mocks.render.mock.calls[0][0];
+    mocks.sendMessage.mockResolvedValueOnce({ todos: [] });
+
+    await expect(dataAPI.callFunction("list-todos", {})).resolves.toEqual({
+      todos: [],
+    });
+    await expect(dataAPI.fetchFile("./content.json")).resolves.toMatchObject({
+      revision: null,
+      canWrite: false,
+    });
+    await expect(dataAPI.getUserIdentity()).resolves.toMatchObject({
+      isAuthenticated: false,
+    });
+    await expect(
+      dataAPI.writeFile({
+        path: "./content.json",
+        content: "{}",
+        revision: "123",
+      })
+    ).resolves.toMatchObject({
+      success: false,
+      error: { code: "read_only" },
+    });
+    expect(mocks.sendMessage).toHaveBeenCalledExactlyOnceWith("callFunction", {
+      functionIdOrSlug: "list-todos",
+      input: {},
+    });
+  });
+
+  it("keeps a PDF export of public functions on the cache", async () => {
+    render(
+      <ServerVisualizationWrapperClient
+        identifier="frame"
+        allowedOrigins={["https://app.dust.tt"]}
+        canInvokePublicFunctions
+        isPdfMode
+        catalog={getVizCatalog("en-US")}
+        prefetchedCode="Published code"
+      />
+    );
+    const { dataAPI } = mocks.render.mock.calls[0][0];
+
+    await expect(dataAPI.callFunction("list-todos", {})).rejects.toMatchObject({
+      code: "not_supported",
+    });
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+  });
 });

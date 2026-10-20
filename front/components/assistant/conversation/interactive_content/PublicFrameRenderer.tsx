@@ -199,6 +199,7 @@ export function PublicFrameRenderer({
               key={`viz-${fileId}`}
               canInvokeFunctions={publicUserIdentity !== undefined}
               scopedUserIdentity={publicUserIdentity}
+              shareToken={shareToken}
               viewer={viewer}
               framePackageRoot={
                 framePath && framePath.includes("/")

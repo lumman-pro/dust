@@ -24,6 +24,7 @@ const VizAccessTokenPayloadSchema = z.object({
   shareScope: fileShareScopeSchema,
   userId: z.string().optional(),
   workspaceId: z.string(),
+  canInvokePublicFunctions: z.boolean().optional(),
 });
 
 type VizAccessTokenPayload = z.infer<typeof VizAccessTokenPayloadSchema>;
@@ -34,12 +35,14 @@ export function generateVizAccessToken({
   userId,
   shareScope,
   workspaceId,
+  canInvokePublicFunctions,
 }: {
   contentType: FrameFileContentType;
   fileToken: string;
   userId?: string;
   shareScope: FileShareScope;
   workspaceId: string;
+  canInvokePublicFunctions?: boolean;
 }): string {
   const payload: VizAccessTokenPayload = {
     contentType,
@@ -47,6 +50,7 @@ export function generateVizAccessToken({
     shareScope,
     userId,
     workspaceId,
+    canInvokePublicFunctions,
   };
 
   const secret = config.getVizJwtSecret();

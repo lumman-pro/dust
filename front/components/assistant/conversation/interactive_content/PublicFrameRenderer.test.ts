@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
     frameId?: string;
     functionTarget?: string;
     scopedUserIdentity?: ScopedWorkspaceUserIdentity;
+    shareToken?: string;
     viewer: unknown;
   } | null,
   hasFrameFunctions: false,
@@ -33,6 +34,7 @@ vi.mock(
       frameId?: string;
       functionTarget?: string;
       scopedUserIdentity?: ScopedWorkspaceUserIdentity;
+      shareToken?: string;
       viewer: unknown;
     }) => {
       mocks.iframeProps = props;
@@ -271,6 +273,7 @@ describe("PublicFrameRenderer", () => {
       canInvokeFunctions: false,
       framePackageRoot: null,
       scopedUserIdentity: undefined,
+      shareToken: "share-token",
       viewer: null,
     });
   });

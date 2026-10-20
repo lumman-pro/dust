@@ -1,5 +1,6 @@
 import { prewarmFrameSandbox } from "@app/lib/api/frames/prewarm_frame_sandbox";
 import { createFrameSession } from "@app/lib/api/share/frame_session";
+import { extractAndVerifyVizAccessTokenFromHeader } from "@app/lib/api/viz/access_tokens";
 import { Authenticator } from "@app/lib/auth";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import type { FileResource } from "@app/lib/resources/file_resource";
@@ -41,6 +42,15 @@ vi.mock("@front-api/routes/v1/public/frames/shared_auth", () => ({
 }));
 
 import { resolveOptionalAuth } from "@front-api/routes/v1/public/frames/shared_auth";
+
+function decodeVizAccessToken(accessToken: string) {
+  const result = extractAndVerifyVizAccessTokenFromHeader(
+    `Bearer ${accessToken}`
+  );
+  assert(result.isOk(), "Expected a valid viz access token");
+
+  return result.value;
+}
 
 describe("GET /api/v1/public/frames/[token]", () => {
   let auth: Authenticator;
@@ -760,6 +770,10 @@ describe("GET /api/v1/public/frames/[token]", () => {
       });
 
       expect(response.status).toBe(200);
+      const { accessToken } = await response.json();
+      expect(decodeVizAccessToken(accessToken)).toMatchObject({
+        canInvokePublicFunctions: true,
+      });
       expect(prewarmFrameSandbox).not.toHaveBeenCalled();
     });
 
@@ -823,9 +837,11 @@ describe("GET /api/v1/public/frames/[token]", () => {
       const response = await requestFrame(token);
 
       expect(response.status).toBe(200);
-      await expect(response.json()).resolves.toEqual(
-        expect.objectContaining({ hasFunctions: true })
-      );
+      const body = await response.json();
+      expect(body).toEqual(expect.objectContaining({ hasFunctions: true }));
+      expect(decodeVizAccessToken(body.accessToken)).toMatchObject({
+        canInvokePublicFunctions: false,
+      });
       expect(prewarmFrameSandbox).toHaveBeenCalledWith(
         auth,
         expect.objectContaining({ sId: frame.sId })
