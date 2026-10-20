@@ -120,6 +120,10 @@ vi.mock("@app/lib/temporal", () => ({
     },
   }),
   getTemporalClientForFrontNamespace: vi.fn().mockResolvedValue({
+    connection: {
+      withDeadline: vi.fn(async (_deadline, fn) => fn()),
+      withAbortSignal: vi.fn(async (_signal, fn) => fn()),
+    },
     workflow: {
       start: vi.fn().mockResolvedValue(undefined),
       signalWithStart: vi.fn().mockResolvedValue(undefined),

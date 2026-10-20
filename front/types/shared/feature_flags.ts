@@ -1,4 +1,10 @@
 export const WHITELISTABLE_FEATURES_CONFIG = {
+  dfs_gcs_replication: {
+    description:
+      "Replicate this workspace's GCS pod and conversation files into DFS",
+    stage: "dust_only",
+    owner: "flvndvd",
+  },
   dust_lean_agent: {
     description:
       "Enable @dust-lean, a Dust agent that starts without tools, skills, or company knowledge",
