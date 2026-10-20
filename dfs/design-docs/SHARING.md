@@ -114,7 +114,7 @@ access the conversation today, and grants can be tightened later if we change ou
   the ones without `r`. The resource exposes `read` or `write`.
 - No caching of `Stat` across requests: removing a grant applies on the next request.
 - Fail closed: a dfs error is an error, never "not found" or "allowed".
-- Shadow mode first (log diffs with today's check), then enforce per workspace behind a FF.
+- Enforced per workspace behind a FF.
 
 `canAccess` results:
 
@@ -183,9 +183,8 @@ to grant `u:<userId> rw`.
 2. Backfill `u:<userId> rw` for participants who can access the conversation today (`canAccess`),
    so that participants who lost a space don't get access back.
 3. New conversations get a folder at creation, and approved mention invites write grants.
-4. Shadow mode.
-5. Enforce per workspace, shipping the popover at the same time.
-6. Remove `urlAccessMode`, `privateConversationUrlsByDefault` and their UI.
+4. Enforce per workspace, shipping the popover at the same time.
+5. Remove `urlAccessMode`, `privateConversationUrlsByDefault` and their UI.
 
 Step 2 narrows access: non-participants who used the link lose access and get the no-access
 message.
