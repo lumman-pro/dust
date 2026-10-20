@@ -69,11 +69,19 @@ export function filterSlashCommandItems(
     return items;
   }
 
-  return items.filter((command) =>
-    getSlashCommandSearchText(command).some((text) =>
-      normalizeSlashCommandSearchText(text).includes(normalizedQuery)
+  return items
+    .filter((command) =>
+      getSlashCommandSearchText(command).some((text) =>
+        normalizeSlashCommandSearchText(text).includes(normalizedQuery)
+      )
     )
-  );
+    .toSorted((a, b) =>
+      compareForAutocompleteSort(
+        normalizedQuery,
+        normalizeSlashCommandSearchText(a.label),
+        normalizeSlashCommandSearchText(b.label)
+      )
+    );
 }
 
 export function buildCapabilitySlashCommandItems<

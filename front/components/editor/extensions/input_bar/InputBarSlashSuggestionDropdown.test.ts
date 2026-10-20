@@ -1,3 +1,4 @@
+import { filterSlashCommandItems } from "@app/components/editor/extensions/shared/slash_suggestion/buildSlashCommandItems";
 import { PICK_MODEL_SLASH_COMMAND_ACTION } from "@app/components/editor/extensions/shared/slash_suggestion/pickModelSlashCommand";
 import type { SlashCommand } from "@app/components/editor/extensions/shared/slash_suggestion/SlashCommandDropdown";
 import {
@@ -14,10 +15,7 @@ import type { MessageDescriptor } from "@lingui/core";
 import { setupI18n } from "@lingui/core";
 import { describe, expect, it } from "vitest";
 
-import {
-  filterInputBarSlashCommandItems,
-  getInputBarSlashCommandItems,
-} from "./InputBarSlashSuggestionItems";
+import { getInputBarSlashCommandItems } from "./InputBarSlashSuggestionItems";
 import type { InputBarSlashCommand } from "./InputBarSlashSuggestionTypes";
 import {
   getAvailableInputBarSlashCommands,
@@ -40,7 +38,7 @@ function buildInputBarSlashCommandItems({
   query: string;
   t?: (descriptor: MessageDescriptor) => string;
 }): SlashCommand[] {
-  return filterInputBarSlashCommandItems(
+  return filterSlashCommandItems(
     getInputBarSlashCommandItems({ ...options, t }),
     query
   );
