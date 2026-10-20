@@ -143,12 +143,15 @@ create dfs://<userSId>--<user-folder-id>/.conversations/conv-<conversationSId>
 - **MIME types:** pod folders have the MIME type `application/vnd.dust.pod` and conversation folders
   `application/vnd.dust.conversation`, so clients can recognize them wherever they are moved. Other
   folders keep the default `inode/directory`.
-- **Pod names:** pod folders use the pod's actual name (`SpaceResource.name`) unchanged, also
-  stored in `dust.display_name`. URI percent-encoding preserves that name. DFS basename limits
-  still apply. The current `podFolderName()` helper rewrites names and falls back to a pod ID;
-  it needs to be updated to match this design. Pod renames and collisions between pods with the
-  same name also remain unimplemented. A rename must preserve the folder ID, and a collision
-  must not make distinct pods share a folder.
+- **Pod names:** pod folders use the pod's actual name (`SpaceResource.name`), also stored in
+  `dust.display_name`, with only `%`, `/`, control characters and a leading `.` percent-encoded
+  (`Q3/Q4 plan` becomes `Q3%2FQ4 plan`): `/` cannot appear in a basename and a leading `.` would
+  hide the folder, and encoding `%` too keeps distinct names distinct. URI percent-encoding then
+  applies on top, like for any name. Each pod folder carries its pod's sId in the `dust.pod_id`
+  xattr, and front only reuses an existing folder carrying the pod's sId. When the name is taken by
+  another pod's folder (e.g. a deleted pod with the same name), or is longer than 255 bytes, the
+  folder is named `<name> (<podSId>)` instead, cut to 255 bytes: a collision never makes distinct
+  pods share a folder. Pod renames remain unimplemented; a rename must preserve the folder ID.
 - **Stored reference:** front stores the returned folder ID on the user, the pod, or the
   conversation. All later access to that context's content uses this ID as the anchor, never a path
   from the root or from the user folder.

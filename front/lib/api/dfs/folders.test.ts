@@ -3,6 +3,7 @@ import type { DfsFolderContext } from "@app/lib/api/dfs/folders";
 import {
   DFS_CONVERSATION_FOLDER_MIME_TYPE,
   DFS_DISPLAY_NAME_XATTR,
+  DFS_POD_ID_XATTR,
   DFS_POD_FOLDER_MIME_TYPE,
   getOrCreateConversationFolder,
   getOrCreatePodFolder,
@@ -11,6 +12,7 @@ import {
 import { Authenticator } from "@app/lib/auth";
 import { DfsClient } from "@app/lib/dfs/client";
 import { DfsFileSystem } from "@app/lib/dfs/file_system";
+import { podFolderUri } from "@app/lib/dfs/folders";
 import { formatDfsUri } from "@app/lib/dfs/uri";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { DfsUserFolderResource } from "@app/lib/resources/dfs_user_folder_resource";
@@ -133,7 +135,7 @@ describe("getOrCreatePodFolder", () => {
     });
 
     expect(res.isOk()).toBe(true);
-    expect(dfs.paths()).toContain(`/users/${user.sId}/pods/Q3-Q4 plan`);
+    expect(dfs.paths()).toContain(`/users/${user.sId}/pods/Q3%2FQ4 plan`);
     const stored = await SpaceResource.fetchById(authenticator, pod.sId);
     expect(res.isOk() && res.value).toBe(stored?.dfsObjectId);
     const metadata = await metadataOf(context, stored?.dfsObjectId);
@@ -141,6 +143,65 @@ describe("getOrCreatePodFolder", () => {
     expect(
       Buffer.from(metadata?.xattrs[DFS_DISPLAY_NAME_XATTR] ?? []).toString()
     ).toBe("Q3/Q4 plan");
+    expect(
+      Buffer.from(metadata?.xattrs[DFS_POD_ID_XATTR] ?? []).toString()
+    ).toBe(pod.sId);
+  });
+
+  it("reuses an existing folder of the same pod", async () => {
+    const { authenticator, workspace, user } = await createResourceTest({});
+    const { dfs, context } = setup();
+    const pod = await SpaceFactory.project(workspace);
+    const userFolderId = await getOrCreateUserFolder(
+      authenticator,
+      context,
+      user
+    );
+    if (userFolderId.isErr()) {
+      throw userFolderId.error;
+    }
+    // E.g. created by a call that failed before storing its ID.
+    const existing = await context.fs.mkdir(
+      podFolderUri(userFolderId.value, pod.name),
+      { xattrs: { [DFS_POD_ID_XATTR]: Buffer.from(pod.sId) } }
+    );
+
+    const res = await getOrCreatePodFolder(authenticator, context, pod, {
+      user,
+    });
+
+    expect(res.isOk() && existing.isOk() && res.value).toBe(
+      existing.isOk() && existing.value.attr.id
+    );
+    expect(dfs.paths().filter((path) => path.includes("/pods/"))).toEqual([
+      `/users/${user.sId}/pods/${pod.name}`,
+    ]);
+  });
+
+  it("does not reuse the folder of another pod with the same name", async () => {
+    const { authenticator, workspace, user } = await createResourceTest({});
+    const { dfs, context } = setup();
+    const pod = await SpaceFactory.project(workspace);
+    const userFolderId = await getOrCreateUserFolder(
+      authenticator,
+      context,
+      user
+    );
+    if (userFolderId.isErr()) {
+      throw userFolderId.error;
+    }
+    // E.g. the folder of a deleted pod that had the same name.
+    const pods = dfs.createDirectory(userFolderId.value, "pods");
+    const other = dfs.createDirectory(pods, pod.name);
+
+    const res = await getOrCreatePodFolder(authenticator, context, pod, {
+      user,
+    });
+
+    expect(res.isOk() && res.value).not.toBe(other);
+    expect(dfs.paths()).toContain(
+      `/users/${user.sId}/pods/${pod.name} (${pod.sId})`
+    );
   });
 
   it("uses the first editor of the pod when no user is given", async () => {

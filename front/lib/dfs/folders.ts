@@ -9,8 +9,8 @@ import type { DfsObjectId } from "@app/types/dfs";
 /**
  * @cc [owner:fabiencelier,label:product] folder-layout
  * The URIs MUST follow the layout of `dfs/design-docs/URI.md`: `users/<userSId>` under the tenant
- * root, `pods/<podFolderName(podName)>` and `.conversations/conv-<conversationSId>` under their
- * parent folder. Changing a name orphans the folders already created under the previous one.
+ * root, `pods/<one of podFolderNames(pod)>` and `.conversations/conv-<conversationSId>` under
+ * their parent folder. Changing a name orphans the folders already created under the previous one.
  */
 export function userFolderUri(rootId: DfsObjectId, userId: string): string {
   return formatDfsUri(rootId, { path: ["users", userId] });
@@ -18,38 +18,68 @@ export function userFolderUri(rootId: DfsObjectId, userId: string): string {
 
 export function podFolderUri(
   userFolderId: DfsObjectId,
-  pod: { sId: string; name: string }
+  folderName: string
 ): string {
-  return formatDfsUri(userFolderId, { path: ["pods", podFolderName(pod)] });
+  return formatDfsUri(userFolderId, { path: ["pods", folderName] });
 }
 
 // See "Stored basenames" in `dfs/design-docs/API.md`.
 const MAX_NAME_BYTES = 255;
 
+function percentEncode(char: string): string {
+  return [...Buffer.from(char, "utf8")]
+    .map((byte) => `%${byte.toString(16).toUpperCase().padStart(2, "0")}`)
+    .join("");
+}
+
+// The pod name split into encoded characters (see `pod-folder-names`), so that truncating never
+// cuts an escape sequence.
+function encodedPodNameChars(name: string): string[] {
+  return [...name].map((char, i) =>
+    char === "%" ||
+    char === "/" ||
+    /\p{Cc}/u.test(char) ||
+    (i === 0 && char === ".")
+      ? percentEncode(char)
+      : char
+  );
+}
+
 /**
- * @cc [owner:fabiencelier,label:product] pod-folder-name
- * The name MUST be a valid dfs basename derived from the pod's name: `/` and control characters are
- * replaced with `-`, surrounding whitespace and leading dots are removed (so that it is never `.`,
- * `..` or hidden), and it is cut to 255 UTF-8 bytes without splitting a character. A pod name with
- * nothing left MUST fall back to `pod-<podSId>`. Different pods MAY get the same name.
+ * The names to try, in order, for the folder of `pod`, see `pod-folder-names`.
  */
-export function podFolderName({
+/**
+ * @cc [owner:fabiencelier,label:product] pod-folder-names
+ * The first name MUST be the pod's name with only `%`, `/`, control characters and a leading `.`
+ * percent-encoded (UTF-8 bytes, `%XX`), so that two different pod names never give the same folder
+ * name; it is omitted when empty or longer than 255 UTF-8 bytes. The last name MUST be that encoded
+ * name, cut without splitting a character or an escape sequence, followed by ` (<podSId>)`, within
+ * 255 bytes, or `pod-<podSId>` for an empty pod name: it is unique to the pod.
+ */
+export function podFolderNames({
   sId,
   name,
 }: {
   sId: string;
   name: string;
-}): string {
-  const cleaned = name.replace(/[/\p{Cc}]/gu, "-").replace(/^[\s.]+/u, "");
+}): string[] {
+  const chars = encodedPodNameChars(name);
+  const encoded = chars.join("");
+  if (encoded === "") {
+    return [`pod-${sId}`];
+  }
+  const suffix = ` (${sId})`;
   let truncated = "";
-  for (const char of cleaned) {
-    if (Buffer.byteLength(truncated + char) > MAX_NAME_BYTES) {
+  for (const char of chars) {
+    if (Buffer.byteLength(truncated + char + suffix) > MAX_NAME_BYTES) {
       break;
     }
     truncated += char;
   }
-  truncated = truncated.trimEnd();
-  return truncated || `pod-${sId}`;
+  const unique = `${truncated}${suffix}`;
+  return Buffer.byteLength(encoded) <= MAX_NAME_BYTES
+    ? [encoded, unique]
+    : [unique];
 }
 
 /**

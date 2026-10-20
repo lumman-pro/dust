@@ -1,32 +1,36 @@
-import { podFolderName } from "@app/lib/dfs/folders";
+import { podFolderNames } from "@app/lib/dfs/folders";
 import { describe, expect, it } from "vitest";
 
-function nameOf(name: string) {
-  return podFolderName({ sId: "pod_1", name });
+function namesOf(name: string) {
+  return podFolderNames({ sId: "pod_1", name });
 }
 
-describe("podFolderName", () => {
-  it("keeps a valid name", () => {
-    expect(nameOf("Q3 roadmap (draft)")).toBe("Q3 roadmap (draft)");
+describe("podFolderNames", () => {
+  it("keeps a name without characters to encode, then the unique name", () => {
+    expect(namesOf("Équipe Paris (draft)")).toEqual([
+      "Équipe Paris (draft)",
+      "Équipe Paris (draft) (pod_1)",
+    ]);
   });
 
-  it("replaces slashes and control characters", () => {
-    expect(nameOf("a/b\u0000c\nd")).toBe("a-b-c-d");
+  it("percent-encodes only %, /, control characters and a leading dot", () => {
+    expect(namesOf(".a/b%c\nd.e")[0]).toBe("%2Ea%2Fb%25c%0Ad.e");
   });
 
-  it("removes surrounding whitespace and leading dots", () => {
-    expect(nameOf("  . .hidden  ")).toBe("hidden");
+  it("gives different names to names that differ only by encoded characters", () => {
+    expect(namesOf("a/b")[0]).not.toBe(namesOf("a-b")[0]);
+    expect(namesOf("a%2Fb")[0]).not.toBe(namesOf("a/b")[0]);
   });
 
-  it("falls back to the pod sId when nothing is left", () => {
-    expect(nameOf("..")).toBe("pod-pod_1");
-    expect(nameOf("   ")).toBe("pod-pod_1");
+  it("only gives the unique name to an empty pod name", () => {
+    expect(namesOf("")).toEqual(["pod-pod_1"]);
   });
 
-  it("cuts to 255 bytes without splitting a character", () => {
-    const name = nameOf("é".repeat(200));
+  it("only gives a unique name cut to 255 bytes to a name too long", () => {
+    const names = namesOf("/".repeat(100));
 
-    expect(name).toBe("é".repeat(127));
-    expect(Buffer.byteLength(name)).toBe(254);
+    expect(names).toHaveLength(1);
+    expect(names[0]).toBe(`${"%2F".repeat(82)} (pod_1)`);
+    expect(Buffer.byteLength(names[0])).toBeLessThanOrEqual(255);
   });
 });
