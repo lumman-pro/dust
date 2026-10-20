@@ -233,10 +233,13 @@ export async function writeSessionSource(
   const outcome = await applyInTurn(hocuspocus, {
     file,
     agent,
-    fromCurrent: (current) =>
-      current === base
-        ? new Ok({ source, value: undefined })
-        : new Err("changed" as const),
+    // A write applies only to the source it was made from.
+    fromCurrent: (current) => {
+      if (current !== base) {
+        return new Err("changed" as const);
+      }
+      return new Ok({ source, value: undefined });
+    },
   });
   if (outcome.isErr()) {
     return outcome;
