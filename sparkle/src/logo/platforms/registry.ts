@@ -71,6 +71,7 @@ import LinearLogo from "./Linear";
 import LinkedinLogo from "./Linkedin";
 import LokaliseLogo from "./Lokalise";
 import LumaLogo from "./Luma";
+import LummanLogo from "./Lumman";
 import MetaLogo from "./Meta";
 import MicrosoftLogo from "./Microsoft";
 import MicrosoftExcelLogo from "./MicrosoftExcel";
@@ -207,6 +208,7 @@ export const PLATFORM_LOGOS = {
   LinkedinLogo,
   LokaliseLogo,
   LumaLogo,
+  LummanLogo,
   MetaLogo,
   MicrosoftLogo,
   MicrosoftExcelLogo,

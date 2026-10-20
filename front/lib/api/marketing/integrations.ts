@@ -184,6 +184,7 @@ const REMOTE_MCP_CATEGORY_MAP: Record<string, IntegrationCategory> = {
   contentful: "productivity",
   "contentful (europe)": "productivity",
   n8n: "productivity",
+  "multi calendar": "calendar",
   ahrefs: "data",
   webflow: "development",
   "bright data": "data",

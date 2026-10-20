@@ -7588,6 +7588,127 @@ export const DEFAULT_REMOTE_MCP_SERVERS: DefaultRemoteMCPServerConfig[] = [
     },
   },
   {
+    id: 10060,
+    name: "Multi Calendar",
+    description:
+      "Multi Calendar tools to read events, find free time, create, move and cancel events and answer invitations across several Outlook.com, Microsoft 365 and Google calendar accounts at once, with booking links, booking pages, group polls and circles.",
+    url: "https://calendar.lumman.co/mcp",
+    icon: "LummanLogo",
+    documentationUrl: "https://lumman.co/mcp/multi-calendar",
+    connectionInstructions:
+      "Multi Calendar uses OAuth with dynamic client registration. Choose personal accounts so each member connects their own calendars. Sign in to Lumman with Google, Microsoft, a passkey or an emailed code and approve Dust; calendar accounts are added, and what each allows is set, at lumman.co/mcp/account/multi-calendar.",
+    authMethod: "oauth-dynamic",
+    toolStakes: {
+      calendars_list: "never_ask",
+      events_list: "never_ask",
+      events_get: "never_ask",
+      free_times_find: "never_ask",
+      preferences_get: "never_ask",
+      polls_results: "never_ask",
+      links_polls_list: "never_ask",
+      circles_list: "never_ask",
+      circles_free_times_find: "never_ask",
+      preferences_set: "low",
+      busy_everywhere_set: "low",
+      booking_links_create: "low",
+      polls_create: "low",
+      links_polls_close: "low",
+      events_create: "high",
+      events_edit: "high",
+      events_cancel: "high",
+      events_respond: "high",
+      booking_page_set: "high",
+      polls_book: "high",
+      circles_invite: "high",
+    },
+    toolDisplayLabels: {
+      calendars_list: {
+        running: "Listing calendars on Multi Calendar",
+        done: "Listed calendars on Multi Calendar",
+      },
+      events_list: {
+        running: "Reading events on Multi Calendar",
+        done: "Read events on Multi Calendar",
+      },
+      events_get: {
+        running: "Reading an event on Multi Calendar",
+        done: "Read an event on Multi Calendar",
+      },
+      free_times_find: {
+        running: "Finding a free time on Multi Calendar",
+        done: "Found a free time on Multi Calendar",
+      },
+      preferences_get: {
+        running: "Reading scheduling preferences on Multi Calendar",
+        done: "Read scheduling preferences on Multi Calendar",
+      },
+      polls_results: {
+        running: "Reading a poll's answers on Multi Calendar",
+        done: "Read a poll's answers on Multi Calendar",
+      },
+      links_polls_list: {
+        running: "Listing open links and polls on Multi Calendar",
+        done: "Listed open links and polls on Multi Calendar",
+      },
+      circles_list: {
+        running: "Listing circles on Multi Calendar",
+        done: "Listed circles on Multi Calendar",
+      },
+      circles_free_times_find: {
+        running: "Finding a time for a circle on Multi Calendar",
+        done: "Found a time for a circle on Multi Calendar",
+      },
+      preferences_set: {
+        running: "Changing scheduling preferences on Multi Calendar",
+        done: "Changed scheduling preferences on Multi Calendar",
+      },
+      busy_everywhere_set: {
+        running: "Setting where busy time shows on Multi Calendar",
+        done: "Set where busy time shows on Multi Calendar",
+      },
+      booking_links_create: {
+        running: "Making a booking link on Multi Calendar",
+        done: "Made a booking link on Multi Calendar",
+      },
+      polls_create: {
+        running: "Making a group poll on Multi Calendar",
+        done: "Made a group poll on Multi Calendar",
+      },
+      links_polls_close: {
+        running: "Closing a link or poll on Multi Calendar",
+        done: "Closed a link or poll on Multi Calendar",
+      },
+      events_create: {
+        running: "Creating an event on Multi Calendar",
+        done: "Created an event on Multi Calendar",
+      },
+      events_edit: {
+        running: "Changing an event on Multi Calendar",
+        done: "Changed an event on Multi Calendar",
+      },
+      events_cancel: {
+        running: "Cancelling an event on Multi Calendar",
+        done: "Cancelled an event on Multi Calendar",
+      },
+      events_respond: {
+        running: "Answering an invitation on Multi Calendar",
+        done: "Answered an invitation on Multi Calendar",
+      },
+      booking_page_set: {
+        running: "Setting up a booking page on Multi Calendar",
+        done: "Set up a booking page on Multi Calendar",
+      },
+      polls_book: {
+        running: "Booking a poll's time on Multi Calendar",
+        done: "Booked a poll's time on Multi Calendar",
+      },
+      circles_invite: {
+        running: "Inviting people into a circle on Multi Calendar",
+        done: "Invited people into a circle on Multi Calendar",
+      },
+    },
+  },
+  {
     id: 10049,
     name: "Grafana",
     description:

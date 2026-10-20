@@ -3711,6 +3711,7 @@ const InternalAllowedIconSchema = FlexibleEnumSchema<
   | "LinearLogo"
   | "LokaliseLogo"
   | "LumaLogo"
+  | "LummanLogo"
   | "MicrosoftExcelLogo"
   | "MicrosoftLogo"
   | "MicrosoftOutlookLogo"

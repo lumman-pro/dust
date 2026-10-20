@@ -69,6 +69,7 @@ export { default as LinearLogo } from "./Linear";
 export { default as LinkedinLogo } from "./Linkedin";
 export { default as LokaliseLogo } from "./Lokalise";
 export { default as LumaLogo } from "./Luma";
+export { default as LummanLogo } from "./Lumman";
 export { default as MetaLogo } from "./Meta";
 export { default as MicrosoftLogo } from "./Microsoft";
 export { default as MicrosoftExcelLogo } from "./MicrosoftExcel";
