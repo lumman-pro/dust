@@ -30,19 +30,6 @@ function formatAccess(access: "restricted" | "open", t: Translate): string {
     : t(msg({ message: "Restricted", context: "pod access" }));
 }
 
-function formatPinnedFramePath(
-  path: string | null | undefined,
-  t: Translate
-): string {
-  if (path === null) {
-    return t(msg`Unpinned`);
-  }
-  if (path === undefined) {
-    return "—";
-  }
-  return path;
-}
-
 function ChangeRow({ label, before, after }: ChangeRowProps) {
   const { t } = useLingui();
   const hasChanged = before !== after;
@@ -142,16 +129,6 @@ export function PodEditInformationValidationDetails({
           ? loadingLabel
           : "—",
       after: formatAccess(input.access, t),
-    });
-  }
-
-  if (input.pinnedFramePath !== undefined) {
-    changes.push({
-      label: t`Pinned frame`,
-      before: isCurrentPodInfoLoading
-        ? loadingLabel
-        : formatPinnedFramePath(spaceInfo?.pinnedFramePath ?? undefined, t),
-      after: formatPinnedFramePath(input.pinnedFramePath, t),
     });
   }
 

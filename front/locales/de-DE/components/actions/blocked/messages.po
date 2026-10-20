@@ -150,11 +150,6 @@ msgid "access"
 msgstr "Zugriff"
 
 #: front/components/actions/blocked/toolValidationLabels.ts
-msgctxt "Pod field"
-msgid "pinned frame"
-msgstr "angeheftetes Frame"
-
-#: front/components/actions/blocked/toolValidationLabels.ts
 msgid "Allow agent to update Pod {fieldList}?"
 msgstr "Dem Agenten erlauben, den Pod zu aktualisieren ({fieldList})?"
 

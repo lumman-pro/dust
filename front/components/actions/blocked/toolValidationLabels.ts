@@ -141,11 +141,6 @@ const MCP_TOOL_OVERRIDES: Partial<
         if (inputs.access !== undefined) {
           fields.push(t(msg({ message: "access", context: "Pod field" })));
         }
-        if (inputs.pinnedFramePath !== undefined) {
-          fields.push(
-            t(msg({ message: "pinned frame", context: "Pod field" }))
-          );
-        }
         if (fields.length === 0) {
           return t(msg`Allow agent to edit Pod information?`);
         }
