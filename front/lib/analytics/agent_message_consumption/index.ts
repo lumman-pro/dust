@@ -6,7 +6,7 @@ import type { ElasticsearchError } from "@app/lib/api/elasticsearch";
 import type { Authenticator } from "@app/lib/auth";
 import type { AgentMCPActionResource } from "@app/lib/resources/agent_mcp_action_resource";
 import type { Result } from "@app/types/shared/result";
-import { Ok } from "@app/types/shared/result";
+import { Err, Ok } from "@app/types/shared/result";
 
 /**
  * Loads, projects, and indexes the complete consumption analytics snapshot for one agent message.
@@ -34,6 +34,9 @@ export async function indexAgentMessageConsumptionAnalytics(
   const documentsResult = buildAgentMessageConsumptionAnalyticsDocuments(input);
   if (documentsResult.isErr()) {
     return documentsResult;
+  }
+  if (documentsResult.value.length === 0) {
+    return new Err({ code: "empty_documents", context: {} });
   }
 
   return upsertAgentMessageConsumptionAnalyticsDocuments(documentsResult.value);

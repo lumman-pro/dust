@@ -9,15 +9,20 @@ import type { AgentMessageConsumptionAnalyticsData } from "@app/types/assistant/
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
 
-export type ConsumptionDocumentsSkipReason = {
-  code: "credit_mismatch";
-  context: {
-    attributionVersion: number;
-    indexedCreditMicro: number;
-    reconciledCreditMicro: number;
-    documentCount: number;
-  };
-};
+export type ConsumptionDocumentsSkipReason =
+  | {
+      code: "credit_mismatch";
+      context: {
+        attributionVersion: number;
+        indexedCreditMicro: number;
+        reconciledCreditMicro: number;
+        documentCount: number;
+      };
+    }
+  | {
+      code: "empty_documents";
+      context: Record<string, never>;
+    };
 
 // The analytics activity only indexes the outcome of the attribution activity that ran before it:
 // the items of the newest attribution version, at their stored reconciled amounts. New usages,
