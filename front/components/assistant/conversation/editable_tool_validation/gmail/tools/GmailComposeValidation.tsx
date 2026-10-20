@@ -4,8 +4,8 @@ import {
   HtmlEditor,
 } from "@app/components/editor/HtmlEditor";
 import type { MCPValidationOutputType } from "@app/lib/actions/constants";
-import type { GmailComposeInput } from "@app/lib/api/actions/servers/gmail/types";
-import { isGmailComposeInput } from "@app/lib/api/actions/servers/gmail/types";
+import type { InternalMCPToolInputType } from "@app/lib/actions/mcp_internal_actions/constants";
+import { validateToolInputs } from "@app/lib/actions/mcp_internal_actions/constants";
 import {
   AttachmentChip,
   Button,
@@ -28,6 +28,11 @@ interface ComposeFormValues {
 }
 
 type Translate = (descriptor: MessageDescriptor) => string;
+
+type GmailComposeInput = InternalMCPToolInputType<
+  "gmail",
+  "send_mail" | "create_draft"
+>;
 
 function getComposeFormSchema({
   isSubjectEditable,
@@ -131,11 +136,12 @@ export function GmailComposeValidation({
   onApproveWithEditedArguments,
 }: GmailComposeValidationProps) {
   const { t } = useLingui();
-  const inputs = useMemo(
-    () =>
-      isGmailComposeInput(blockedAction.inputs) ? blockedAction.inputs : null,
-    [blockedAction.inputs]
-  );
+  const inputs = useMemo(() => {
+    const toolName = isDraft ? "create_draft" : "send_mail";
+    return validateToolInputs("gmail", toolName, blockedAction.inputs)
+      ? blockedAction.inputs
+      : null;
+  }, [blockedAction.inputs, isDraft]);
 
   const originalSubject = inputs?.subject ?? "";
   const originalBody = inputs?.body ?? "";
