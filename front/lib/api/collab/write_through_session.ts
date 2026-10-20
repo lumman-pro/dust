@@ -144,10 +144,10 @@ export type CollabSessionEdit =
  * `beforeEdit` MUST pass before `edit` is sent; the session then applies `edit` to its source at
  * its turn, so changes made meanwhile do not refuse it. An edit MUST be sent again only when the
  * session answered that it applied nothing (`busy`), up to `MAX_SESSION_WRITE_ATTEMPTS`, then fail
- * with `unavailable`; any other failure MUST NOT be retried, since the edit may have applied. An edit
- * whose text does not match the session's source MUST answer `edit_refused` with its reason. Without
- * a session, or once it closed, it MUST write nothing and answer `no_session`, and failing to learn
- * whether a session is open MUST be an error, as for `writeThroughCollabSession`.
+ * with `unavailable`; any other failure MUST NOT be retried, since the edit may have applied. An
+ * edit whose text does not match the session's source MUST answer `edit_refused` with its reason.
+ * Without a session, or once it closed, it MUST write nothing and answer `no_session`, and failing
+ * to learn whether a session is open MUST be an error, as for `writeThroughCollabSession`.
  */
 export async function editThroughCollabSession<E extends Error>(
   auth: Authenticator,
@@ -164,6 +164,7 @@ export async function editThroughCollabSession<E extends Error>(
     beforeEdit: () => Promise<Result<void, E>>;
   }
 ): Promise<Result<CollabSessionEdit, CollabSessionWriteError | E>> {
+  // Without a session, the read answers at once, before any access check: most edits find none.
   const live = await readCollabSource(auth, filePath, agent);
   if (live.isErr()) {
     return new Err(

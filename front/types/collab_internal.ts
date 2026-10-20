@@ -102,7 +102,7 @@ export type CollabSourceEditRequest = z.infer<
 export const collabSourceEditResponseSchema = z.discriminatedUnion("result", [
   z.object({
     result: z.literal("written"),
-    replacements: z.number().int(),
+    replacements: z.number().int().positive(),
   }),
   z.object({ result: z.enum(["closed", "busy", "unsaved"]) }),
   z.object({ result: z.literal("refused"), message: z.string() }),
@@ -115,4 +115,10 @@ export const collabSourceEditResponseSchema = z.discriminatedUnion("result", [
 
 export type CollabSourceEditResponse = z.infer<
   typeof collabSourceEditResponseSchema
+>;
+
+/** An edit's answer once a refusal is turned into an error. */
+export type CollabSourceEditResult = Exclude<
+  CollabSourceEditResponse,
+  { result: "refused" }
 >;

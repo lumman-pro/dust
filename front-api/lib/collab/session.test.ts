@@ -40,7 +40,7 @@ vi.mock("@app/lib/api/collab/comments", () => ({
   dispatchSessionCommentMentions: vi.fn(async () => undefined),
 }));
 
-describe("readSessionSource and writeSessionSource", () => {
+describe("readSessionSource, writeSessionSource and editSessionSource", () => {
   const THREAD_SOURCE =
     "# Notes\n\nHello :comment-start{id=c1}there:comment-end{id=c1}.\n\n" +
     ":::annotations\n::comment{id=c1 status=open}\n\n" +
@@ -379,7 +379,10 @@ describe("readSessionSource and writeSessionSource", () => {
       },
     });
 
-    expect(edited.isOk() && edited.value.result).toBe("edit_refused");
+    expect(edited.isOk() && edited.value).toMatchObject({
+      result: "edit_refused",
+      code: "string_not_found",
+    });
     expect(await openSource(hocuspocus, name)).toBe(SOURCE);
   });
 });

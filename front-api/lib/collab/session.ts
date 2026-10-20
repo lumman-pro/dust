@@ -6,11 +6,8 @@ import {
   saveCollabSession,
 } from "@app/lib/api/collab/session_file";
 import { replaceYDocContent, yDocToDfm } from "@app/lib/api/collab/ydoc";
-import {
-  DfmAgentDocumentError,
-  editDocumentSource,
-} from "@app/lib/api/documents/agent_edits";
-import { DfmStoredDocumentError } from "@app/lib/api/documents/read_write";
+import type { EditSourceFailure } from "@app/lib/api/documents/agent_edit_source";
+import { editDocumentSource } from "@app/lib/api/documents/agent_edit_source";
 import { WRITE_CANONICAL_FILE_CONTENT_MAX_BYTES } from "@app/lib/api/files/file_system_ops";
 import type { DfmComment } from "@app/lib/markdown/dfm";
 import { setTimeoutAsync } from "@app/lib/utils/async_utils";
@@ -29,7 +26,7 @@ import type {
 import { BODY_FRAGMENT_NAME, toSessionName } from "@app/types/collab";
 import type {
   CollabSourceEdit,
-  CollabSourceEditResponse,
+  CollabSourceEditResult,
   CollabSourceWriteResult,
   CollabSourceReadResponse,
 } from "@app/types/collab_internal";
@@ -239,7 +236,7 @@ export async function writeSessionSource(
     change: (current) =>
       current === base
         ? new Ok({ source, value: undefined })
-        : new Err(undefined),
+        : new Err("changed" as const),
   });
   if (changed.isErr()) {
     return changed;
@@ -260,10 +257,11 @@ export async function writeSessionSource(
 
 /**
  * @cc [owner:tdraier,label:product;concurrency;security] collab-session-source-edit
- * An edit MUST be applied as a write is (`collab-session-source-write`), with the same answers,
- * turn and announcements, except that it MUST NOT compare with a `base`: at its turn, the source
- * `readSessionSource` would return MUST be changed with `editDocumentSource`, so changes made since
- * the agent read the document are kept. An edit that does not match that source MUST answer
+ * An edit MUST be applied as a write is (`collab-session-source-write`), with the same turn,
+ * `closed`, `busy` and `unsaved` answers and announcements, but MUST NOT compare with a `base`:
+ * at its turn, the source `readSessionSource` would return MUST be changed with
+ * `editDocumentSource`, so changes made since the agent read the document are kept. An edit that
+ * does not match that source MUST answer
  * `edit_refused` with its reason, and one whose result the codec refuses, or that would be larger
  * than `WRITE_CANONICAL_FILE_CONTENT_MAX_BYTES`, MUST fail; both change nothing.
  */
@@ -274,24 +272,25 @@ export async function editSessionSource(
     edit,
     agent,
   }: { file: CollabAccess; edit: CollabSourceEdit; agent?: CollabAgent }
-): Promise<
-  Result<Exclude<CollabSourceEditResponse, { result: "refused" }>, string>
-> {
+): Promise<Result<CollabSourceEditResult, string>> {
   const changed = await changeSessionSource(hocuspocus, {
     file,
     agent,
-    change: (current) => {
+    change: (
+      current
+    ): Result<{ source: string; value: number }, EditSourceFailure> => {
       const edited = editDocumentSource(current, edit);
       if (edited.isErr()) {
-        return new Err(edited.error);
+        return edited;
       }
       if (
         Buffer.byteLength(edited.value.source, "utf8") >
         WRITE_CANONICAL_FILE_CONTENT_MAX_BYTES
       ) {
-        return new Err(
-          new DfmStoredDocumentError("refused", TOO_LARGE_TO_EDIT_LIVE_MESSAGE)
-        );
+        return new Err({
+          kind: "failed",
+          message: TOO_LARGE_TO_EDIT_LIVE_MESSAGE,
+        });
       }
       return new Ok({
         source: edited.value.source,
@@ -307,13 +306,18 @@ export async function editSessionSource(
       return new Ok({ result: "written", replacements: changed.value.value });
     case "declined": {
       const { reason } = changed.value;
-      return reason instanceof DfmAgentDocumentError
-        ? new Ok({
+      switch (reason.kind) {
+        case "edit_refused":
+          return new Ok({
             result: "edit_refused",
-            code: reason.code,
-            message: reason.message,
-          })
-        : new Err(reason.message);
+            code: reason.error.code,
+            message: reason.error.message,
+          });
+        case "failed":
+          return new Err(reason.message);
+        default:
+          return assertNever(reason);
+      }
     }
     case "closed":
     case "busy":

@@ -4,7 +4,7 @@ import type { CollabAgent } from "@app/types/collab";
 import type {
   CollabSourceEdit,
   CollabSourceEditRequest,
-  CollabSourceEditResponse,
+  CollabSourceEditResult,
   CollabSourceReadRequest,
   CollabSourceReadResponse,
   CollabSourceWriteRequest,
@@ -211,12 +211,7 @@ export async function editCollabSource(
     edit: CollabSourceEdit;
     agent?: CollabAgent;
   }
-): Promise<
-  Result<
-    Exclude<CollabSourceEditResponse, { result: "refused" }>,
-    CollabSourceError
-  >
-> {
+): Promise<Result<CollabSourceEditResult, CollabSourceError>> {
   const user = auth.user();
   if (!user) {
     return new Err(noUser());
