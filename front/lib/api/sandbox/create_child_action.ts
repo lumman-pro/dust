@@ -3,6 +3,7 @@ import {
   deduplicateMCPServerConfigurations,
   disambiguateServerNamesBySpace,
 } from "@app/lib/actions/mcp_actions";
+import { getAugmentedInputs } from "@app/lib/actions/mcp_execution";
 import type { AgentLoopMCPApproveExecutionEvent } from "@app/lib/actions/mcp_internal_actions/events";
 import { validateToolInputs } from "@app/lib/actions/mcp_utils";
 import { isToolExecutionStatusFinal } from "@app/lib/actions/statuses";
@@ -65,7 +66,10 @@ export async function createSandboxChildAction(
     rawInputs: Record<string, unknown>;
   }
 ): Promise<Result<CreateSandboxChildActionResult, Error>> {
-  const view = await MCPServerViewResource.fetchById(auth, serverViewId);
+  // `configuration` so remote views carry cached tools (inputSchema) for augmentation.
+  const view = await MCPServerViewResource.fetchById(auth, serverViewId, {
+    mode: "configuration",
+  });
   if (!view) {
     return new Err(new Error("MCP server view not found."));
   }
@@ -194,6 +198,14 @@ export async function createSandboxChildAction(
     );
   }
 
+  // Need the persisted inputSchema so getAugmentedInputs can inject preconfigured
+  // TOOL_INPUT.* fields (dataSources, etc.). Name-only stubs get EMPTY_INPUT_SCHEMA
+  // and skip injection.
+  const tool = view.getServerTools().find((t) => t.name === toolName);
+  if (!tool) {
+    return new Err(new Error(`Tool ${toolName} not found on server.`));
+  }
+
   // Resolve the tool configuration (stake, enabled state, approval-requiring
   // arguments, retry policy, timeout) through the same code path as direct
   // agent-loop tool calls, so that approvals recorded on direct calls apply to
@@ -202,7 +214,7 @@ export async function createSandboxChildAction(
     auth,
     view.mcpServerId,
     serverSideConfig,
-    [{ name: toolName, description: "" }],
+    [tool],
     view.remoteMCPServerUrl
   );
   if (toolConfigurationsRes.isErr()) {
@@ -237,11 +249,18 @@ export async function createSandboxChildAction(
     return validateInputsResult;
   }
 
+  // Same as the agent-loop path (`create_tool_actions`): inject preconfigured
+  // data sources / warehouses / etc. so `dsbx` callers never fill TOOL_INPUT.* args.
+  const augmentedInputs = getAugmentedInputs(auth, {
+    actionConfiguration: fullToolConfiguration,
+    rawInputs,
+  });
+
   const { status } = await getExecutionStatusFromConfig(auth, {
     actionConfiguration: fullToolConfiguration,
     skipToolsValidation: agentMessage.skipToolsValidation,
     context: {
-      toolInputs: rawInputs,
+      toolInputs: augmentedInputs,
     },
   });
 
@@ -279,7 +298,7 @@ export async function createSandboxChildAction(
   const action = await createMCPAction(auth, {
     actionConfiguration: fullToolConfiguration,
     agentMessage,
-    augmentedInputs: rawInputs,
+    augmentedInputs,
     conversation: conversationJson,
     status: persistedStatus,
     stepContent: parentAction.stepContent,
@@ -294,7 +313,7 @@ export async function createSandboxChildAction(
       ...(await makeMCPApproveExecutionEventBase(auth, {
         actionId: action.sId,
         toolConfiguration: fullToolConfiguration,
-        inputs: rawInputs,
+        inputs: augmentedInputs,
         approvalSubjectName: agentConfiguration.name,
       })),
       configurationId: fullToolConfiguration.sId,

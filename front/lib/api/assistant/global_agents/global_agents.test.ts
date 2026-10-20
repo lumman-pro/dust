@@ -18,10 +18,10 @@ import {
   CLAUDE_SONNET_5_MODEL_ID,
 } from "@app/types/assistant/models/anthropic";
 import {
+  AUTO_COMPLEX_MODEL_ID,
   AUTO_FAST_MODEL_ID,
   AUTO_MODEL_ID,
 } from "@app/types/assistant/models/auto";
-import { GEMINI_3_1_PRO_MODEL_ID } from "@app/types/assistant/models/google_ai_studio";
 import {
   GPT_5_5_MODEL_ID,
   GPT_5_6_LUNA_MODEL_ID,
@@ -466,7 +466,7 @@ describe("getGlobalAgents OpenAI Dust agents", () => {
 });
 
 describe("getGlobalAgents Deep Dive model routing", () => {
-  it("uses Sol with medium reasoning as the Deep Dive primary model", async () => {
+  it("uses the Premium stream as the Deep Dive model", async () => {
     const workspace = await WorkspaceFactory.creditPriced({
       whiteListedProviders: ["anthropic", "openai"],
     });
@@ -480,12 +480,12 @@ describe("getGlobalAgents Deep Dive model routing", () => {
 
     expect(agents).toHaveLength(1);
     expect(agents[0].model).toMatchObject({
-      modelId: GPT_5_6_SOL_MODEL_ID,
-      reasoningEffort: "medium",
+      modelId: AUTO_COMPLEX_MODEL_ID,
+      reasoningEffort: "none",
     });
   });
 
-  it("uses Sol medium for Deep Dive while using Sol high for planning and Luna high for tasks", async () => {
+  it("uses the Premium stream for Deep Dive while using Sol high for planning and Luna high for tasks", async () => {
     const workspace = await WorkspaceFactory.enterprise({
       whiteListedProviders: ["openai"],
     });
@@ -510,8 +510,8 @@ describe("getGlobalAgents Deep Dive model routing", () => {
     ).toEqual([
       {
         sId: GLOBAL_AGENTS_SID.DEEP_DIVE,
-        modelId: GPT_5_6_SOL_MODEL_ID,
-        reasoningEffort: "medium",
+        modelId: AUTO_COMPLEX_MODEL_ID,
+        reasoningEffort: "none",
       },
       {
         sId: GLOBAL_AGENTS_SID.DUST_TASK,
@@ -526,7 +526,7 @@ describe("getGlobalAgents Deep Dive model routing", () => {
     ]);
   });
 
-  it("falls back to Opus 5 light for enterprise Deep Dive", async () => {
+  it("uses the Premium stream for Deep Dive while falling back to Opus 5 high for planning and Sonnet 5 low for tasks", async () => {
     const workspace = await WorkspaceFactory.enterprise({
       whiteListedProviders: ["anthropic"],
     });
@@ -551,8 +551,8 @@ describe("getGlobalAgents Deep Dive model routing", () => {
     ).toEqual([
       {
         sId: GLOBAL_AGENTS_SID.DEEP_DIVE,
-        modelId: CLAUDE_OPUS_5_MODEL_ID,
-        reasoningEffort: "low",
+        modelId: AUTO_COMPLEX_MODEL_ID,
+        reasoningEffort: "none",
       },
       {
         sId: GLOBAL_AGENTS_SID.DUST_TASK,
@@ -565,44 +565,6 @@ describe("getGlobalAgents Deep Dive model routing", () => {
         reasoningEffort: "high",
       },
     ]);
-  });
-
-  it("falls back to Sonnet 5 light for non-enterprise Deep Dive", async () => {
-    const workspace = await WorkspaceFactory.basic({
-      whiteListedProviders: ["anthropic"],
-    });
-    const auth = await Authenticator.internalAdminForWorkspace(workspace.sId);
-
-    const agents = await getGlobalAgents(
-      auth,
-      [GLOBAL_AGENTS_SID.DEEP_DIVE],
-      "light"
-    );
-
-    expect(agents).toHaveLength(1);
-    expect(agents[0].model).toMatchObject({
-      modelId: CLAUDE_SONNET_5_MODEL_ID,
-      reasoningEffort: "low",
-    });
-  });
-
-  it("uses the generic large fallback when preferred Deep Dive models are unavailable", async () => {
-    const workspace = await WorkspaceFactory.basic({
-      whiteListedProviders: ["google_ai_studio"],
-    });
-    const auth = await Authenticator.internalAdminForWorkspace(workspace.sId);
-
-    const agents = await getGlobalAgents(
-      auth,
-      [GLOBAL_AGENTS_SID.DEEP_DIVE],
-      "light"
-    );
-
-    expect(agents).toHaveLength(1);
-    expect(agents[0].model).toMatchObject({
-      modelId: GEMINI_3_1_PRO_MODEL_ID,
-      reasoningEffort: "high",
-    });
   });
 });
 

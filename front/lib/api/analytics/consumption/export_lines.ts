@@ -120,73 +120,33 @@ const ES_SORT: estypes.Sort = [
   { consumption_key: "asc" },
 ];
 
-type DimensionLabelCache = Map<
-  ConsumptionTopDimension,
-  Map<string, DimensionLabel>
->;
+class DimensionLabelCache {
+  private readonly labelsByDimension = new Map<
+    ConsumptionTopDimension,
+    Map<string, DimensionLabel>
+  >();
 
-function newDimensionLabelCache(): DimensionLabelCache {
-  return new Map();
-}
-
-async function resolveAndCache(
-  auth: Authenticator,
-  cache: DimensionLabelCache,
-  dimension: ConsumptionTopDimension,
-  keys: string[]
-): Promise<Map<string, DimensionLabel>> {
-  let cached = cache.get(dimension);
-  if (!cached) {
-    cached = new Map();
-    cache.set(dimension, cached);
-  }
-
-  const uncached = keys.filter((k) => !cached.has(k));
-  if (uncached.length > 0) {
-    const resolved = await resolveDimensionLabels(auth, dimension, uncached);
-    for (const [k, v] of resolved) {
-      cached.set(k, v);
-    }
-  }
-
-  return cached;
-}
-
-// One document per unit of billed credit consumption
-async function fetchAllConsumptionDocuments(
-  query: estypes.QueryDslQueryContainer
-): Promise<Result<AgentMessageConsumptionAnalyticsData[], ElasticsearchError>> {
-  const allDocs: AgentMessageConsumptionAnalyticsData[] = [];
-  let searchAfter: estypes.SortResults | undefined;
-  let hitCount: number;
-
-  do {
-    const result =
-      await searchConsumptionAnalytics<AgentMessageConsumptionAnalyticsData>(
-        query,
-        {
-          size: EXPORT_PAGE_SIZE,
-          sort: ES_SORT,
-          search_after: searchAfter,
-        }
-      );
-
-    if (result.isErr()) {
-      return result;
+  async resolve(
+    auth: Authenticator,
+    dimension: ConsumptionTopDimension,
+    keys: string[]
+  ): Promise<Map<string, DimensionLabel>> {
+    let cached = this.labelsByDimension.get(dimension);
+    if (!cached) {
+      cached = new Map();
+      this.labelsByDimension.set(dimension, cached);
     }
 
-    const { hits } = result.value.hits;
-    for (const hit of hits) {
-      if (hit._source) {
-        allDocs.push(hit._source);
+    const uncached = keys.filter((k) => !cached.has(k));
+    if (uncached.length > 0) {
+      const resolved = await resolveDimensionLabels(auth, dimension, uncached);
+      for (const [k, v] of resolved) {
+        cached.set(k, v);
       }
     }
 
-    hitCount = hits.length;
-    searchAfter = hits[hits.length - 1]?.sort;
-  } while (hitCount === EXPORT_PAGE_SIZE);
-
-  return new Ok(allDocs);
+    return cached;
+  }
 }
 
 // `visibleGroupIds` restricts the user group columns to those groups (group sIds); every group of
@@ -212,7 +172,7 @@ async function buildConsumptionLineExportRows(
 
   const resolve = labelCache
     ? (dimension: ConsumptionTopDimension, keys: string[]) =>
-        resolveAndCache(auth, labelCache, dimension, keys)
+        labelCache.resolve(auth, dimension, keys)
     : (dimension: ConsumptionTopDimension, keys: string[]) =>
         resolveDimensionLabels(auth, dimension, keys);
 
@@ -328,10 +288,11 @@ async function buildConsumptionLineExportRows(
   });
 }
 
-// Fetches and formats the consumption lines for one period (typically a bucket of a
-// larger export) as CSV rows, without a header — callers assemble the final file by
-// prepending the shared header.
-export async function fetchConsumptionExportBucketCsv(
+// Yields the consumption lines for one period (typically a bucket of a larger export) as
+// headerless CSV, one ES page per chunk, so memory stays bounded by the page size rather
+// than by the period's volume. Callers assemble the final file by prepending the shared
+// header. A search failure is yielded as the last item.
+export async function* generateConsumptionExportBucketCsv(
   auth: Authenticator,
   {
     period,
@@ -340,33 +301,7 @@ export async function fetchConsumptionExportBucketCsv(
     period: ConsumptionPeriod;
     filter?: ConsumptionScopeFilter;
   }
-): Promise<Result<string, ElasticsearchError>> {
-  const rows = await fetchConsumptionExportRows(auth, { period, filter });
-  if (rows.isErr()) {
-    return rows;
-  }
-
-  return new Ok(
-    rowsToCsv(CONSUMPTION_LINE_EXPORT_HEADERS, rows.value, {
-      includeHeader: false,
-    })
-  );
-}
-
-export function buildConsumptionLineExportCsvHeader(): string {
-  return rowsToCsv(CONSUMPTION_LINE_EXPORT_HEADERS, []);
-}
-
-async function fetchConsumptionExportRows(
-  auth: Authenticator,
-  {
-    period,
-    filter,
-  }: {
-    period: ConsumptionPeriod;
-    filter?: ConsumptionScopeFilter;
-  }
-): Promise<Result<ConsumptionLineExportRow[], ElasticsearchError>> {
+): AsyncGenerator<Result<string, ElasticsearchError>> {
   const query = buildConsumptionScopeQuery({
     auth,
     startDate: period.startDate,
@@ -374,13 +309,46 @@ async function fetchConsumptionExportRows(
     filter,
   });
 
-  const docsResult = await fetchAllConsumptionDocuments(query);
-  if (docsResult.isErr()) {
-    return docsResult;
-  }
+  const labelCache = new DimensionLabelCache();
+  let searchAfter: estypes.SortResults | undefined;
+  let hitCount: number;
 
-  const rows = await buildConsumptionLineExportRows(auth, docsResult.value);
-  return new Ok(rows);
+  do {
+    const result =
+      await searchConsumptionAnalytics<AgentMessageConsumptionAnalyticsData>(
+        query,
+        {
+          size: EXPORT_PAGE_SIZE,
+          sort: ES_SORT,
+          search_after: searchAfter,
+        }
+      );
+
+    if (result.isErr()) {
+      yield result;
+      return;
+    }
+
+    const { hits } = result.value.hits;
+    const docs = removeNulls(hits.map((hit) => hit._source));
+    if (docs.length > 0) {
+      const rows = await buildConsumptionLineExportRows(auth, docs, {
+        labelCache,
+      });
+      yield new Ok(
+        rowsToCsv(CONSUMPTION_LINE_EXPORT_HEADERS, rows, {
+          includeHeader: false,
+        })
+      );
+    }
+
+    hitCount = hits.length;
+    searchAfter = hits[hits.length - 1]?.sort;
+  } while (hitCount === EXPORT_PAGE_SIZE);
+}
+
+export function buildConsumptionLineExportCsvHeader(): string {
+  return rowsToCsv(CONSUMPTION_LINE_EXPORT_HEADERS, []);
 }
 
 export function rowsToNdjson(rows: ConsumptionLineExportRow[]): string {
@@ -435,7 +403,7 @@ export async function streamConsumptionExport(
   async function* pages(): AsyncGenerator<Uint8Array> {
     // Yield the first (already-fetched) page, then continue paginating.
     // Labels resolved on earlier pages are cached and reused.
-    const labelCache = newDimensionLabelCache();
+    const labelCache = new DimensionLabelCache();
     let currentHits = firstPageHits;
     let isFirst = true;
 

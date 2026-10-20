@@ -1,0 +1,11 @@
+{
+  "action": "frame.draft_mode_updated",
+  "targets": [
+    { "type": "workspace" },
+    { "type": "frame" }
+  ],
+  "metadata": {
+    "frame_id": "string",
+    "draft_mode": "string"
+  }
+}

@@ -1,6 +1,7 @@
 // Frame publishing runs esbuild, whose TextEncoder invariant requires Node rather than jsdom.
 // @vitest-environment node
 
+import { enterFrameDraftMode } from "@app/lib/api/frames/draft_mode";
 import { publishFramePublication } from "@app/lib/api/frames/publication_storage";
 import type { Authenticator } from "@app/lib/auth";
 import { AgentMCPActionResource } from "@app/lib/resources/agent_mcp_action_resource";
@@ -55,12 +56,10 @@ function postJson(path: string, token: string, body: unknown) {
 function requestFramePublish(
   workspaceId: string,
   token: string,
-  manifestPath: string,
-  mode: "live" | "draft"
+  manifestPath: string
 ) {
   return postJson(`/api/v1/w/${workspaceId}/sandbox/frames/publish`, token, {
     manifestPath,
-    mode,
   });
 }
 
@@ -132,30 +131,31 @@ async function setup() {
   };
 }
 
-async function publishFrame(
-  context: Awaited<ReturnType<typeof setup>>,
-  mode: "live" | "draft"
-) {
+async function publishFrame(context: Awaited<ReturnType<typeof setup>>) {
   const response = await requestFramePublish(
     context.workspace.sId,
     context.token,
-    context.manifestPath,
-    mode
+    context.manifestPath
   );
   expect(response.status).toBe(200);
   return FramePublishResponseSchema.parse(await response.json());
 }
 
-// Publishes the Frame live, then a changed draft, and returns both publication ids.
+// Publishes the Frame live, turns draft mode on, publishes a changed draft, and returns both
+// publication ids.
 async function publishLiveThenDraft(
   context: Awaited<ReturnType<typeof setup>>
 ) {
-  const live = await publishFrame(context, "live");
+  const live = await publishFrame(context);
+  const draftMode = await enterFrameDraftMode(context.auth, {
+    frame: context.frame,
+  });
+  assert(draftMode.isOk(), "draft mode is on");
   mockFrameSource(
     context.mountDirectoryPath,
     uiSource.replace("Ready", "Almost ready")
   );
-  const draft = await publishFrame(context, "draft");
+  const draft = await publishFrame(context);
   expect(draft.status).toBe("draft");
 
   return {
@@ -204,7 +204,7 @@ beforeEach(() => {
 });
 
 describe("POST /api/v1/w/[wId]/sandbox/frames/[frameId]/make-live", () => {
-  it("makes the pending draft live and attaches the Frame to the parent action", async () => {
+  it("makes the pending draft live, ends draft mode and attaches the Frame to the parent action", async () => {
     const context = await setup();
     const { draftPublicationId } = await publishLiveThenDraft(context);
     // Each publish attaches the Frame to the parent action; make-live must attach it once more.
@@ -230,6 +230,7 @@ describe("POST /api/v1/w/[wId]/sandbox/frames/[frameId]/make-live", () => {
     expect(frame?.useCaseMetadata?.latestPublicationId).toBe(
       draftPublicationId
     );
+    expect(frame?.isInFrameDraftMode).toBe(false);
 
     const generatedFilesAfter = await listGeneratedFiles(context);
     expect(generatedFilesAfter).toHaveLength(generatedFilesBefore.length + 1);
@@ -247,10 +248,7 @@ describe("POST /api/v1/w/[wId]/sandbox/frames/[frameId]/make-live", () => {
       context.mountDirectoryPath,
       uiSource.replace("Ready", "Newer")
     );
-    const { publicationId: newerDraftId } = await publishFrame(
-      context,
-      "draft"
-    );
+    const { publicationId: newerDraftId } = await publishFrame(context);
     expect(newerDraftId).not.toBe(draftPublicationId);
 
     const response = await requestMakeLive(
@@ -271,10 +269,7 @@ describe("POST /api/v1/w/[wId]/sandbox/frames/[frameId]/make-live", () => {
 
   it("returns 409 when the Frame has no pending draft", async () => {
     const context = await setup();
-    const { publicationId: livePublicationId } = await publishFrame(
-      context,
-      "live"
-    );
+    const { publicationId: livePublicationId } = await publishFrame(context);
 
     const response = await requestMakeLive(
       context.workspace.sId,

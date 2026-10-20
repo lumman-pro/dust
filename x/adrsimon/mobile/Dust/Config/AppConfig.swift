@@ -18,6 +18,10 @@ enum AppConfig {
     static let callbackURLScheme = "dust"
     static let callbackURL = "\(callbackURLScheme)://auth"
 
+    static func messageURL(workspaceId: String, conversationId: String, messageId: String) -> URL? {
+        URL(string: "\(appURL)/w/\(workspaceId)/conversation/\(conversationId)#\(messageId)")
+    }
+
     enum Endpoints {
         static let login = "/api/workos/login"
         static let authenticate = "/api/workos/authenticate"
@@ -38,6 +42,10 @@ enum AppConfig {
 
         static func conversationMessage(workspaceId: String, conversationId: String, messageId: String) -> String {
             "/api/w/\(workspaceId)/assistant/conversations/\(conversationId)/messages/\(messageId)"
+        }
+
+        static func conversationForks(workspaceId: String, conversationId: String) -> String {
+            "/api/w/\(workspaceId)/assistant/conversations/\(conversationId)/forks"
         }
 
         static func conversationEvents(workspaceId: String, conversationId: String) -> String {

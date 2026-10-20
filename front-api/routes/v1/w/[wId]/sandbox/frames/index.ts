@@ -26,8 +26,9 @@ import share from "./share";
 const FramePublishRequestSchema = z.object({
   manifestPath: z.string().min(1),
   replacesPath: z.string().min(1).optional(),
-  // Older dsbx binaries send no mode: they keep publishing live.
-  mode: FramePublishModeSchema.default("live"),
+  // A draft request turns the Frame's draft mode on before publishing. Older dsbx binaries send no
+  // mode; outside draft mode they publish live.
+  mode: FramePublishModeSchema.optional(),
 });
 
 type FramePublishResponse = {
@@ -110,7 +111,7 @@ app.post(
       publishedByAgentConfigurationId: claims.aId,
       sourcePath: manifestPath,
       replacesPath,
-      mode,
+      draftRequested: mode === "draft",
     });
     if (publication.isErr()) {
       const status = frameSourceErrorStatus(publication.error);

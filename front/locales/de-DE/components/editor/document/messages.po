@@ -42,7 +42,6 @@ msgid "Insert"
 msgstr "Einfügen"
 
 #: front/components/editor/document/DocumentBlockMenu.tsx
-#: front/components/editor/document/DocumentCommentThread.tsx
 msgid "Close"
 msgstr "Schließen"
 
@@ -123,8 +122,12 @@ msgid "Resolve"
 msgstr "Erledigen"
 
 #: front/components/editor/document/DocumentCommentThread.tsx
-msgid "Delete comment"
-msgstr "Kommentar löschen"
+msgid "More actions"
+msgstr "Weitere Aktionen"
+
+#: front/components/editor/document/DocumentCommentThread.tsx
+msgid "Delete"
+msgstr "Löschen"
 
 #. placeholder {0}: replies.length
 #: front/components/editor/document/DocumentCommentThread.tsx
@@ -217,10 +220,6 @@ msgstr "Dieses Dokument kann hier nicht bearbeitet werden, da eine Tabellenzeile
 #: front/components/editor/document/DocumentMarkdownPreview.tsx
 msgid "This document can't be edited here yet because it has HTML."
 msgstr "Dieses Dokument kann hier noch nicht bearbeitet werden, da es HTML enthält."
-
-#: front/components/editor/document/DocumentMarkdownPreview.tsx
-msgid "This document can't be edited here yet because it has a task list."
-msgstr "Dieses Dokument kann hier noch nicht bearbeitet werden, da es eine Aufgabenliste enthält."
 
 #: front/components/editor/document/DocumentMarkdownPreview.tsx
 msgid "This document can't be edited here yet because it has a reference link definition."

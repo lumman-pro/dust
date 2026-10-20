@@ -1,6 +1,7 @@
 // Legacy Frame publishing runs esbuild, whose TextEncoder invariant requires Node rather than jsdom.
 // @vitest-environment node
 
+import { enterFrameDraftMode } from "@app/lib/api/frames/draft_mode";
 import { buildAgentMessageBillingPlan } from "@app/lib/credits/agent_message_billing";
 import { ConversationModel } from "@app/lib/models/agent/conversation";
 import { AgentMCPActionResource } from "@app/lib/resources/agent_mcp_action_resource";
@@ -244,10 +245,9 @@ describe("POST /api/v1/w/[wId]/sandbox/frames", () => {
     ]);
   });
 
-  it("publishes a draft when asked and the Frame is already live", async () => {
+  it("publishes a draft while the Frame is in draft mode", async () => {
     const context = await setup();
     assert(context.frame);
-    await FeatureFlagFactory.basic(context.auth, "frames_v2_drafts");
 
     const liveResponse = await requestFramePublish(
       context.workspace.sId,
@@ -256,6 +256,10 @@ describe("POST /api/v1/w/[wId]/sandbox/frames", () => {
     );
     expect(liveResponse.status).toBe(200);
     const live = await liveResponse.json();
+    const draftMode = await enterFrameDraftMode(context.auth, {
+      frame: context.frame,
+    });
+    assert(draftMode.isOk(), "draft mode is on");
 
     context.sourceByPath.set(
       `${context.mountDirectoryPath}/index.tsx`,
@@ -264,8 +268,7 @@ describe("POST /api/v1/w/[wId]/sandbox/frames", () => {
     const draftResponse = await requestFramePublish(
       context.workspace.sId,
       context.token,
-      context.manifestPath,
-      "draft"
+      context.manifestPath
     );
     expect(draftResponse.status).toBe(200);
     const draft = await draftResponse.json();
@@ -273,6 +276,41 @@ describe("POST /api/v1/w/[wId]/sandbox/frames", () => {
     expect(draft.publicationId).not.toBe(live.publicationId);
 
     const frame = await FileResource.fetchById(context.auth, context.frame.sId);
+    expect(frame?.useCaseMetadata?.activePublicationId).toBe(
+      live.publicationId
+    );
+    expect(frame?.useCaseMetadata?.latestPublicationId).toBe(
+      draft.publicationId
+    );
+  });
+
+  it("turns draft mode on and publishes a draft when the client asks for one", async () => {
+    const context = await setup();
+    assert(context.frame);
+    await FeatureFlagFactory.basic(context.auth, "frames_v2_drafts");
+    const liveResponse = await requestFramePublish(
+      context.workspace.sId,
+      context.token,
+      context.manifestPath
+    );
+    const live = await liveResponse.json();
+    context.sourceByPath.set(
+      `${context.mountDirectoryPath}/index.tsx`,
+      uiSource.replace("Ready", "Almost ready")
+    );
+
+    const response = await requestFramePublish(
+      context.workspace.sId,
+      context.token,
+      context.manifestPath,
+      "draft"
+    );
+
+    expect(response.status).toBe(200);
+    const draft = await response.json();
+    expect(draft.status).toBe("draft");
+    const frame = await FileResource.fetchById(context.auth, context.frame.sId);
+    expect(frame?.isInFrameDraftMode).toBe(true);
     expect(frame?.useCaseMetadata?.activePublicationId).toBe(
       live.publicationId
     );

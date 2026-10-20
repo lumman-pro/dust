@@ -200,7 +200,10 @@ struct MainContainerView: View {
                     tokenProvider: tokenProvider,
                     user: user,
                     currentUserEmail: user.email,
-                    currentUserSId: viewModel.currentUserSId
+                    currentUserSId: viewModel.currentUserSId,
+                    onConversationBranched: { branched in
+                        navigationPath.append(ConversationDestination.conversation(branched))
+                    }
                 )
             }
 

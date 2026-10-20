@@ -1,3 +1,4 @@
+import { emitFrameDraftModeAuditLog } from "@app/lib/api/frames/draft_mode";
 import {
   withFramePublishLock,
   withFrameSourceLock,
@@ -44,9 +45,15 @@ type MakeLiveResult = Result<
  * Frame's source and publish locks, and MUST fail, leaving both pointers unchanged, on the checks
  * whose inputs can change after the draft was published: the function sharing conflict (share
  * scope) and the share allowlist (file access). Development feature flags are not re-checked.
- * When the named publication is already the live one, it MUST succeed without re-activating it;
- * when it is neither live nor the pending draft (including when there is no pending draft), it
- * MUST fail with `draft_conflict`.
+ * When the named publication is already the live one and no draft is pending, it MUST succeed
+ * without re-activating it; when it is live but a newer draft is pending, or when it is neither live
+ * nor the pending draft, it MUST fail with `draft_conflict`.
+ */
+/**
+ * @cc [owner:davidebbo,label:product] make-live-ends-draft-mode
+ * Every successful make-live MUST leave the Frame out of draft mode, including when the named
+ * publication was already live (nothing changed in draft mode): it is how editors leave draft
+ * mode.
  */
 export async function makeFrameDraftLive(
   auth: Authenticator,
@@ -77,8 +84,16 @@ export async function makeFrameDraftLive(
           new FrameMakeLiveError("unauthorized", "You cannot edit this Frame.")
         );
       }
-      // The same request sent twice: the first one already made this draft live.
-      if (fresh.useCaseMetadata?.activePublicationId === draftPublicationId) {
+      // Nothing changed in draft mode, or the same request sent twice: the first one already made
+      // this draft live. A newer draft pending since means the caller has not seen it.
+      if (
+        fresh.useCaseMetadata?.activePublicationId === draftPublicationId &&
+        fresh.pendingDraftPublicationId === undefined
+      ) {
+        if (fresh.isInFrameDraftMode) {
+          await fresh.exitFrameDraftMode();
+          emitFrameDraftModeAuditLog(auth, fresh, "off");
+        }
         return new Ok({ publicationId: draftPublicationId });
       }
       if (fresh.pendingDraftPublicationId !== draftPublicationId) {
@@ -113,6 +128,7 @@ export async function makeFrameDraftLive(
         return publicSharing;
       }
 
+      const wasInDraftMode = fresh.isInFrameDraftMode;
       const activation = await activateFramePublication(auth, {
         frame: fresh,
         publicationId: draftPublicationId,
@@ -121,6 +137,9 @@ export async function makeFrameDraftLive(
       });
       if (activation.isErr()) {
         return activation;
+      }
+      if (wasInDraftMode) {
+        emitFrameDraftModeAuditLog(auth, fresh, "off");
       }
       return new Ok({ publicationId: draftPublicationId });
     })

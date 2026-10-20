@@ -1122,6 +1122,10 @@ msgid "This Frame changed or is being updated. Refresh it and try again."
 msgstr "Dieses Frame wurde geändert oder wird gerade aktualisiert. Laden Sie es neu und versuchen Sie es erneut."
 
 #: front/lib/api_error_messages.ts
+msgid "This Frame has no live version yet."
+msgstr "Dieses Frame hat noch keine Live-Version."
+
+#: front/lib/api_error_messages.ts
 msgid "These changes couldn't be made live."
 msgstr "Diese Änderungen konnten nicht live geschaltet werden."
 

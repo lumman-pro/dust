@@ -932,7 +932,6 @@ const WhitelistableFeaturesSchema = FlexibleEnumSchema<
   | "pricing_groups"
   | "workspace_analytics"
   | "conversations_slack_notifications"
-  | "collapsible_messages"
   | "conversation_consumption_details"
   | "sensitivity_labels"
   | "use_vertex_for_supported_models"
@@ -1287,6 +1286,7 @@ const UserMessageContextSchema = z.object({
   clientSideMCPServerIds: z.array(z.string()).optional().nullable(),
   selectedMCPServerViewIds: z.array(z.string()).optional().nullable(),
   lastTriggerRunAt: z.number().optional().nullable(),
+  excludedRetrievalTags: z.array(z.string()).optional().nullable(),
 });
 
 const AgenticMessageDataSchema = z.object({

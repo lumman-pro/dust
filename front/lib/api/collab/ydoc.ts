@@ -1,8 +1,10 @@
 import { documentSchema } from "@app/components/editor/document/content";
 import type { DfmEnvelope } from "@app/components/editor/document/dfm_persistence";
 import {
+  getUnsavableBodyReason,
   loadDfm,
   saveDfm,
+  UNSAVABLE_BODY_MESSAGE,
 } from "@app/components/editor/document/dfm_persistence";
 import {
   getCommentedTexts,
@@ -114,10 +116,35 @@ export function replaceYDocContent(
  * `yDocToDfm` MUST write without the comment marks whose id has no thread in `comments`, so a
  * mark left without its thread, by an undo or a failed comment command, never blocks a save.
  */
-export function yDocToDfm({
+export function yDocToDfm(session: SessionContent): Result<string, string> {
+  const live = readLiveDocument(session);
+  return live.isOk() ? saveDfm(live.value.envelope, live.value.content) : live;
+}
+
+/**
+ * Why `yDocToDfm` refused the session's body with `failure`, without its text. Null when
+ * `failure` is not about the body or the body writes.
+ */
+export function getYDocUnsavableBodyReason(
+  session: SessionContent,
+  failure: string
+): string | null {
+  if (failure !== UNSAVABLE_BODY_MESSAGE) {
+    return null;
+  }
+  const live = readLiveDocument(session);
+  return live.isOk()
+    ? getUnsavableBodyReason(live.value.envelope, live.value.content)
+    : null;
+}
+
+const readLiveDocument = ({
   doc,
   comments,
-}: SessionContent): Result<string, string> {
+}: SessionContent): Result<
+  { envelope: DfmEnvelope; content: JSONContent },
+  string
+> => {
   const envelope = envelopeSchema.safeParse(
     doc.getMap(ENVELOPE_MAP_NAME).toJSON()
   );
@@ -135,14 +162,14 @@ export function yDocToDfm({
     return new Err("The live document has an unreadable body.");
   }
   const threadIds = new Set(comments.map(({ id }) => id));
-  return saveDfm(
-    envelope.data,
-    withDocumentJSONComments(
+  return new Ok({
+    envelope: envelope.data,
+    content: withDocumentJSONComments(
       withoutOrphanCommentMarks(content, threadIds),
       comments
-    )
-  );
-}
+    ),
+  });
+};
 
 /**
  * @cc [owner:tdraier,label:product] co-edition-commented-texts

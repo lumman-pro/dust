@@ -26,8 +26,9 @@ function getEffectiveHttpStatus(error: APIError): number | undefined {
     case "flex_unavailable":
       return 429;
     // OpenAI reports overload as an in-band SSE `error` event on a 200 stream, so the SDK
-    // throws a statusless `APIError` carrying this code instead of an HTTP 503.
+    // throws a statusless `APIError` carrying one of these codes instead of an HTTP 503.
     case "server_is_overloaded":
+    case "service_unavailable":
       return 503;
     default:
       return error.status;
@@ -45,8 +46,8 @@ function getEffectiveHttpStatus(error: APIError): number | undefined {
  */
 /**
  * @cc [owner:aubin,label:error-handling] server-overloaded-is-provider-overload
- * `server_is_overloaded` API errors MUST map to a provider-attributed, retryable
- * `overloaded_error`, including statusless SSE errors, so the UI blames the provider.
+ * `server_is_overloaded` and `service_unavailable` API errors MUST map to a provider-attributed,
+ * retryable `overloaded_error`, including statusless SSE errors, so the UI blames the provider.
  */
 export function openaiStreamErrorToErrorEvent(
   metadata: EndpointMetadata,

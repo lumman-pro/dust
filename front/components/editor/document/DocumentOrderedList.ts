@@ -24,6 +24,11 @@ const isOrderedListMarkdown = (tokens: { type: string; ordered?: boolean }[]) =>
  * numbered with decimals. A numbered list pasted as text MUST be read by `parsePastedMarkdown`,
  * and pasted as plain text when it refuses it or is not given.
  */
+/**
+ * @cc [owner:rfrenoy,label:product] document-ordered-list-after-empty-paragraph
+ * A numbered list not starting at 1 that directly follows an empty paragraph in a list item MUST
+ * be written after a blank line, so it reads back as a list instead of that paragraph's text.
+ */
 export const DocumentOrderedList =
   OrderedList.extend<DocumentOrderedListOptions>({
     addOptions() {
@@ -51,6 +56,19 @@ export const DocumentOrderedList =
         ...(start !== 1 ? { attrs: { start } } : {}),
         content: token.items ? helpers.parseChildren(token.items) : [],
       };
+    },
+
+    renderMarkdown(node, h, context) {
+      const markdown = this.parent?.(node, h, context) ?? "";
+      const previous = context.previousNode;
+      const start = node.attrs?.start;
+      return context.parentType === "listItem" &&
+        previous?.type === "paragraph" &&
+        !previous.content?.length &&
+        isNumber(start) &&
+        start !== 1
+        ? `\n${markdown}`
+        : markdown;
     },
 
     addAttributes() {

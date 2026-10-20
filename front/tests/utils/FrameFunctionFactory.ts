@@ -94,6 +94,31 @@ export async function createTestConversationFrameFile(
 }
 
 /**
+ * A conversation `auth` authored, holding a Frames v2 file with a live publication
+ * (`activePublicationId`) but no stored bundle: enough for code that reads only the publication
+ * pointers.
+ */
+export async function createTestLiveConversationFrame(
+  auth: Authenticator,
+  {
+    activePublicationId = "publication-live",
+  }: { activePublicationId?: string } = {}
+) {
+  const conversation = await ConversationFactory.create(auth, {
+    agentConfigurationId: GLOBAL_AGENTS_SID.DUST,
+    messagesCreatedAt: [new Date()],
+  });
+  const frame = await createTestConversationFrameFile(auth, {
+    conversationId: conversation.sId,
+  });
+  await frame.setActiveFramePublication({
+    publicationId: activePublicationId,
+    description: "Track tasks.",
+  });
+  return { conversation, frame };
+}
+
+/**
  * Stores the single function definition `createTestFrameFunction` publishes, for one publication
  * of an existing Frame. Does not touch the Frame's publication pointers.
  */

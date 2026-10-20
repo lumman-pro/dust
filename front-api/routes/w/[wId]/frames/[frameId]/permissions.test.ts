@@ -51,6 +51,7 @@ describe("GET /api/w/:wId/frames/:frameId/permissions", () => {
       livePublicationId: null,
       livePublishedAt: null,
       draftPublicationId: null,
+      draftMode: false,
       requiredTools: [],
       authorizedTools: [],
       isLastPublisher: false,
@@ -59,7 +60,7 @@ describe("GET /api/w/:wId/frames/:frameId/permissions", () => {
     });
   });
 
-  it("reports the live and draft publications to an author", async () => {
+  it("reports the live and draft publications, and draft mode, to an author", async () => {
     const { auth, workspace } = await createPrivateApiMockRequest({
       role: "admin",
     });
@@ -86,6 +87,7 @@ describe("GET /api/w/:wId/frames/:frameId/permissions", () => {
     await frame.setLatestFramePublication({
       publicationId: "publication-draft",
     });
+    await frame.enterFrameDraftMode({ userSId: auth.getNonNullableUser().sId });
 
     const response = await honoApp.request(
       `/api/w/${workspace.sId}/frames/${frame.sId}/permissions`
@@ -98,6 +100,7 @@ describe("GET /api/w/:wId/frames/:frameId/permissions", () => {
         livePublicationId: "publication-live",
         livePublishedAt: null,
         draftPublicationId: "publication-draft",
+        draftMode: true,
       })
     );
   });
@@ -208,7 +211,7 @@ describe("GET /api/w/:wId/frames/:frameId/permissions", () => {
     );
   });
 
-  it("does not report the draft to a caller who cannot edit the Frame, even when asked for latest", async () => {
+  it("does not report the draft or draft mode to a caller who cannot edit the Frame, even when asked for latest", async () => {
     const { auth, workspace } = await createPrivateApiMockRequest({
       role: "admin",
     });
@@ -227,6 +230,7 @@ describe("GET /api/w/:wId/frames/:frameId/permissions", () => {
     await expect(response.json()).resolves.toEqual(
       expect.objectContaining({
         draftPublicationId: null,
+        draftMode: false,
         // The draft declares no function: a non-writer asking for latest is answered for live.
         hasFunctions: true,
         livePublicationId: "publication-1",
@@ -261,6 +265,7 @@ describe("GET /api/w/:wId/frames/:frameId/permissions", () => {
       livePublicationId: null,
       livePublishedAt: null,
       draftPublicationId: null,
+      draftMode: false,
       requiredTools: [],
       authorizedTools: [],
       isLastPublisher: false,

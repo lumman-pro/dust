@@ -885,7 +885,6 @@ function getGlobalAgent({
         settings,
         preFetchedDataSources,
         mcpServerViews,
-        featureFlags,
       });
       break;
     case GLOBAL_AGENTS_SID.DUST_TASK:

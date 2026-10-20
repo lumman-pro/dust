@@ -147,6 +147,10 @@ export type AgentLoopArgs = {
   // args from old workflow histories must still tolerate a missing value at runtime.
   userMessageOrigin: UserMessageOrigin;
 
+  // Data source tags this run keeps out of retrieval, carried as a run-scoped value rather than
+  // persisted on the message (see the excluded-retrieval-tags-honored contract on searchFunction).
+  excludedRetrievalTags?: string[] | null;
+
   caching?: ConversationCaching;
 
   // RunIds from the specific agent loop execution. Used by tracking workflows
@@ -544,6 +548,12 @@ async function buildAgentLoopRuntimeData(
     agentMessage,
     auth,
     conversation,
-    userMessage,
+    userMessage: {
+      ...userMessage,
+      context: {
+        ...userMessage.context,
+        excludedRetrievalTags: agentLoopArgs.excludedRetrievalTags ?? null,
+      },
+    },
   });
 }

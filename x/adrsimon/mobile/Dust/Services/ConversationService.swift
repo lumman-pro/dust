@@ -113,6 +113,22 @@ enum ConversationService {
         return response.conversation
     }
 
+    static func branchConversation(
+        workspaceId: String,
+        conversationId: String,
+        sourceMessageId: String,
+        tokenProvider: TokenProvider
+    ) async throws -> String {
+        let endpoint = AppConfig.Endpoints.conversationForks(workspaceId: workspaceId, conversationId: conversationId)
+        let response: BranchConversationResponse = try await APIClient.authenticatedPost(
+            endpoint,
+            body: BranchConversationRequest(sourceMessageId: sourceMessageId),
+            tokenProvider: tokenProvider,
+            snakeCase: false
+        )
+        return response.conversationId
+    }
+
     static func createConversation(
         workspaceId: String,
         request: CreateConversationRequest,
@@ -303,6 +319,14 @@ enum ConversationService {
     }
 
     private struct RetryMessageRequest: Encodable {}
+
+    private struct BranchConversationRequest: Encodable {
+        let sourceMessageId: String
+    }
+
+    private struct BranchConversationResponse: Decodable {
+        let conversationId: String
+    }
 
     private struct MarkAsReadRequest: Encodable {
         let read: Bool

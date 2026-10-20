@@ -1,11 +1,14 @@
 // @vitest-environment node
+import { documentSchema } from "@app/components/editor/document/content";
 import {
   loadDfm,
   saveDfm,
+  UNSAVABLE_BODY_MESSAGE,
 } from "@app/components/editor/document/dfm_persistence";
 import {
   dfmToYDoc,
   ENVELOPE_MAP_NAME,
+  getYDocUnsavableBodyReason,
   replaceYDocContent,
   yDocCommentedTexts,
   yDocToDfm,
@@ -13,7 +16,10 @@ import {
 import { serializeDfm } from "@app/lib/markdown/dfm";
 import { FIXTURE, FIXTURES } from "@app/lib/markdown/dfm/tests/dfm.test_utils";
 import { BODY_FRAGMENT_NAME } from "@app/types/collab";
+import { Ok } from "@app/types/shared/result";
 import type { LocalTransactionOrigin } from "@hocuspocus/server";
+import type { JSONContent } from "@tiptap/core";
+import { prosemirrorJSONToYXmlFragment } from "@tiptap/y-tiptap";
 import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
 
@@ -73,6 +79,21 @@ describe("dfmToYDoc and yDocToDfm", () => {
     expect(yDocToDfm({ doc: copy, comments: live.value.comments })).toEqual(
       savedByEditor(FIXTURE)
     );
+  });
+
+  it("keep the tasks of a mixed list through a Yjs update", () => {
+    const source =
+      "- Groceries\n- [ ] Milk\n- [x] Eggs\n\n1. [x] Write\n2. Send\n";
+    const live = dfmToYDoc(source);
+    expect(live.isOk()).toBe(true);
+    if (!live.isOk()) {
+      return;
+    }
+
+    const copy = new Y.Doc();
+    Y.applyUpdate(copy, Y.encodeStateAsUpdate(live.value.doc));
+
+    expect(yDocToDfm({ doc: copy, comments: [] })).toEqual(new Ok(source));
   });
 
   it("write the edits and threads the session holds, never threads from the shared document", () => {
@@ -156,9 +177,9 @@ describe("dfmToYDoc and yDocToDfm", () => {
   });
 
   it("refuse a file the editor refuses, with the same reason", () => {
-    const taskList = "Intro.\n\n- [ ] todo\n";
-    const editor = loadDfm(taskList);
-    const live = dfmToYDoc(taskList);
+    const html = "Intro.\n\n<div>x</div>\n";
+    const editor = loadDfm(html);
+    const live = dfmToYDoc(html);
 
     expect(editor.isErr()).toBe(true);
     expect(live.isErr()).toBe(true);
@@ -241,11 +262,11 @@ describe("replaceYDocContent", () => {
   });
 
   it("refuse a file the editor refuses, with the same reason, changing nothing", () => {
-    const taskList = "Intro.\n\n- [ ] todo\n";
-    const editor = loadDfm(taskList);
+    const html = "Intro.\n\n<div>x</div>\n";
+    const editor = loadDfm(html);
     const { doc, comments } = loadLive(BEFORE);
 
-    const replaced = replaceYDocContent(doc, taskList, ORIGIN);
+    const replaced = replaceYDocContent(doc, html, ORIGIN);
 
     expect(editor.isErr() && replaced.isErr()).toBe(true);
     if (editor.isErr() && replaced.isErr()) {
@@ -293,5 +314,65 @@ describe("yDocCommentedTexts", () => {
     doc.getXmlFragment(BODY_FRAGMENT_NAME).insert(0, [new Y.Map()] as never);
 
     expect(yDocCommentedTexts(doc)).toEqual(new Map());
+  });
+});
+
+describe("getYDocUnsavableBodyReason", () => {
+  const bullets = (text: string): JSONContent => ({
+    type: "bulletList",
+    content: [
+      {
+        type: "listItem",
+        content: [{ type: "paragraph", content: [{ type: "text", text }] }],
+      },
+    ],
+  });
+
+  const indented: JSONContent = {
+    type: "paragraph",
+    content: [{ type: "text", text: "    secret plan" }],
+  };
+
+  const liveDocument = (content: JSONContent[]) => {
+    const live = dfmToYDoc("Intro.\n");
+    if (live.isErr()) {
+      throw new Error(live.error);
+    }
+    const body = live.value.doc.getXmlFragment(BODY_FRAGMENT_NAME);
+    live.value.doc.transact(() => body.delete(0, body.length));
+    prosemirrorJSONToYXmlFragment(
+      documentSchema,
+      { type: "doc", content },
+      body
+    );
+    return live.value;
+  };
+
+  it("names what a live body cannot write, without its text", () => {
+    const live = liveDocument([indented]);
+    const saved = yDocToDfm(live);
+    if (saved.isOk()) {
+      throw new Error("The body saved.");
+    }
+
+    expect(saved.error).toBe(UNSAVABLE_BODY_MESSAGE);
+    const reason = getYDocUnsavableBodyReason(live, saved.error);
+    expect(reason).toBe(
+      "The document would not read back the same as Markdown, from paragraph, which reads back as codeBlock."
+    );
+    expect(reason).not.toContain("secret");
+  });
+
+  it("is null for a live body that saves", () => {
+    const live = liveDocument([bullets("milk")]);
+
+    expect(yDocToDfm(live).isOk()).toBe(true);
+    expect(getYDocUnsavableBodyReason(live, UNSAVABLE_BODY_MESSAGE)).toBeNull();
+  });
+
+  it("is null for a failure that is not about the body", () => {
+    const live = liveDocument([indented]);
+
+    expect(getYDocUnsavableBodyReason(live, "The storage is down.")).toBeNull();
   });
 });

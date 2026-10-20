@@ -1122,6 +1122,10 @@ msgid "This Frame changed or is being updated. Refresh it and try again."
 msgstr ""
 
 #: front/lib/api_error_messages.ts
+msgid "This Frame has no live version yet."
+msgstr ""
+
+#: front/lib/api_error_messages.ts
 msgid "These changes couldn't be made live."
 msgstr ""
 

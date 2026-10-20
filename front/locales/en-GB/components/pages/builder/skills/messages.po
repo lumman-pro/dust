@@ -38,10 +38,6 @@ msgid "No skills to show."
 msgstr ""
 
 #: front/components/pages/builder/skills/ManageSkillsPage.tsx
-msgid "Dust - Manage skills"
-msgstr ""
-
-#: front/components/pages/builder/skills/ManageSkillsPage.tsx
 msgid "Search skills"
 msgstr ""
 
@@ -59,4 +55,8 @@ msgstr ""
 
 #: front/components/pages/builder/skills/ManageSkillsPage.tsx
 msgid "Hidden skills"
+msgstr ""
+
+#: front/components/pages/builder/skills/ManageSkillsPage.tsx
+msgid "Dust - Manage skills"
 msgstr ""

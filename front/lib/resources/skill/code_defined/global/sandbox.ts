@@ -31,10 +31,10 @@ function buildSandboxInstructionProse({
     "Use `bash` to run commands and scripts.",
     "The sandbox persists for the conversation duration.",
     "You can use the `dsbx` command line tool to list and run tools programmatically in the sandbox.",
-    "Use it with `dsbx tools [SERVER_NAME] [TOOL_NAME] [ARGS]...`. Run `dsbx tools --help` for more information.",
+    "List servers with `dsbx tools`, then inspect a server's tools and each tool's JSON Schema (`input_schema`) with `dsbx tools [SERVER_NAME]`.",
+    'Invoke a tool by passing arguments as one JSON object with `--args-json` before the server and tool names, matching that `input_schema` — e.g. `dsbx tools --args-json \'{"query":"hello"}\' [SERVER_NAME] [TOOL_NAME]`. Use `--args-json -` to read the JSON object from stdin (preferred for large or nested payloads: `dsbx tools --args-json - [SERVER_NAME] [TOOL_NAME] < /tmp/args.json`). Run `dsbx tools --help` for more information.',
     "`dsbx` tool calls only work while the `bash` command that started them is running: once it returns or hits its timeout, its credentials are revoked and any leftover call fails. Do not background them, and do not start more calls than fit in the timeout — split large batches across several `bash` calls, or raise `timeoutMs`.",
-    "For very large argument values, write the value to a file in the sandbox and pass the path with a `__file__:` prefix (e.g. `--query __file__:/tmp/q.txt`) instead of inlining the value on the command line. Any value starting with `__file__:` is read from the file (UTF-8, max 100 MB) and used as the value for that key. File contents that are a JSON object or array are parsed into structured data (e.g. `--files __file__:/tmp/files.json` for a tool expecting an array), exactly as if the same JSON had been passed inline; any other content is used as a string. The file must already exist in the sandbox filesystem.",
-    "Pass `--json` (before the server and tool names, e.g. `dsbx tools --json [SERVER_NAME] [TOOL_NAME] [ARGS]...`) to get the tool result as structured JSON (`{ content, isError }`) instead of plain text, which is easier to parse programmatically. Placed after the positional arguments it is treated as a tool argument instead.",
+    'Pass `--json` together with `--args-json` (both before the server and tool names, e.g. `dsbx tools --json --args-json \'{"query":"hello"}\' [SERVER_NAME] [TOOL_NAME]`) to get the tool result as structured JSON (`{ content, isError }`) instead of plain text, which is easier to parse programmatically. Placed after the positional arguments, `--json` is not a CLI flag.',
   ];
 
   if (hasFramesV2Functions) {
@@ -431,7 +431,7 @@ export const sandboxSkill = {
   },
   mcpServers: [{ name: "sandbox" }],
   warmsConversationSandbox: async () => true,
-  version: 2,
+  version: 3,
   icon: "TerminalSquareIcon",
   // Auto-enabled for dust-like agents, which are heavy users of it.
   // This allows adding the bash tool eagerly, as it's used for a wide variety of use cases and deferring it would

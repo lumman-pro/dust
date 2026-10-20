@@ -157,7 +157,6 @@ const FloatingThread = ({
         })
       }
       onDelete={() => void run(() => remove(thread.id, null))}
-      onClose={closeThread}
       onElement={onElement}
       renderAuthorAvatar={renderAuthorAvatar}
       renderBody={renderCommentBody}
@@ -200,8 +199,8 @@ interface DocumentCommentCardProps {
  * card under its highlighted text, with every message, and nothing MUST float for a thread
  * without highlighted text, unless an action on it is pending or its refusal shows: the card MUST
  * then stay where it last floated. Reply and moderation controls MUST render only when canWrite.
- * Close, or Escape outside a field, MUST clear the active thread and return focus to the editor;
- * so MUST resolving or deleting it from the card. Escape inside a reply field MUST NOT close the
+ * Escape outside a field MUST clear the active thread and return focus to the editor, unless it
+ * closes a message's actions menu; so MUST resolving or deleting it from the card. Escape inside a reply field MUST NOT close the
  * card; when the field hands it to its onCancel, the field MUST be cleared and focus MUST return
  * to the thread. A refused action MUST show the reason on the thread until it changes.
  */

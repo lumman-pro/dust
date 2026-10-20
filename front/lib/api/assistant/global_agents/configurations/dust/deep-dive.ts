@@ -5,7 +5,6 @@ import {
   DEEP_DIVE_DESC,
   DEEP_DIVE_NAME,
 } from "@app/lib/api/assistant/global_agents/configurations/dust/consts";
-import { shouldUseOpus } from "@app/lib/api/assistant/global_agents/configurations/dust/dust";
 import {
   getCompanyDataAction,
   getCompanyDataWarehousesAction,
@@ -36,6 +35,7 @@ import {
   CLAUDE_OPUS_5_DEFAULT_MODEL_CONFIG,
   CLAUDE_SONNET_5_DEFAULT_MODEL_CONFIG,
 } from "@app/types/assistant/models/anthropic";
+import { AUTO_COMPLEX_MODEL_CONFIG } from "@app/types/assistant/models/auto";
 import {
   GPT_5_6_LUNA_MODEL_CONFIG,
   GPT_5_6_SOL_MODEL_CONFIG,
@@ -373,32 +373,6 @@ function getLargeModelFallback(
   };
 }
 
-function getDeepDiveModelConfig(
-  auth: Authenticator,
-  featureFlags: WhitelistableFeature[]
-): ModelConfigWithReasoning | null {
-  const primaryModelConfig = getEnabledModelConfig(
-    auth,
-    GPT_5_6_SOL_MODEL_CONFIG,
-    "medium",
-    featureFlags
-  );
-  if (primaryModelConfig) {
-    return primaryModelConfig;
-  }
-
-  const fallbackModelConfig = getEnabledModelConfig(
-    auth,
-    shouldUseOpus(auth)
-      ? CLAUDE_OPUS_5_DEFAULT_MODEL_CONFIG
-      : CLAUDE_SONNET_5_DEFAULT_MODEL_CONFIG,
-    "low",
-    featureFlags
-  );
-
-  return fallbackModelConfig ?? getLargeModelFallback(auth, featureFlags);
-}
-
 function getDustTaskModelConfig(
   auth: Authenticator,
   featureFlags: WhitelistableFeature[]
@@ -447,17 +421,14 @@ export function _getDeepDiveGlobalAgent(
     settings,
     preFetchedDataSources,
     mcpServerViews,
-    featureFlags,
   }: {
     settings: GlobalAgentSettingsModel | null;
     preFetchedDataSources: PrefetchedDataSourcesType | null;
     mcpServerViews: MCPServerViewsForGlobalAgentsMap;
-    featureFlags: WhitelistableFeature[];
   }
 ): AgentConfigurationType | null {
   const { run_agent: runAgentMCPServerView } = mcpServerViews;
   const pictureUrl = DUST_AVATAR_URL;
-  const modelConfig = getDeepDiveModelConfig(auth, featureFlags);
 
   const deepAgent: Omit<
     AgentConfigurationType,
@@ -487,7 +458,7 @@ export function _getDeepDiveGlobalAgent(
     canEdit: false,
   };
 
-  if (settings?.status === "disabled_by_admin" || !modelConfig) {
+  if (settings?.status === "disabled_by_admin") {
     return {
       ...deepAgent,
       status: "disabled_by_admin",
@@ -496,11 +467,12 @@ export function _getDeepDiveGlobalAgent(
     };
   }
 
+  // The Premium stream is resolved to a concrete model and effort at message-send time.
   const model: AgentModelConfigurationType = {
-    providerId: modelConfig.modelConfiguration.providerId,
-    modelId: modelConfig.modelConfiguration.modelId,
+    providerId: AUTO_COMPLEX_MODEL_CONFIG.providerId,
+    modelId: AUTO_COMPLEX_MODEL_CONFIG.modelId,
     temperature: 1.0,
-    reasoningEffort: modelConfig.reasoningEffort,
+    reasoningEffort: AUTO_COMPLEX_MODEL_CONFIG.defaultReasoningEffort,
   };
 
   deepAgent.model = model;

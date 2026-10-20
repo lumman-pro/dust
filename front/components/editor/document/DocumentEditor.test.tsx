@@ -1162,13 +1162,13 @@ describe("Document for a file the editor cannot open", () => {
     );
 
   it("renders the body read-only, without anchors or threads, under the reason", async () => {
-    // A task list: valid DFM the editor cannot keep.
+    // HTML: valid DFM the editor cannot keep.
     const { container } = renderRefused(
-      `# Plan\n\nSee :comment-start{id=c1}this:comment-end{id=c1}.\n\n| Step | Owner |\n| --- | --- |\n| Ship | Daph |\n\n- [ ] Review\n\n:::annotations\n::comment{id=c1 status=open}\n\n::message{author=user:usr_daph name="Daph" at=${AT}}\n\nNote.\n:::\n`
+      `# Plan\n\nSee :comment-start{id=c1}this:comment-end{id=c1}.\n\n| Step | Owner |\n| --- | --- |\n| Ship | Daph |\n\n<div>Review</div>\n\n:::annotations\n::comment{id=c1 status=open}\n\n::message{author=user:usr_daph name="Daph" at=${AT}}\n\nNote.\n:::\n`
     );
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "This document can't be edited here yet because it has a task list."
+      "This document can't be edited here yet because it has HTML."
     );
     expect(screen.getByRole("heading", { name: "Plan" })).toBeInTheDocument();
     expect(screen.getByRole("cell", { name: "Ship" })).toBeInTheDocument();
@@ -1178,8 +1178,8 @@ describe("Document for a file the editor cannot open", () => {
   });
 
   it("keeps the general note when the refusal names no element", async () => {
-    // Mixed bullet markers: supported elements that would not read back the same.
-    renderRefused("A\n\n* a\n+ b\n");
+    // A link destination with a space: supported elements that would not read back the same.
+    renderRefused("See [docs](<https://example.com/a b>)\n");
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "This document uses formatting the editor doesn't support yet, so it can't be edited here."
@@ -1188,7 +1188,7 @@ describe("Document for a file the editor cannot open", () => {
 
   it("logs a refused document once, with its reason and without its content", async () => {
     const warn = vi.spyOn(datadogLogger, "warn");
-    const source = "Intro.\n\n- [ ] Ship to Secret\n";
+    const source = "Intro.\n\n<div>Ship to Secret</div>\n";
 
     // A live document mounts again for each connection.
     renderRefused(source).unmount();
@@ -1198,8 +1198,7 @@ describe("Document for a file the editor cannot open", () => {
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledWith(
       {
-        reason:
-          "The Markdown uses formatting the editor cannot keep: a task list.",
+        reason: "The Markdown uses formatting the editor cannot keep: HTML.",
       },
       "Document opened read-only"
     );

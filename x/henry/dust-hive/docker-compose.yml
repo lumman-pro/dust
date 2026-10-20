@@ -59,7 +59,7 @@ services:
       retries: 10
 
   fdb:
-    image: foundationdb/foundationdb:7.3.69
+    image: foundationdb/foundationdb:7.4.8
     environment:
       # Host mode: the cluster file advertises 127.0.0.1:$FDB_PORT. The per-env override sets
       # FDB_PORT and publishes the same port number on the host.
@@ -75,7 +75,7 @@ services:
   fdb_init:
     depends_on:
       - fdb
-    image: foundationdb/foundationdb:7.3.69
+    image: foundationdb/foundationdb:7.4.8
     network_mode: service:fdb
     restart: "no"
     environment:

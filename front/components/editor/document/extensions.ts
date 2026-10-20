@@ -27,13 +27,14 @@ import { Code } from "@tiptap/extension-code";
 import { CodeBlock } from "@tiptap/extension-code-block";
 import { Heading } from "@tiptap/extension-heading";
 import { Markdown } from "@tiptap/markdown";
+import { Plugin } from "@tiptap/pm/state";
 import type { StarterKitOptions } from "@tiptap/starter-kit";
 import { StarterKit } from "@tiptap/starter-kit";
 
 /**
  * @cc [owner:tdraier,label:product] document-link-click
- * In an editable document, clicking a link MUST NOT open it, so its text can be clicked and
- * selected like any other text.
+ * In an editable document, a plain click on a link MUST NOT open it, so its text can be clicked
+ * and selected like any other text. Cmd or Ctrl+click opens it (see `document-link-modified-click`).
  */
 const starterKitOptions: Partial<StarterKitOptions> = {
   heading: false,
@@ -91,6 +92,26 @@ const DocumentHeading = Heading.extend({
  * character in the code, so it reads back the same.
  */
 const DocumentCodeBlock = CodeBlock.extend({
+  addProseMirrorPlugins() {
+    return [
+      ...(this.parent?.() ?? []),
+      new Plugin({
+        props: {
+          // TODO(louisjc): drop once TipTap strips the newline ending HTML code blocks, such as
+          // Notion's: https://github.com/ueberdosis/tiptap/issues/8541
+          transformPastedHTML: (html) => {
+            // Copied from a ProseMirror editor, ours included, which holds the code as is.
+            if (html.includes("data-pm-slice")) {
+              return html;
+            }
+            return html
+              .replaceAll("\n</code></pre>", "</code></pre>")
+              .replaceAll("\n</pre>", "</pre>");
+          },
+        },
+      }),
+    ];
+  },
   parseMarkdown: (token, helpers) =>
     helpers.createNode(
       "codeBlock",

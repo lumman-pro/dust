@@ -1,108 +1,135 @@
-# Writing GCS-backed files to DFS
+# GCS replication into DFS
 
-Two write paths populate DFS. GCS events replicate every file under pod and conversation filesystem folders, including agent writes from the sandbox. Front writes content fragments and original file uploads directly to DFS, alongside the existing GCS write during the double-write phase. Processed versions are excluded from Front's direct DFS writes. These Front writes do not depend on Pub/Sub delivery.
+Replicate the live files in pod and conversation GCS folders into DFS. `FileResource` already copies attached uploads into these folders. The importer handles those copies and sandbox writes through the same Pub/Sub subscription; Front does not need a second content write to DFS.
 
-GCS custom metadata carries no DFS grants or replication instructions. Front owns permission resolution and updates DFS grants directly.
+GCS remains the source of truth until a file switches to DFS. Replication is asynchronous and can skip intermediate versions. Front resolves permissions and updates DFS grants directly. GCS custom metadata does not carry grants.
+
+## Scope
+
+| GCS source | DFS destination |
+| --- | --- |
+| `w/{workspaceId}/pods/{podId}/files/{path}` | `users/{userSId}/pods/{podName}/{path}` under the tenant root. |
+| `w/{workspaceId}/conversations/{conversationId}/files/{path}` | The conversation's DFS directory. |
+
+Import every file in these folders, including original uploads, processed copies and Frame files. Acknowledge events for other paths without importing them. Canonical uploads under `files/w/...` remain in GCS; their mount copies are imported.
+
+Sandbox function bundles use a separate `sandbox-functions/` prefix and are outside this rollout. See [`resolveProjectMountPath()`](../../front/lib/resources/file_resource.ts#L1874).
+
+## Existing copies in FileResource
+
+[`FileResource.copyMountFiles()`](../../front/lib/resources/file_resource.ts#L1984) copies the original into its GCS mount path:
+
+```ts
+const srcOriginalPath = this.getCloudStoragePath(auth, "original");
+await bucket.copyFile(srcOriginalPath, mountFilePath);
+```
+
+It also copies the processed version when `getProcessedMountFilePath()` returns a path. Each successful GCS copy emits a finalize event for the destination. [GCS event types](https://docs.cloud.google.com/storage/docs/pubsub-notifications#event_types).
+
+| Entry point | Behavior |
+| --- | --- |
+| [`markAsReady()`](../../front/lib/resources/file_resource.ts#L990) | Resolves and copies the mount file when processing marks an upload ready. |
+| [`setUseCaseMetadata()`](../../front/lib/resources/file_resource.ts#L1781) | Resolves and copies the mount file when the file is attached, including an upload that was already ready. |
+| [`resolveAndSetMountFilePath()`](../../front/lib/resources/file_resource.ts#L1811) | Selects the conversation or pod path, claims it, then calls `copyMountFiles()`. |
+
+[`maybeUpsertFileAttachment()`](../../front/lib/api/files/attachments.ts#L20) binds an unattached conversation upload through `setUseCaseMetadata()`. [`toFileContentFragment()`](../../front/lib/api/assistant/conversation/content_fragment.ts#L91) creates a conversation `FileResource` for inline content; processing then calls [`markAsReady()`](../../front/lib/api/files/processing/index.ts#L637). Content-node references without a file are outside this replication scope.
+
+[`uploadContent()`](../../front/lib/resources/file_resource.ts#L1727) writes edits to the existing GCS mount path. Its temporary dual-write comment refers to the canonical and mount objects within GCS. Frames created directly at a mount path are covered by the same events.
+
+`markAsReady()` sets the ready status before copying and returns early on an already-ready file. Retrying that method alone does not repair a failed copy. Mount-copy recovery must retry the copy itself; Pub/Sub cannot import an object that was never copied.
 
 ## Event flow
 
 ```mermaid
 flowchart LR
-  G[Private uploads buckets] --> N[Cell native-events topic]
-  N --> S[Relay pull subscription]
-  S --> R[Keying relay]
-  R -->|Pod and conversation paths only| K[Keyed topic]
-  K --> D[Ordered DFS pull subscription]
-  D --> W[gcs-pubsub-importer]
-  W -->|Read live object attributes and bytes| G
-  W -.->|Acquire and release exclusive DFS flock| DFS[DFS server]
-  Front -->|Existing uploads during double write| G
-  Front -->|Content fragments and original uploads| DFS
-  Front -.->|Create and update grants| DFS
-  W -->|Resolve conversation owner and destination context| Front
-  W -->|Session, grant and mutation RPCs| DFS
+  Front -->|FileResource mount copies| G[Private uploads buckets]
+  G --> N[Cell native-events topic]
+  N --> D[DFS pull subscription]
+  D --> I[Front Pub/Sub consumer]
+  I -->|signalWithStart| T[Temporal workflow per source object]
+  T --> W[Import activity]
+  W -->|Conditional reads| G
+  W -.->|Lock source during import| L[Source locks]
+  W -->|Resolve owner and destination| Front
+  W -->|Write files and initial grants| DFS[DFS server]
+  Front -.->|Update grants| DFS
   DFS --> FDB[FoundationDB]
-  S --> Q1[Relay dead-letter queue]
-  D --> Q2[DFS dead-letter queue]
+  D --> Q[DFS dead-letter queue]
 ```
 
-GCS publishes native events. The relay selects pod and conversation filesystem paths and republishes those events with an ordering key. `gcs-pubsub-importer` instances validate the same path scope before importing. Events for other paths are ignored and acknowledged. Agents writing files from the sandbox cannot attach custom metadata; their files qualify through the path alone.
+Use one native topic and one pull subscription. A Front consumer hands events to Temporal. One workflow per `(tenant, bucket, objectName)` schedules imports for that source. Independent objects can be imported concurrently. No keying relay or ordered topic is needed.
 
-The `gcs-pubsub-importer` reads GCS and writes DFS. For conversation files, it calls Front with the workspace and conversation IDs from the path to resolve the conversation owner. The grant subject is `u:<ownerUserSId>`; it must come from Front rather than being inferred from the object name or the agent that wrote it. The `gcs-pubsub-importer` authenticates filesystem writes with its tenant-scoped `superuser` session.
+### Front consumer
 
-The second topic lets the relay add ordering keys. With unary Pull, ordered delivery allows one outstanding batch per key. This distributes independent work across `gcs-pubsub-importer` instances while serializing each key. It does not restore GCS mutation order. [Pub/Sub ordering](https://docs.cloud.google.com/pubsub/docs/ordering#pull_subscriber_clients).
+Run the pull subscription consumer in a standalone Node process in `front`. Configure the full subscription name, expected bucket and notification configuration. Validate messages before handing them to Temporal.
 
-## Front writes and permission resolution
+The consumer checks the `dfs_gcs_replication` feature flag for the workspace in `w/{workspaceId}/...`. It acknowledges objects outside the supported prefixes and objects whose workspace has the flag disabled, without starting a workflow. Flag lookup failures are retried. The import activity checks the flag again on every attempt. Enabling the flag requires a backfill for objects whose events or activities were already skipped. Disabling it prevents new imports once the change is visible to the flag lookup. Imports already running may finish.
 
-Content fragments and original file uploads originating in the Front codebase must write to DFS from the Front write path. Front does not write processed versions to DFS. Objects outside pod and conversation filesystem folders will not be picked up by the `gcs-pubsub-importer`. Front resolves the destination and grants from the authenticated workspace and the resource's access rules, writes the bytes to DFS, and records the DFS reference alongside the GCS reference.
+For an enabled workspace, call `signalWithStart` with a stable workflow ID derived from the source key. Acknowledge the Pub/Sub message only after Temporal accepts the signal. A failed or ambiguous handoff is nacked. Redelivery may signal twice, which must be harmless. Invalid messages are nacked and eventually reach the Pub/Sub dead-letter queue. [Temporal message passing](https://docs.temporal.io/encyclopedia/workflow-message-passing).
 
-For conversation files imported by `gcs-pubsub-importer`, the service uses the owner returned by Front to establish `ALLOW u:<ownerUserSId> rw` when creating the replica. Existing local grants must survive later content imports. Pod files retain the pod's shared permissions through their provisioned directory. Front applies subsequent permission changes directly in DFS; GCS object attributes do not determine grants.
+Limit concurrent handoffs to eight. On shutdown, stop accepting messages, allow 30 seconds for handoffs to drain, then leave unfinished deliveries unacknowledged. Pub/Sub client shutdown has a 60-second limit. Imports continue independently in Temporal.
 
-Front and the `gcs-pubsub-importer` can both encounter a file written by Front into a pod or conversation folder. They must agree on one destination object and coordinate updates so an event cannot create a duplicate or overwrite newer contents. The shared mapping, locking and version checks for this overlap remain to be defined. Path filtering cannot distinguish the producer, and custom metadata is not used to do so.
+### Temporal imports
 
-The protocol requires a real parent `ObjectId` and basename to create a file. Destination mapping remains open, as described below. Creation does not accept grants: local grants are applied separately through tenant-key `UpdateGrants`, using `{ grant, remove: false }` to attach and `remove: true` to detach. Restrictive grants must be in place before exposing the file. [Protocol](../protocol/proto/dfs.proto), [grant API](API.md#updategrants).
+The signal marks the source as needing an import. The workflow runs one import activity at a time. Signals received during an activity require another pass after it finishes. Coalesce those signals into one pending pass. Do not choose a generation from the last delivered event: notification order does not identify the current GCS state.
 
-The `gcs-pubsub-importer` reads live GCS object attributes and the exact generation's bytes rather than trusting an event's older payload. Generation and metageneration are source version checks, not a permission channel.
+The workflow completes when there is no pending pass, without awaiting more work between that check and completion. A later `signalWithStart` starts a new execution with the same workflow ID. For continuously updated objects, use Continue-As-New after an activity completes and history reaches the SDK's suggested limit. Carry pending work into the new execution. Workflow arguments contain source identifiers only, never file bytes or GCS credentials. [Entity workflows](https://docs.temporal.io/design-patterns/entity-workflow).
 
-Front keeps separate GCS and DFS references during double write. A resource's read cutover must wait for a complete DFS write and correct grants. GCS and DFS writes are not atomic; the implementation must define how a successful GCS write with a failed DFS write is recorded and retried. Pub/Sub does not repair Front uploads outside the two folder namespaces. Once DFS owns a resource's contents, pending GCS events must not overwrite or delete it.
+Each activity attempt has a 30-minute start-to-close timeout and a 60-second heartbeat timeout, with heartbeats every 20 seconds. Retry failures with exponential backoff capped at one minute. Alert on sustained retries and stalled workflows. Cancellation must reach the GCS stream and DFS requests. Heartbeats report activity liveness, not successful import completion. A timed-out activity may still be running, so the DFS lease and fencing checks below remain required. [Activity failure detection](https://docs.temporal.io/encyclopedia/detecting-activity-failures), [TypeScript activity cancellation](https://typescript.temporal.io/api/namespaces/activity).
 
-## Authorization contract
+Before activation, implement the fenced DFS importer, bind it to the Temporal activity, register the worker, and add the Pub/Sub process entrypoint and deployment configuration. The importer must acquire the source lock, resolve permissions and destination IDs, write DFS, and record completion before returning success. The Front-only PR can prepare the consumer and Temporal orchestration while this DFS support is pending.
 
-DFS enforces file access through its grants. Front authorizes access to the conversation URL. The migration must preserve or narrow existing permissions, never enlarge them.
+### Notifications and preconditions
 
-Conversation files follow the conversation's access rules: read access allows reading its files, and write access allows writing them. Front currently gives an accessible conversation a read/write filesystem mount. Pod shared files retain their separate pod read/write checks.
+Configure `JSON_API_V1` payloads and subscribe to `OBJECT_FINALIZE`, `OBJECT_METADATA_UPDATE`, `OBJECT_DELETE`, and `OBJECT_ARCHIVE` (when versioning is enabled). Attributes include `bucketId`, `objectId`, and `objectGeneration`; the payload includes `metageneration`. GCS provides at-least-once publication after activation. Notifications can duplicate or arrive out of order, with no delivery-time SLA. [GCS notifications](https://docs.cloud.google.com/storage/docs/pubsub-notifications).
 
-### Conversation folders and URL sharing
+Treat each notification as a request to reconcile the source. Read the live object's metadata, then fetch its bytes with both returned versions as preconditions:
 
-Standalone conversation folders live in `/users/{userId}/conversations/`. They inherit **one user grant** from the user directory:
-
-```text
-/users/user-U/                            ALLOW u:user-U rw
-  conversations/                         no local grants
-    conv-C/                              no local grants
-      report.csv                         no local grants
+```http
+GET /storage/v1/b/{bucket}/o/{encodedObjectName}?alt=media&ifGenerationMatch={g}&ifMetagenerationMatch={m}
 ```
 
-Sharing C's conversation URL does not itself grant access to its DFS files. There are two choices:
+A successful request returns bytes matching the metadata read. If DFS already has a complete copy of generation `g`, reuse those bytes. A mismatch returns `412` and the activity retries from current metadata. A disappearance between metadata and content reads also requires a retry. [GET API](https://docs.cloud.google.com/storage/docs/json_api/v1/objects/get), [preconditions](https://docs.cloud.google.com/storage/docs/request-preconditions).
 
-1. **Do nothing.** Another user can open the conversation if Front allows it, but cannot browse its DFS files.
-2. **Grant access on first visit.** After the visitor passes Front's conversation checks, Front creates a just-in-time grant on C's folder. The folder appears in the visitor's `/shared`. The grant permits the corresponding conversation file operations and applies only to C.
+Do not add `generation=g` to this live-object check: that parameter selects a retained revision, which may be noncurrent. GCS does not retain historical metadata that can be fetched by metageneration. [GET API](https://docs.cloud.google.com/storage/docs/json_api/v1/objects/get), [metadata history](https://docs.cloud.google.com/storage/docs/object-versioning#noncurrent_object_metadata).
 
-The proposed choice is option 2. Front authorizes the initial share; DFS enforces subsequent file access. This is the authority tension: if later Front permission changes must revoke that access, Front must also remove or restrict the DFS grant. A successful first visit alone does not handle revocation.
+Using the event's versions directly would allow skipping a `412` only if another notification covers the replacement state. Reading current metadata on every pass removes that dependency. A metadata event can create a missing replica, and a late delete event can import a replacement object.
 
-Pod conversations retain their existing pod audience through explicit grants derived from pod access. They are the shared exception to the standalone user-scoped default.
+## Concurrency
 
-## DFS superuser subject
+All workers, backfills, repair jobs and the switch to DFS must use the same exclusive lock for `(tenant, bucket, objectName)`. Acquire it before reading GCS and hold it through file creation, writes, initial grants and the completion marker. The lock key must exist before the DFS file and survive its deletion.
 
-DFS implements the reserved subject `superuser` for maintenance operations. The `gcs-pubsub-importer` and directory provisioning use normal `CreateSession` with the tenant key and `subjects: ["superuser"]`, then authenticate filesystem operations with the returned session key. The tenant comes exclusively from the authenticated tenant key.
+Use a renewable lease with an initial duration of 60 seconds and renew it every 20 seconds while the import is active. The lock service determines expiry. A crashed worker stops renewing, so another worker can acquire the lock after the last lease expires. A busy lock fails the activity attempt for retry. This lease is independent of Pub/Sub's acknowledgment deadline and Temporal's heartbeat timeout.
 
-**A `superuser` session has read/write access to every existing real object in its tenant, regardless of grants, including DENYs.** The subject is exact and case-sensitive. It does not grant access to other tenants. The `gcs-pubsub-importer` still validates destinations and acquires the required locks.
+Each acquisition returns a newer fencing token for that source. Every DFS mutation, including deletion, grants and the completion marker, must verify that token and the active lease atomically with the mutation. DFS must reject writes from an expired or replaced holder. The token sequence must survive lease expiry and file deletion so an old token cannot become valid again.
 
-**Tenant administration still requires the tenant key.** The `gcs-pubsub-importer` uses it separately for `UpdateGrants`; a `superuser` session cannot authorize tenant-key RPCs. Do not attach ALLOW grants for `superuser`: those grants are invalid, including removals. No additional protocol/server change is needed for this subject. [Session API](API.md#createsession), [protocol](../protocol/proto/dfs.proto).
+If renewal fails or times out, stop the transfer and DFS writes and fail the activity attempt. Do not report success after losing the lease. Renew only a matching, unexpired lease. Release only when the holder and token still match, so a delayed request cannot release a replacement worker's lease. Release after all writes finish or on cancellation when possible. Otherwise let the lease expire. The lock API and storage remain to be implemented.
 
-## Scaling
+The current DFS protocol has no lock or conditional-write operation. Front's Redis lock expires and does not fence DFS writes. Neither is sufficient to run the importer safely today.
 
-All `gcs-pubsub-importer` instances use one ordered subscription. Unary Pull allows one outstanding batch per key:
+A GCS precondition only protects the read. Without the lock, worker A can fetch version A, stall while worker B copies version B into DFS, then overwrite B with A. Both reads passed their preconditions, and no further event need arrive. A GCS recheck before an unlocked DFS write still leaves this race.
 
-```text
-gcs-pubsub-importer 1: A1, A2, A3 — serial
-gcs-pubsub-importer 2: B1, B2     — serial, concurrent with A
-```
+## Import procedure
 
-A batch may contain several keys. Serialize each key locally and process different keys concurrently.
+1. **Filter and lock.** Revalidate the source workspace and check `dfs_gcs_replication`. Take the source lock. If the file has switched to DFS, complete without changing it.
+2. **Read GCS.** Read current live metadata, then fetch content with the generation and metageneration preconditions above. If it changes or disappears between requests, retry the activity from live metadata.
+3. **Resolve the destination.** Reuse the stored source-to-file mapping. On first import, obtain the parent directory ID and required grants from Front. Fail if the destination or conversation owner cannot be resolved in the source workspace. A retry after file creation must recover the same file even if the worker failed before saving its mapping.
+4. **Write.** Clear the completion marker before changing the file. Copy content from offset zero when the generation differs or no complete copy exists. Set the final size and required attributes. Apply initial grants before exposing a new file, including when recovering an incomplete creation. Preserve grants on later imports. Set the marker only after every operation and the full content transfer succeeds.
+5. **Complete.** Return success for completed imports, verified unchanged files and files already managed by DFS. Retry failures. An incomplete file update must leave the marker absent. If the activity result is lost, keep the completed marker so the retry can skip the write. Pub/Sub was already acknowledged at the Temporal handoff.
 
-## Reconciliation
+Handle read results as follows:
 
-Events may duplicate or arrive out of order. Each event triggers reconciliation with live GCS state.
+| Result | Action |
+| --- | --- |
+| `412` or `404` on the conditional content read | Retry from current metadata. Do not apply the earlier metadata or partial bytes. |
+| `404` on the live metadata read | Delete the mapped replica under the source lock while GCS remains authoritative. If no replica exists, complete. |
+| Access error, throttling, service error or interrupted transfer | Fail the activity attempt for Temporal to retry. Never treat it as deletion. |
 
-1. **Filter.** Recognize the pod and conversation filesystem paths listed below. Ignore objects outside those paths and acknowledge their events. Custom metadata has no role in eligibility or permission resolution.
-2. **Lock and check.** Validate the configured bucket, workspace, tenant and destination. Acquire the source's exclusive DFS lock and read live object attributes. For a conversation file, call Front to resolve the owner subject within that workspace. Verify the destination's permissions and compare the completion marker with the live source state. If required ownership or destination context cannot be resolved, do not mark the import complete.
-3. **Write.** On first import, create the file under the provisioned directory and durably record its source-to-file mapping. Reuse an existing mapping, including one created by Front. Clear the marker before changing bytes. Read the exact GCS generation, write from offset zero, and set the final size and required file attributes. New conversation files receive the resolved owner's grant; pod files inherit their directory's permissions. Later imports preserve existing grants. Check every operation result before setting the marker.
-4. **Unlock and acknowledge.** Acknowledge after a successful write or verified equal state. Failed imports retry.
+Delete/archive events must check the live object because a replacement also emits an event for the displaced generation. A stale delete must not remove a newer replica. [GCS event types](https://docs.cloud.google.com/storage/docs/pubsub-notifications#event_types).
 
-An authoritative live-object 404 removes an already-mapped replica under the same lock while GCS remains authoritative. If there is no mapped replica, acknowledge without creating anything. An old deletion event must not remove a newer live generation or a file that has switched to DFS ownership.
+GCS reads are strongly consistent after writes, metadata updates and deletes. The lock orders DFS imports; it does not prevent new GCS writes during an import. Later events bring DFS up to date. [GCS consistency](https://docs.cloud.google.com/storage/docs/consistency).
 
-### Completion marker xattr
+### Completion marker
 
 ```text
 front.gcs_sync = {
@@ -113,30 +140,33 @@ front.gcs_sync = {
 }
 ```
 
-`front.gcs_sync` records the last complete copy. Matching source, generation and metageneration can skip copying after the permission checks. A missing marker requires a rewrite. Clear it before every attempt, including same-generation retries, so a crash cannot leave partial bytes marked complete.
+The marker records a complete import. After checking the live source, matching all four fields allows a skip. A matching source and generation with a different metageneration allows reuse of complete bytes. A missing marker requires a full rewrite. Clear it before content or attribute changes, including retries of the same generation.
 
-Writes are direct. The lock serializes `gcs-pubsub-importer` instances; readers that ignore it may see partial contents.
+Keep generation and metageneration values lossless and compare generations for equality. Generation numbers are not guaranteed to increase; taking their numeric maximum cannot reject stale events. Metageneration increases only within one generation. [Generation semantics](https://docs.cloud.google.com/storage/docs/metadata#generation-number).
 
-## gcs-pubsub-importer scope and destinations
+DFS writes modify the destination file directly. Readers that do not take the lock may see partial contents.
 
-Every file under either of these recognizable GCS paths is replicated, including files created or overwritten by agents in the sandbox without custom metadata:
+## Destination mapping
 
-| GCS source | DFS destination |
-| --- | --- |
-| `w/{w}/pods/{p}/files/{path}` | The pod's DFS directory; mapping to its ID remains to be defined. |
-| `w/{w}/conversations/{c}/files/{path}` | The conversation's DFS directory; mapping to its ID remains to be defined. |
+The GCS path supplies the workspace, pod or conversation ID, and relative path. DFS creation requires a parent `ObjectId` and basename. Front's [folder helpers](../../front/lib/api/dfs/folders.ts) create and store user, pod and conversation folder IDs using the [DFS URI layout](URI.md). The importer should reuse those helpers.
 
-Other storage paths are outside the event pipeline. Canonical original uploads under `files/w/...`, content fragments and other original Front uploads are written to DFS by Front; canonical processed versions remain in GCS. The folder path rule applies regardless of the file's producer or type, including Frame files and copies of processed versions if they are written inside these namespaces.
+Pod directories in DFS use the pod's actual name (`SpaceResource.name`) unchanged. Resolve the pod ID from the GCS path within its workspace, then use its stored DFS folder ID. On first creation, create `pods/{podName}` under the owner's user folder with that exact name. URI percent-encoding preserves the name; it does not change the stored basename. DFS basename limits still apply.
 
-The GCS key identifies the workspace, pod or conversation, and relative file path. It does not provide a DFS parent directory ID. We still need to define who provisions those directories and how the `gcs-pubsub-importer` obtains their IDs. The Front lookup for a conversation owner does not by itself resolve that directory mapping. Existing Front integration stores the tenant root ID; pod and conversation directory provisioning is not implemented. The intended layout follows the [DFS URI design](URI.md):
+GCS paths, source locks and completion markers continue to use the pod ID. Later imports use the stored DFS folder ID, so a directory rename or move preserves the mapping. Front must handle pod renames by updating the existing directory's name and `dust.display_name`; a pod rename does not produce a GCS object event.
 
-```text
-<tenant-root>/users/<userId>/
-  pods/pod-<podSId>/
-  conversations/conv-<conversationSId>/
-```
+The current [`podFolderName()` helper](../../front/lib/dfs/folders.ts) rewrites names and falls back to a pod ID. It needs to be updated to preserve the actual name. The folder helpers also do not handle pod renames or name collisions. Folder creation must distinguish recovery for the same pod from another pod with the same name before imports are enabled. Pod grant propagation remains unfinished, and interrupted folder creation needs to recover its initial grants before files are exposed.
 
-For example, `w/W/pods/P/files/reports/q3.csv` belongs under P's DFS directory once that mapping exists. Suppose P's directory has:
+Store one mapping from the source object to its DFS file ID and reuse it for later imports. Mapping storage and recovery after interrupted creation remain to be defined. Preserving a DFS ID across a GCS rename also needs an explicit mapping update; separate copy and delete notifications do not establish that relationship.
+
+## Permissions
+
+Front resolves the conversation owner and pod permissions from the authenticated workspace. New conversation files receive `ALLOW u:<ownerUserSId> rw`; the importer must not infer this subject from the object name or writer. Pod files inherit their directory's grants. Later imports preserve file-local grants maintained by Front. GCS custom metadata has no effect on access.
+
+The importer uses a tenant-key `CreateSession` with `subjects: ["superuser"]` for filesystem writes. This subject has read/write access to real objects in that tenant, including through DENYs. `UpdateGrants` still requires the tenant key. Do not attach grants for `superuser`; they are invalid. [Session API](API.md#createsession), [protocol](../protocol/proto/dfs.proto).
+
+File creation does not accept grants. Apply them separately with `UpdateGrants` using `remove: false` to attach and `remove: true` to detach. Required access restrictions must be in place before a file is accessible. A failed owner lookup or grant update must not produce a completed import. [Grant API](API.md#updategrants).
+
+For example, a pod directory with these grants passes its access rules to files created without local grants:
 
 ```text
 DENY rw
@@ -144,63 +174,61 @@ ALLOW g:G1 r
 ALLOW g:G2 rw
 ```
 
-The `gcs-pubsub-importer` initially creates `reports/` and `q3.csv` with no local grants. They inherit G1 read and G2 read/write. The directory's DENY clears permissions inherited from the containing user folder. No GCS custom metadata is needed.
+The DENY clears inherited access; G1 receives read access and G2 read/write access. Do not copy the directory's grants onto each file.
 
-The source-to-file mapping preserves the DFS file ID across later imports and renames. The `gcs-pubsub-importer` does not copy the directory's grants onto each file. A pod path identifies the pod rather than the conversation that produced a sandbox write, so pod permissions come from the pod context. The Front lookup and directory provisioning interface for that context remain to be defined.
+### Conversation sharing
 
-## Backfill
+A standalone conversation directory inherits the owner's user grant:
 
-The folder backfill enumerates all existing files in the pod and conversation namespaces and schedules reconciliation through the same import path as live events. Conversation files use the Front owner lookup; pod files use the provisioned pod directory's permissions. The backfill does not stamp or read custom grant metadata.
+```text
+/users/user-U/                            ALLOW u:user-U rw
+  .conversations/                        no local grants
+    conv-C/                              no local grants
+```
 
-Historical content fragments and original Front uploads require a separate Front-driven backfill using their resource records to determine destinations, grants and DFS references. Processed versions are excluded from this backfill. Enumerating folder events alone cannot migrate these files. Its resource coverage and execution plan remain to be defined.
+When someone visits a shared conversation, Front first checks conversation access, then grants access to that conversation's DFS directory. It appears in the visitor's `/shared`. This must not grant access to the owner's other conversations. Later Front permission changes must update or revoke the DFS grant. Pod conversations retain the pod's audience.
 
-Directory provisioning, direct Front writes and both backfill paths use Front's permission model. Directory permissions must be in place before importing files that inherit them. A failed owner lookup must not silently fall back to another subject or be acknowledged as a completed import.
+Use Front's current access checks:
 
-## Destination grants
-
-Directory grants carry shared permissions. Conversation imports resolve the owner through Front and establish the owner grant described above. Pod files inherit pod directory grants. Front writes any additional file-local grants directly to DFS. Later content imports preserve those grants and must not replace directory sharing permissions.
-
-| Actor | DFS access |
+| Conversation | Required access |
 | --- | --- |
-| `superuser` session | Read/write access to every existing real object within one tenant, regardless of grants. Issued through tenant-key `CreateSession`. |
-| User `u:<userId>` | Access inherited from the user's directory or explicitly granted on a shared context. |
-| Group `g:<groupId>` | Access derived from the existing Front group's applicable permissions. |
+| Pod conversation (`spaceId` set) | The pod exists and the caller can read it. Extra requested spaces and standalone URL restrictions do not apply. |
+| Standalone conversation (`spaceId` null, `depth === 0`) | The caller can read every requested space. Private-by-default URLs in `participants_only` mode also require participation. |
+| Sub-conversation without a pod | Required-space checks still apply; the private-by-default URL restriction does not. |
 
-Front uses its existing permission checks when provisioning directories, resolving owners and writing uploads and grants to DFS. User and group subjects must retain the caller's actual scope. In particular, scoped API keys or sandbox sessions must not gain broader access through a user subject.
+Missing or inaccessible resources deny access. An invitation does not bypass requested-space checks. Preserve existing support-user and auth-method exceptions without widening ordinary callers' permissions. [Conversation access](../../front/lib/resources/conversation_resource.ts#L1406).
 
-### Conversation files
+Front currently gives an accessible conversation a read/write filesystem mount. Pod shared files require pod read access for reads and pod write access for writes. A pod reader can therefore write conversation files while only reading pod shared files. Preserve those rules and the caller's scope, including scoped API keys and sandbox sessions. [Mount permissions](../../front/lib/api/file_system/dust_file_system.ts#L114).
 
-Front's current conversation checks determine the pod audience and authorize a JIT share:
+## Backfill and recovery
 
-| Conversation | Front access check |
-| --- | --- |
-| Pod conversation (`spaceId` set) | The pod exists and the caller can read it. Additional `requestedSpaceIds`, participation and private-by-default URL settings do not add visibility restrictions. |
-| Standalone conversation (`spaceId` null, `depth === 0`) | The caller can read every requested space. When private-by-default URL restrictions apply with `participants_only` mode, participation is also required. |
-| Sub-conversation without a pod | Required-space checks still apply. Front exempts it from the private-by-default URL restriction. |
+Create the subscription and enable notifications before backfill. GCS notification activation can take 30 seconds. Include that window in the scan. Monitor publication failures: GCS may remove the notification after seven days of persistent delivery failure. [Delivery guarantees](https://docs.cloud.google.com/storage/docs/pubsub-notifications#delivery_guarantees).
 
-Missing or inaccessible required resources deny access. An invitation to a standalone conversation does not bypass its requested-space checks. Front's explicit support-user and auth-method exceptions do not grant ordinary sessions an administrative bypass. [Conversation authorization](../../front/lib/resources/conversation_resource.ts).
+List existing files in the two folders and signal the same per-source Temporal workflows. Resolve conversation owners and use the provisioned pod directory grants. Do not add grant metadata to GCS objects.
 
-File write permissions differ between the two mounts:
+For legacy attachments with no mount copy, the existing [`ensureMountFilePath()` helper](../../front/scripts/backfill_mount_helpers.ts#L73) copies canonical files into GCS. It overwrites existing mount objects, so do not run it over live edited files. Recover missing copies before expecting Pub/Sub delivery; restoring a missing processed sibling must also preserve the live original.
 
-| Files | Read | Write |
-| --- | --- | --- |
-| Conversation files | Conversation access | Conversation access; Front currently makes this mount read/write. |
-| Pod shared files | Pod read | Pod write. |
+Replay the Pub/Sub dead-letter queue for failures before handoff. After handoff, monitor and recover imports in Temporal, including failed or terminated workflows. Run periodic repair scans over both live GCS objects and stored mappings to repair missed updates and deletes. Pub/Sub can discard unacknowledged messages after the retention period. [Subscription retention](https://docs.cloud.google.com/pubsub/docs/subscription-properties#message_retention_duration).
 
-A pod reader can therefore write conversation-mounted files while only reading pod shared files. This follows `ConversationResource.canAccess`, `createConversationMount` and `createPodMount`. [Access check](../../front/lib/resources/conversation_resource.ts#L1405), [mount permissions](../../front/lib/api/file_system/dust_file_system.ts#L114).
+## Switching to DFS
 
-For standalone C, a JIT grant is attached to C's folder, leaving the owner's inherited grant intact. The visitor discovers C through `/shared` and gains no access to the owner's other conversations. Do not pre-grant access to every potential URL viewer.
-
-### Uploads copied into a pod or conversation
-
-Front writes an upload's canonical original to DFS as part of its upload flow. The canonical processed version remains in GCS. Both `files/w/{w}/{f}/{original,processed}` GCS paths remain outside event replication.
-
-Copies into a pod or conversation filesystem are separate destination files with that context's permissions. Front-created copies of originals must also be written to DFS by Front. Their GCS paths additionally qualify for the `gcs-pubsub-importer`, so both paths must reuse the same destination mapping and coordinate version checks. Copies of processed versions in these folders reach DFS only through the event pipeline, as do sandbox-created files and copies. Attaching an upload must not move its canonical DFS object or carry unrelated source grants into the destination.
+Keep GCS and DFS references during migration. Switch reads only after a complete import with correct grants. Take the source lock when switching content ownership so an in-flight import cannot overwrite a subsequent DFS write. After the switch, pending GCS events must not modify or delete the DFS file.
 
 ## Validation
 
-Check that the relay and `gcs-pubsub-importer` restrict event replication to pod and conversation filesystem paths, including sandbox-created files. Custom metadata must not affect eligibility or grants. Verify that conversation imports resolve the owner through Front, pod imports preserve pod permissions, and failed or cross-workspace lookups cannot produce completed imports. Later content imports must preserve existing grants.
+Check these cases before enabling replication:
 
-Verify that content fragments and original Front uploads write bytes, grants and references to DFS without relying on Pub/Sub. Check that Front direct writes and the Front-driven backfill exclude processed versions, while copies under pod and conversation folders still qualify for event replication. Cover original copies, partial double-write failures and retries. For Front writes into replicated folders, test that concurrent event delivery neither creates duplicates nor overwrites newer contents. Verify both backfill paths.
-
-Compare pod and conversation access with Front's existing checks. Verify owner grants, JIT sharing through `/shared`, tenant isolation, duplicate/reordered events and the handoff from GCS-owned contents to DFS-owned contents. Front permission changes must update DFS directly throughout the migration.
+- Original uploads, uploads attached after processing, file-backed content fragments, processed copies and sandbox-created files all reach DFS through GCS events. Other prefixes are ignored.
+- Duplicate and reordered events, including replacement generations whose numeric values decrease, leave the current state in DFS.
+- A crash before handoff causes Pub/Sub redelivery. A crash after Temporal accepts the signal but before acknowledgment can signal twice without losing the import.
+- Signals during an import schedule another pass. Signals racing with workflow completion or Continue-As-New are preserved. Sustained traffic does not grow one history indefinitely.
+- An event for `(g,1)` imports current metadata `(g,2)`. A `412` or `404` between metadata and content reads retries from current state.
+- A worker crashes while holding the lock. Its lease expires and a retry can acquire the same source lock without manual cleanup. Imports longer than one lease succeed while renewal continues.
+- An activity times out after a successful GCS read and its lease expires. A replacement activity imports the file. DFS rejects the old activity's writes, and its delayed renewal or release cannot change the replacement lease. A renewal timeout fails the attempt.
+- Concurrent first imports and retries after creation reuse one file. Deletion/recreation uses the same source lock.
+- Pod files land in a directory with the pod's exact name. Renames preserve its DFS folder ID and source mappings. Different pods with the same name cannot share a directory.
+- An old delete/archive event leaves a newer live object intact. A missing historical revision does not delete its live replica.
+- Interrupted content, attribute and initial-grant writes leave no completion marker. Retries complete the import without resetting later Front grants.
+- Failed mount copies, dead-lettered handoffs, failed workflows and missed deletes are recovered. Mount-copy repair preserves live edits.
+- Tenant isolation, owner grants, pod permissions and conversation sharing match Front's checks. Failed or cross-workspace lookups cannot create completed imports.
+- The switch to DFS waits for the importer and prevents pending GCS events from changing DFS-owned files.

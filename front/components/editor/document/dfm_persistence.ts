@@ -27,6 +27,17 @@ export interface DfmEnvelope {
 const CODEC_SAVE_ERROR_MESSAGE =
   "This document cannot be saved as written. Your changes are still here. Undo the last edit to try again.";
 
+/** Why `saveDfm` refuses a body the editor cannot express as Markdown. */
+export const UNSAVABLE_BODY_MESSAGE =
+  "This formatting cannot be saved as Markdown yet. Your changes are still here. Undo the last edit to try again.";
+
+/** The body as `saveDfm` writes it, before the envelope and threads. */
+const serializeBody = (envelope: DfmEnvelope, content: JSONContent) =>
+  serializeDocumentMarkdown(
+    withoutDocumentJSONComments(content),
+    envelope.anchorOrder
+  );
+
 /** A codec error as shown in the read-only view, with its line when it has one. */
 function describe(error: DfmError): string {
   return error.line === undefined
@@ -39,18 +50,22 @@ function describe(error: DfmError): string {
 const EDITOR_REFUSALS = [
   /^The Markdown uses formatting the editor cannot keep: [^\n]+\.$/,
   /^The Markdown could not be parsed\.$/,
+  /^The Markdown's task lists would not read back the same\.$/,
   /^The Markdown does not fit the editor's document structure\.$/,
   /^The Markdown would not read back the same after editing\.$/,
   /^A comment is anchored where the editor cannot show it\.$/,
   /^Comment "[\w-]+" (starts or ends on text the editor cannot highlight|covers no text the editor can highlight)\.$/,
   /^Comment anchor "[\w-]+" is (not paired|never closed) where the editor reads it\.$/,
+  /^The document would not read back the same as Markdown, from [\w >[\],]+, which reads back as [\w >[\],]+\.$/,
+  /^The document would be written as \w+ Markdown, which the editor cannot read\.$/,
+  /^The document could not be written as Markdown\.$/,
 ];
 
 /**
  * @cc [owner:PopDaph,label:security;product] document-refusal-loggable
  * A refusal reason MUST reach logs only when it is one the editor writes, which never quotes the
- * file; any other reason MUST be logged as not valid DFM. Comment ids MUST be masked, so a kind
- * of refusal is one value.
+ * file; any other reason MUST be logged as not valid DFM. Comment ids MUST be masked, so a refusal
+ * never names a comment.
  */
 export function loggableRefusal(reason: string): string {
   return EDITOR_REFUSALS.some((pattern) => pattern.test(reason))
@@ -119,14 +134,9 @@ export function saveDfm(
   envelope: DfmEnvelope,
   content: JSONContent
 ): Result<string, string> {
-  const markdown = serializeDocumentMarkdown(
-    withoutDocumentJSONComments(content),
-    envelope.anchorOrder
-  );
+  const markdown = serializeBody(envelope, content);
   if (markdown.isErr()) {
-    return new Err(
-      "This formatting cannot be saved as Markdown yet. Your changes are still here. Undo the last edit to try again."
-    );
+    return new Err(UNSAVABLE_BODY_MESSAGE);
   }
 
   const serialized = serializeDfm({
@@ -140,6 +150,20 @@ export function saveDfm(
   }
 
   return new Ok(serialized.value);
+}
+
+/**
+ * @cc [owner:PopDaph,label:product;logging] document-dfm-save-reason
+ * When `saveDfm` refuses a body the editor cannot express, this MUST return the serializer's
+ * reason as `loggableRefusal` gives it, naming node types, never the document's
+ * text. It MUST return null for a body `saveDfm` can write.
+ */
+export function getUnsavableBodyReason(
+  envelope: DfmEnvelope,
+  content: JSONContent
+): string | null {
+  const markdown = serializeBody(envelope, content);
+  return markdown.isErr() ? loggableRefusal(markdown.error) : null;
 }
 
 /**

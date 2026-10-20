@@ -1,4 +1,5 @@
 import type { MCPServerConfigurationType } from "@app/lib/actions/mcp";
+import { getInternalMCPServerNameFromSId } from "@app/lib/actions/mcp_internal_actions/constants";
 import { isServerSideMCPServerConfiguration } from "@app/lib/actions/types/guards";
 import { transformAgentConfigurationToFormData } from "@app/lib/agent_builder/transform_agent_configuration";
 import { AgentYAMLConverter } from "@app/lib/agent_yaml_converter/converter";
@@ -10,6 +11,7 @@ import type { Authenticator } from "@app/lib/auth";
 import { toAgentConfigurations } from "@app/lib/resources/agent_resource_serialization";
 import { DataSourceResource } from "@app/lib/resources/data_source_resource";
 import { DataSourceViewResource } from "@app/lib/resources/data_source_view_resource";
+import { MCPServerViewResource } from "@app/lib/resources/mcp_server_view_resource";
 import { SpaceResource } from "@app/lib/resources/space_resource";
 import logger from "@app/logger/logger";
 import { ConnectorsAPI } from "@app/types/connectors/connectors_api";
@@ -71,6 +73,44 @@ async function checkActionsDataSourceViewsAccess(
 }
 
 /**
+ * @cc [owner:fabiencelier,label:product;error-handling] missing-tool-views
+ * When the MCP server view of one of `actions` does not resolve (e.g. soft-deleted view), the check
+ * MUST fail with a 404 whose message carries that tool's configuration `sId`, and its internal
+ * server name when it has one. The export MUST NOT drop the tool silently.
+ */
+async function checkActionsMCPServerViewsExist(
+  auth: Authenticator,
+  actions: MCPServerConfigurationType[]
+): Promise<Result<void, APIErrorWithContentfulStatusCode>> {
+  const serverSideActions = actions.filter(isServerSideMCPServerConfiguration);
+
+  const mcpServerViews = await MCPServerViewResource.fetchByIds(
+    auth,
+    serverSideActions.map((action) => action.mcpServerViewId)
+  );
+  const foundIds = new Set(mcpServerViews.map((view) => view.sId));
+  const missingAction = serverSideActions.find(
+    (action) => !foundIds.has(action.mcpServerViewId)
+  );
+  if (missingAction) {
+    // The loader clears the view id of an unresolved view and names an unnamed tool "Missing", so
+    // identify the tool by its internal server name when known and by its configuration sId.
+    const toolName =
+      getInternalMCPServerNameFromSId(missingAction.internalMCPServerId) ??
+      missingAction.name;
+    return new Err({
+      status_code: 404,
+      api_error: {
+        type: "mcp_server_view_not_found",
+        message: `The tool "${toolName}" (${missingAction.sId}) uses an MCP server view that no longer exists. Remove the tool from the agent before exporting it.`,
+      },
+    });
+  }
+
+  return new Ok(undefined);
+}
+
+/**
  * @cc [owner:philipperolet,label:security;product] unreadable-space-views
  * When `canAdminSeePrivateEntities(auth)` is true, the export MUST include the data source views used
  * by the agent's tools (`dataSources` and `tables`), whatever their space. Otherwise, it MUST NOT
@@ -120,6 +160,14 @@ export async function getAgentConfigurationAsYAMLConfig(
   );
   if (accessResult.isErr()) {
     return accessResult;
+  }
+
+  const mcpServerViewsResult = await checkActionsMCPServerViewsExist(
+    auth,
+    agentConfiguration.actions
+  );
+  if (mcpServerViewsResult.isErr()) {
+    return mcpServerViewsResult;
   }
 
   const editors: UserType[] = editorUsers.map((m) => m.toJSON());

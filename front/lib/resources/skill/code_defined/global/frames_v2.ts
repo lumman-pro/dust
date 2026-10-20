@@ -258,15 +258,18 @@ whole path durable only when every call must be live or the interaction itself i
 **Computer vs Frame function — do not mix the two call styles:**
 
 - From the **Computer** (your bash session): explore and invoke tools with the \`dsbx tools\` CLI
-  (\`dsbx tools --help\`, \`dsbx tools --json …\`). That is the Computer skill's path.
+  (\`dsbx tools\`, \`dsbx tools [SERVER]\` for each tool's \`input_schema\`, then
+  \`dsbx tools --json --args-json '…' [SERVER] [TOOL]\`). That is the Computer skill's path.
 - Inside **Frame function source** (\`fetch()\`): use \`tools.call\` from \`@dust/pod\`. Do **not**
   shell out to \`dsbx\`, \`execFile\`, or \`child_process\` to run \`dsbx tools\` from a function.
 
-Discover the exact server name, tool name, and argument shapes from the Computer with
-\`dsbx tools --help\` (and trial calls with \`--json\` if needed). Pass the server exactly as
-\`dsbx tools\` lists it: a workspace can hold several instances of one server under their own
-names (e.g. \`gmail1\` and \`gmail2\`), and a line that shows an \`id:\` must be called by that id.
-Then implement the durable function with the typed client:
+Discover the exact server name, tool name, and argument JSON Schema from the Computer with
+\`dsbx tools\` / \`dsbx tools [SERVER]\` (listings show each tool's raw \`input_schema\`). Trial
+calls with \`dsbx tools --json --args-json '…' [SERVER] [TOOL]\` use the same JSON object shape
+\`tools.call\` accepts. Pass the server exactly as \`dsbx tools\` lists it: a workspace can hold
+several instances of one server under their own names (e.g. \`gmail1\` and \`gmail2\`), and a line
+that shows an \`id:\` must be called by that id. Then implement the durable function with the typed
+client:
 
 \`\`\`ts
 import { tools } from "@dust/pod";

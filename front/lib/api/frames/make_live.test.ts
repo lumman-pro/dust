@@ -1,3 +1,5 @@
+import { emitAuditLogEvent } from "@app/lib/api/audit/workos_audit";
+import { enterFrameDraftMode } from "@app/lib/api/frames/draft_mode";
 import { makeFrameDraftLive } from "@app/lib/api/frames/make_live";
 import { canWriteFrameV2Source } from "@app/lib/api/frames/permissions";
 import type { FramePublicationFunctionArtifact } from "@app/lib/api/frames/publication_storage";
@@ -59,6 +61,12 @@ vi.mock("@app/lib/api/frames/operation_lock", async (importActual) => {
         }
       }),
   };
+});
+
+vi.mock("@app/lib/api/audit/workos_audit", async (importActual) => {
+  const actual =
+    await importActual<typeof import("@app/lib/api/audit/workos_audit")>();
+  return { ...actual, emitAuditLogEvent: vi.fn() };
 });
 
 vi.mock("@app/lib/api/frames/permissions", async (importActual) => {
@@ -233,6 +241,76 @@ describe("makeFrameDraftLive", () => {
     const metadata = await metadataOf(auth, frame);
     expect(metadata?.activePublicationId).toBe(draftId);
     expect(metadata?.latestPublicationId).toBe(draftId);
+  });
+
+  it("ends draft mode when it makes the draft live", async () => {
+    const { auth, frame } = await setupFrame();
+    await publishBundle(auth, frame, CODE_A, "live");
+    assert((await enterFrameDraftMode(auth, { frame })).isOk());
+    const draftId = await publishBundle(auth, frame, CODE_B, "draft");
+
+    const result = await makeFrameDraftLive(auth, {
+      frame,
+      draftPublicationId: draftId,
+    });
+
+    assert(result.isOk(), "make live succeeds");
+    const reloaded = await FileResource.fetchById(auth, frame.sId);
+    expect(reloaded?.useCaseMetadata?.frameDraftMode).toBeUndefined();
+    expect(reloaded?.isInFrameDraftMode).toBe(false);
+    expect(emitAuditLogEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "frame.draft_mode_updated",
+        metadata: { frame_id: frame.sId, draft_mode: "off" },
+      })
+    );
+  });
+
+  it("ends draft mode without re-activating when nothing changed in it", async () => {
+    const { auth, frame } = await setupFrame();
+    const liveId = await publishBundle(auth, frame, CODE_A, "live");
+    assert((await enterFrameDraftMode(auth, { frame })).isOk());
+    const activate = vi.spyOn(
+      FileResource.prototype,
+      "setActiveFramePublication"
+    );
+
+    const result = await makeFrameDraftLive(auth, {
+      frame,
+      draftPublicationId: liveId,
+    });
+
+    expect(result.isOk() && result.value).toEqual({ publicationId: liveId });
+    expect(activate).not.toHaveBeenCalled();
+    expect(emitAuditLogEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "frame.draft_mode_updated",
+        metadata: { frame_id: frame.sId, draft_mode: "off" },
+      })
+    );
+    const reloaded = await FileResource.fetchById(auth, frame.sId);
+    expect(reloaded?.isInFrameDraftMode).toBe(false);
+    expect(reloaded?.useCaseMetadata?.activePublicationId).toBe(liveId);
+    expect(reloaded?.useCaseMetadata?.latestPublicationId).toBe(liveId);
+  });
+
+  it("refuses the live publication while a newer draft is pending", async () => {
+    const { auth, frame } = await setupFrame();
+    const liveId = await publishBundle(auth, frame, CODE_A, "live");
+    assert((await enterFrameDraftMode(auth, { frame })).isOk());
+    const draftId = await publishBundle(auth, frame, CODE_B, "draft");
+
+    const result = await makeFrameDraftLive(auth, {
+      frame,
+      draftPublicationId: liveId,
+    });
+
+    assert(result.isErr(), "make live is refused");
+    expect(result.error).toMatchObject({ code: "draft_conflict" });
+    const reloaded = await FileResource.fetchById(auth, frame.sId);
+    expect(reloaded?.useCaseMetadata?.activePublicationId).toBe(liveId);
+    expect(reloaded?.useCaseMetadata?.latestPublicationId).toBe(draftId);
+    expect(reloaded?.useCaseMetadata?.frameDraftMode).toBeDefined();
   });
 
   it("refuses when there is no pending draft", async () => {

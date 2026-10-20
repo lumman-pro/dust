@@ -79,6 +79,9 @@ export type FileUseCaseMetadata = {
   // `activePublicationId` when no draft is pending. Absent on Frames published before drafts:
   // read as `activePublicationId`.
   latestPublicationId?: string;
+  // Set while the Frame is in draft mode: every publish is a draft, until the draft is made live.
+  // `enabledByUserSId` is the editor who turned it on.
+  frameDraftMode?: { enabledAt: number; enabledByUserSId: string };
   // Description from the manifest of the active publication, refreshed on every activation, so
   // it describes what is served rather than what the source folder currently says. The Frame's
   // name is not stored: it is derived from the folder holding the manifest.

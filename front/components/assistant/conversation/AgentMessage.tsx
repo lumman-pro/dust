@@ -148,7 +148,6 @@ import {
   Stop,
   Tooltip,
   Trash01,
-  TruncatedContent,
   useCopyToClipboard,
 } from "@dust-tt/sparkle";
 import { plural } from "@lingui/core/macro";
@@ -312,7 +311,6 @@ export function AgentMessage({
   const sId = agentMessage.sId;
   const [streamId, setStreamId] = useState<string>(`message-${sId}`);
   const { hasFeature } = useFeatureFlags();
-  const isCollapsibleEnabled = hasFeature("collapsible_messages");
   const hasConsumptionDetails = hasFeature("conversation_consumption_details");
 
   const [isRetryHandlerProcessing, setIsRetryHandlerProcessing] =
@@ -1256,28 +1254,6 @@ export function AgentMessage({
       <div className="flex items-center gap-1">{alwaysVisibleButtons}</div>
     );
 
-  const renderMessageContent = () => {
-    if (isCollapsibleEnabled && !shouldStream) {
-      return (
-        <TruncatedContent
-          className="flex flex-col gap-5"
-          defaultCollapsed={!isLastMessage}
-          footer={footerButtons}
-          buttonClassName="text-muted-foreground"
-        >
-          {messageContent}
-        </TruncatedContent>
-      );
-    }
-
-    return (
-      <div className="flex flex-col gap-5">
-        {messageContent}
-        {footerButtons}
-      </div>
-    );
-  };
-
   return (
     <ConversationMessageContainer messageType="agent" type="agent">
       {!hideHeader && (
@@ -1306,7 +1282,10 @@ export function AgentMessage({
       )}
 
       <div className="group flex w-full min-w-0 flex-col gap-2">
-        {renderMessageContent()}
+        <div className="flex flex-col gap-5">
+          {messageContent}
+          {footerButtons}
+        </div>
       </div>
     </ConversationMessageContainer>
   );

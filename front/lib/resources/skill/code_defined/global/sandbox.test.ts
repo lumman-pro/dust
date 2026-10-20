@@ -14,6 +14,11 @@ describe("sandboxSkill", () => {
     });
 
     expect(instructions).toContain("dsbx tools");
+    expect(instructions).toContain("--args-json");
+    expect(instructions).toContain("input_schema");
+    expect(instructions).toContain("--args-json -");
+    expect(instructions).not.toContain("__file__:");
+    expect(instructions).not.toContain("[ARGS]...");
     const systemTools = instructions
       .split("\n")
       .find((line) => line.startsWith("- System:"));

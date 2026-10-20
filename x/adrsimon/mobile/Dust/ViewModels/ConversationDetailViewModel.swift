@@ -60,6 +60,7 @@ final class ConversationDetailViewModel: ObservableObject {
     @Published var isValidatingAction = false
     /// Set when a validate/answer request fails, surfaced as an alert.
     @Published var actionError: String?
+    @Published var isBranching = false
 
     var streamingPhase: AgentStreamingPhase {
         if let blockedState { return blockedState.asPhase }
@@ -264,6 +265,11 @@ final class ConversationDetailViewModel: ObservableObject {
 
         case let .agentMessageDone(event):
             await handleAgentMessageDone(event)
+
+        case let .agentMessageConsumptionUpdated(event):
+            updateAgentMessage(id: event.messageId) { msg in
+                msg.costCredits = event.costCredits
+            }
 
         case let .conversationTitle(event):
             handleConversationTitle(event.title)
@@ -750,6 +756,31 @@ final class ConversationDetailViewModel: ObservableObject {
             )
         } catch {
             logger.error("Failed to retry message: \(error)")
+        }
+    }
+
+    // MARK: - Branch
+
+    func branchConversation(fromMessageId messageId: String) async -> Conversation? {
+        isBranching = true
+        defer { isBranching = false }
+
+        do {
+            let branchedConversationId = try await ConversationService.branchConversation(
+                workspaceId: workspaceId,
+                conversationId: conversation.sId,
+                sourceMessageId: messageId,
+                tokenProvider: tokenProvider
+            )
+            return try await ConversationService.fetchConversation(
+                workspaceId: workspaceId,
+                conversationId: branchedConversationId,
+                tokenProvider: tokenProvider
+            )
+        } catch {
+            logger.error("Failed to branch conversation: \(error)")
+            actionError = error.localizedDescription
+            return nil
         }
     }
 }

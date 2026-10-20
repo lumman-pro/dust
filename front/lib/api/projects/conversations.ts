@@ -1,5 +1,5 @@
 import {
-  canUserAccessConversation,
+  getUserConversationAccess,
   rebuildConversationRequirements,
 } from "@app/lib/api/assistant/conversation/permissions";
 import { Authenticator } from "@app/lib/auth";
@@ -29,6 +29,7 @@ import {
 } from "@app/types/assistant/conversation";
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
+import { assertNever } from "@app/types/shared/utils/assert_never";
 import { removeNulls } from "@app/types/shared/utils/general";
 import type { UserType } from "@app/types/user";
 import uniq from "lodash/uniq";
@@ -321,18 +322,28 @@ export async function moveConversationOutOfProject(
   for (const participant of participants) {
     // After moving out of a project, some participants may no longer have access
     // to the conversation's required spaces. Remove those participants.
-    const hasAccess = await canUserAccessConversation(auth, {
+    const access = await getUserConversationAccess(auth, {
       userId: participant.sId,
       conversationId: conversation.sId,
     });
 
-    if (!hasAccess) {
-      const participantAuth = await Authenticator.fromUserIdAndWorkspaceId(
-        participant.sId,
-        workspaceId
-      );
-      await freshConversation.leaveConversation(participantAuth);
-      continue;
+    switch (access) {
+      case "conversation_not_found":
+      case "conversation_access_restricted": {
+        const participantAuth = await Authenticator.fromUserIdAndWorkspaceId(
+          participant.sId,
+          workspaceId
+        );
+        await freshConversation.leaveConversation(participantAuth);
+        continue;
+      }
+      case "allowed":
+      // Participants pass the private-by-default URL restriction by definition, so only the
+      // rebuilt space requirements can revoke their access.
+      case "conversation_access_restricted_by_private_by_default_url_restriction":
+        break;
+      default:
+        assertNever(access);
     }
 
     // For participants who still have access and had already read the conversation,

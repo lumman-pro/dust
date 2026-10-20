@@ -14,6 +14,12 @@ import {
 import { DOCUMENT_FRAME_NODE_NAME } from "@app/components/editor/document/DocumentFrame";
 import { DOCUMENT_IMAGE_NODE_NAME } from "@app/components/editor/document/DocumentImage";
 import {
+  isWritableTask,
+  LIST_ITEM_NODE_NAME,
+  taskItemTokens,
+  withSeparatedLists,
+} from "@app/components/editor/document/DocumentListItem";
+import {
   hasExtraCells,
   TABLE_CELL_NODE_NAME,
   withColumnAlignments,
@@ -36,6 +42,7 @@ import { flattenExtensions, getExtensionField, getSchema } from "@tiptap/core";
 import { MarkdownManager } from "@tiptap/markdown";
 import type { Mark, Node } from "@tiptap/pm/model";
 import { Fragment } from "@tiptap/pm/model";
+import isEqual from "lodash/isEqual";
 
 export const documentSchema = getSchema(documentExtensions);
 const documentMarkdown = new MarkdownManager({
@@ -81,7 +88,9 @@ const lexMarkdown = (markdown: string): LexedMarkdown => {
 /**
  * @cc [owner:flvndvd,label:architecture] document-markdown-capabilities
  * Supported token names MUST derive from the editor extensions' parse and render handlers, plus
- * `TEXT_ONLY_TOKENS`, which carry only text and need no extension.
+ * `TEXT_ONLY_TOKENS`, which carry only text and need no extension. A task item's `checkbox`
+ * token is structure its list item handler consumes: it MUST NOT be checked as a token of its
+ * own there, and MUST be unsupported anywhere else.
  */
 const supportedMarkdownTokens = new Set(
   flattenExtensions(documentExtensions)
@@ -113,30 +122,23 @@ const isSupportedMarkdownToken = (token: MarkdownToken) =>
   token.type !== undefined &&
   (TEXT_ONLY_TOKENS.has(token.type) ||
     supportedMarkdownTokens.has(token.type)) &&
-  // The registered list handler still discards task markers.
-  !(token.type === "list_item" && token.task) &&
   !(token.type === "table" && hasExtraCells(token));
 
 /** A Markdown element the editor cannot keep and can name. */
 export type UnsupportedElement =
   | "table_extra_cells"
   | "html"
-  | "task_list"
   | "reference_definition";
 
 const UNSUPPORTED_ELEMENT_NAMES: Record<UnsupportedElement, string> = {
   table_extra_cells: "a table row with more cells than its header",
   html: "HTML",
-  task_list: "a task list",
   reference_definition: "a reference link definition",
 };
 
 const unsupportedElement = (
   token: MarkdownToken
 ): UnsupportedElement | null => {
-  if (token.type === "list_item" && token.task) {
-    return "task_list";
-  }
   switch (token.type) {
     case "table":
       return hasExtraCells(token) ? "table_extra_cells" : null;
@@ -154,6 +156,8 @@ const childTokens = (token: MarkdownToken): MarkdownToken[] => {
   switch (token.type) {
     case "list":
       return token.items ?? [];
+    case "list_item":
+      return taskItemTokens(token);
     case "table":
       return [...token.header, ...token.rows.flat()].flatMap(
         (cell) => cell.tokens
@@ -186,6 +190,58 @@ const findToken = (
   }
   return null;
 };
+
+const listItemSignature = (depth: number, task: boolean, checked: boolean) =>
+  `${depth}${task ? (checked ? "x" : "o") : "-"}`;
+
+/** Each list item of the Markdown in document order: its nesting, and whether it is a task, done. */
+const tokenListItems = (tokens: readonly MarkdownToken[]): string[] => {
+  const items: string[] = [];
+  const visit = (token: MarkdownToken, depth: number) => {
+    if (token.type === "list_item") {
+      items.push(
+        listItemSignature(depth, token.task === true, token.checked === true)
+      );
+    }
+    const childDepth = token.type === "list_item" ? depth + 1 : depth;
+    childTokens(token).forEach((child) => visit(child, childDepth));
+  };
+  tokens.forEach((token) => visit(token, 0));
+  return items;
+};
+
+const documentListItems = (document: JSONContent): string[] => {
+  const items: string[] = [];
+  const visit = (node: JSONContent, depth: number) => {
+    const isItem = node.type === LIST_ITEM_NODE_NAME;
+    if (isItem) {
+      items.push(
+        listItemSignature(
+          depth,
+          node.attrs?.task === true,
+          node.attrs?.checked === true
+        )
+      );
+    }
+    node.content?.forEach((child) => visit(child, isItem ? depth + 1 : depth));
+  };
+  visit(document, 0);
+  return items;
+};
+
+const hasTaskItem = (tokens: MarkdownTokens) =>
+  findToken(tokens, (token) => token.type === "list_item" && token.task) !==
+  null;
+
+/**
+ * @cc [owner:rfrenoy,label:product] document-task-items-read
+ * Markdown with a task item MUST open only when the parsed document has the same list items as
+ * marked's GFM tokens, in the same order and nesting, each a task exactly when its token is one
+ * and done exactly when its token is checked.
+ */
+const readsTaskItems = ({ tokens }: LexedMarkdown, document: JSONContent) =>
+  !hasTaskItem(tokens) ||
+  isEqual(tokenListItems(tokens), documentListItems(document));
 
 const findUnsupportedToken = (tokens: MarkdownTokens): MarkdownToken | null =>
   findToken(tokens, (token) => !isSupportedMarkdownToken(token));
@@ -228,7 +284,7 @@ const serializeWithAnchors = (
     formatting
   );
   return substituteAnchorDirectives(
-    documentMarkdown.serialize(anchored),
+    documentMarkdown.serialize(withSeparatedLists(anchored)),
     directives
   );
 };
@@ -323,6 +379,16 @@ const asWritten = (node: JSONContent): JSONContent => {
       })),
     };
   }
+  if (
+    node.type === LIST_ITEM_NODE_NAME &&
+    node.attrs?.task &&
+    !isWritableTask(node)
+  ) {
+    return asWritten({
+      ...node,
+      attrs: { ...node.attrs, task: false, checked: false },
+    });
+  }
   const aligned = node.type === "table" ? withColumnAlignments(node) : node;
   return aligned.content
     ? { ...aligned, content: aligned.content.map(asWritten) }
@@ -334,16 +400,45 @@ const comparable = (document: JSONContent) =>
     documentSchema.nodeFromJSON(asWritten(withoutTrailingParagraphs(document)))
   );
 
-/** Compares in the editor's form, comment marks included, as the user would reopen it. */
-const canRoundTripMarkdown = (
-  document: JSONContent,
-  markdown: LexedMarkdown
-) => {
-  const reopened = anchorsToMarks(parseMarkdown(markdown), documentSchema);
-  return (
-    reopened.isOk() &&
-    comparable(document).eq(comparable(reopened.value.document))
+/** A node's type, with its marks' names when it has any: no text. */
+const describeNode = (node: Node | null): string => {
+  if (!node) {
+    return "end";
+  }
+  if (!node.marks.length) {
+    return node.type.name;
+  }
+  const marks = node.marks.map((mark) => mark.type.name).join(",");
+  return `${node.type.name}[${marks}]`;
+};
+
+/** The node types from the document down to `position`, then the node there: no text. */
+const describePosition = (document: Node, position: number): string => {
+  const resolved = document.resolve(position);
+  const path = Array.from(
+    { length: resolved.depth },
+    (_, depth) => resolved.node(depth + 1).type.name
   );
+  return [...path, describeNode(resolved.nodeAfter)].join(" > ");
+};
+
+/**
+ * Where `reopened` differs from `document`, or null when they are the same. Compares in the
+ * editor's form, comment marks included, as the user would reopen it.
+ */
+const roundTripDifference = ({
+  document,
+  reopened,
+}: {
+  document: JSONContent;
+  reopened: JSONContent;
+}): string | null => {
+  const written = comparable(document);
+  const read = comparable(reopened);
+  const position = written.content.findDiffStart(read.content);
+  return position === null
+    ? null
+    : `${describePosition(written, position)}, which reads back as ${describePosition(read, position)}`;
 };
 
 // Comment marks share one rank, so their order on a text node only records which was added
@@ -423,6 +518,9 @@ export const parseDocumentContent = (
   } catch {
     return new Err("The Markdown could not be parsed.");
   }
+  if (!readsTaskItems(lexed, parsed)) {
+    return new Err("The Markdown's task lists would not read back the same.");
+  }
 
   const marked = anchorsToMarks(parsed, documentSchema);
   if (marked.isErr()) {
@@ -471,9 +569,26 @@ const serializeReadingBack = (
       return markdown;
     }
     const lexed = lexMarkdown(markdown.value);
-    return hasSupportedMarkdown(lexed) && canRoundTripMarkdown(content, lexed)
+    const unsupported = findUnsupportedToken(lexed.tokens);
+    if (unsupported) {
+      return new Err(
+        `The document would be written as ${unsupported.type} Markdown, which the editor cannot read.`
+      );
+    }
+    // An anchor refusal names its comment: it is logged as is, not as a difference.
+    const reopened = anchorsToMarks(parseMarkdown(lexed), documentSchema);
+    if (reopened.isErr()) {
+      return reopened;
+    }
+    const difference = roundTripDifference({
+      document: content,
+      reopened: reopened.value.document,
+    });
+    return difference === null
       ? markdown
-      : new Err("The document would not read back the same as Markdown.");
+      : new Err(
+          `The document would not read back the same as Markdown, from ${difference}.`
+        );
   } catch {
     return new Err("The document could not be written as Markdown.");
   }
@@ -482,8 +597,9 @@ const serializeReadingBack = (
 /**
  * @cc [owner:flvndvd,label:product] document-markdown-save
  * Markdown output MUST reopen with the same content and formatting, ignoring empty trailing
- * paragraphs, spaces at the edges of a table cell, which GFM trims, and a cell's alignment where
- * it differs from its column's, which GFM holds per column. A failed conversion MUST NOT reach
+ * paragraphs, spaces at the edges of a table cell, which GFM trims, a cell's alignment where
+ * it differs from its column's, which GFM holds per column, and the task of an item with no
+ * text on its first line, which GFM reads as a plain item. A failed conversion MUST NOT reach
  * persistence or acknowledge the draft.
  */
 /**

@@ -341,6 +341,14 @@ class FileStorageMock {
             queueMicrotask(() =>
               stream.destroy(new Error(`Simulated GCS write failure: ${path}`))
             );
+          } else {
+            // Like a real upload, the object only exists once the stream completes: a
+            // destroyed stream leaves nothing behind.
+            const chunks: Buffer[] = [];
+            stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+            stream.on("end", () =>
+              this.setObject(path, Buffer.concat(chunks).toString())
+            );
           }
           return stream;
         }),

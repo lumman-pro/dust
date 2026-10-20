@@ -11,6 +11,7 @@ import {
 } from "@viz/app/lib/data-apis/cache-data-api";
 import { HybridDataAPI } from "@viz/app/lib/data-apis/hybrid-data-api";
 import { RPCDataAPI } from "@viz/app/lib/data-apis/rpc-data-api";
+import type { FrameProps } from "@viz/app/lib/frame-props";
 import type { VizCatalog } from "@viz/app/lib/i18n/catalogs";
 import { VizI18nProvider } from "@viz/app/lib/i18n/VizI18nProvider";
 import type { VisualizationConfig } from "@viz/app/lib/visualization-api";
@@ -26,6 +27,7 @@ interface ServerVisualizationWrapperClientProps {
   isAuthenticatedMember?: boolean;
   isFullHeight?: boolean;
   isPdfMode?: boolean;
+  frameProps?: FrameProps;
   catalog: VizCatalog;
   prefetchedCode?: string;
   prefetchedFiles?: PreFetchedFile[];
@@ -54,6 +56,7 @@ export function ServerVisualizationWrapperClient({
   isAuthenticatedMember = false,
   isFullHeight = false,
   isPdfMode = false,
+  frameProps,
   catalog,
   prefetchedCode,
   prefetchedFiles = [],
@@ -85,6 +88,7 @@ export function ServerVisualizationWrapperClient({
     identifier,
     isFullHeight,
     isPdfMode,
+    frameProps,
   };
 
   return (

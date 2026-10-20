@@ -1142,11 +1142,11 @@ export class FileResource extends BaseResource<FileModel> {
    */
   /**
    * @cc [owner:davidebbo,label:product] activation-resolves-the-draft
-   * Activating a publication MUST set both `activePublicationId` and `latestPublicationId` to it:
-   * it is the newest publication, and whatever draft was pending is either it or superseded by it,
-   * since both are built from the same source. A future rollback of live to an older publication
-   * MUST use a separate setter that moves only `activePublicationId`, so editors keep their latest
-   * work.
+   * Activating a publication MUST set both `activePublicationId` and `latestPublicationId` to it,
+   * and MUST end draft mode (`frameDraftMode`): it is the newest publication, and whatever draft was
+   * pending is either it or superseded by it, since both are built from the same source. A future
+   * rollback of live to an older publication MUST use a separate setter that moves only
+   * `activePublicationId`, so editors keep their latest work.
    */
   async setActiveFramePublication(
     {
@@ -1167,6 +1167,7 @@ export class FileResource extends BaseResource<FileModel> {
           activePublicationId: publicationId,
           latestPublicationId: publicationId,
           frameDescription: description,
+          frameDraftMode: undefined,
           ...(publishedByAgentConfigurationId
             ? {
                 lastEditedByAgentConfigurationId:
@@ -1197,6 +1198,40 @@ export class FileResource extends BaseResource<FileModel> {
     return latest !== this.useCaseMetadata?.activePublicationId
       ? latest
       : undefined;
+  }
+
+  get isInFrameDraftMode(): boolean {
+    return this.useCaseMetadata?.frameDraftMode !== undefined;
+  }
+
+  /** Turns draft mode on, recording the editor who did. Leaves both publication pointers alone. */
+  async enterFrameDraftMode(
+    { userSId }: { userSId: string },
+    transaction?: Transaction
+  ) {
+    return this.update(
+      {
+        useCaseMetadata: {
+          ...this.useCaseMetadata,
+          frameDraftMode: { enabledAt: Date.now(), enabledByUserSId: userSId },
+        },
+      },
+      transaction
+    );
+  }
+
+  /** Turns draft mode off. Only valid with no pending draft: activation ends it otherwise. */
+  async exitFrameDraftMode(transaction?: Transaction) {
+    assert(
+      this.pendingDraftPublicationId === undefined,
+      "Draft mode cannot end while a draft is pending."
+    );
+    return this.update(
+      {
+        useCaseMetadata: { ...this.useCaseMetadata, frameDraftMode: undefined },
+      },
+      transaction
+    );
   }
 
   /** The publication a target serves: the live one, or the latest one. */

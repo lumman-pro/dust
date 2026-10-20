@@ -1,6 +1,6 @@
 import {
   buildConsumptionLineExportCsvHeader,
-  fetchConsumptionExportBucketCsv,
+  generateConsumptionExportBucketCsv,
 } from "@app/lib/api/analytics/consumption/export_lines";
 import type { ConsumptionPeriod } from "@app/lib/api/analytics/consumption/period";
 import type {
@@ -17,6 +17,7 @@ import {
 import { notifyConsumptionExportReady } from "@app/lib/notifications/triggers/consumption-export-ready";
 import logger from "@app/logger/logger";
 import { createHash } from "crypto";
+import { pipeline } from "stream/promises";
 
 export function buildConsumptionExportGcsPrefix(workspaceId: string): string {
   return `w/${workspaceId}/consumption_exports/`;
@@ -117,30 +118,33 @@ export async function runConsumptionExportBucketActivity(
   const auth = await Authenticator.fromJSON(authType);
   const workspaceId = auth.getNonNullableWorkspace().sId;
 
-  const result = await fetchConsumptionExportBucketCsv(auth, {
-    period,
-    filter,
-  });
-  if (result.isErr()) {
-    logger.error(
-      { workspaceId, exportId, bucketIndex, err: result.error },
-      "[ConsumptionExport] Failed to fetch consumption lines for bucket."
-    );
-    throw result.error;
-  }
-
   const gcsPath = buildConsumptionExportBucketPartGcsPath(
     workspaceId,
     exportId,
     bucketIndex
   );
 
-  await getTmpWorkloadsBucket()
-    .file(gcsPath)
-    .save(Buffer.from(result.value, "utf-8"), {
-      contentType: "text/csv",
-      resumable: false,
-    });
+  // Pages are streamed straight to GCS so a bucket never sits whole in memory: several
+  // buckets of the same export can land on one worker at once. The pipeline waits for the
+  // upload to drain before pulling the next page.
+  await pipeline(
+    generateConsumptionExportBucketCsv(auth, { period, filter }),
+    async function* (chunks) {
+      for await (const chunk of chunks) {
+        if (chunk.isErr()) {
+          logger.error(
+            { workspaceId, exportId, bucketIndex, err: chunk.error },
+            "[ConsumptionExport] Failed to fetch consumption lines for bucket."
+          );
+          throw chunk.error;
+        }
+        yield chunk.value;
+      }
+    },
+    getTmpWorkloadsBucket()
+      .file(gcsPath)
+      .createWriteStream({ contentType: "text/csv", resumable: false })
+  );
 }
 
 // Concatenates `sourcePaths` into `destinationPath` via server-side GCS compose: no bytes

@@ -1,0 +1,12 @@
+**
+!dfs/
+!dfs/protocol/
+!dfs/protocol/Cargo.toml
+!dfs/protocol/Cargo.lock
+!dfs/protocol/build.rs
+!dfs/protocol/src/**
+!dfs/protocol/proto/**
+!dfs/server/
+!dfs/server/Cargo.toml
+!dfs/server/Cargo.lock
+!dfs/server/src/**

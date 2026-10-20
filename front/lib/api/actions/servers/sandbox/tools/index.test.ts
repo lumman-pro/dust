@@ -49,6 +49,7 @@ vi.mock("@app/lib/api/config", () => ({
     getApiBaseUrl: () => "https://dust.tt",
     getSandboxVizUrl: () => "https://viz.dust.tt",
     getSandboxDevFrontHostName: () => undefined,
+    getDsbxCliSha256: () => undefined,
   },
 }));
 

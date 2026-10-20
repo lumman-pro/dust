@@ -24,7 +24,7 @@
       "**/workers-build": true,
       "**/storybook-static": true,
       "dev/docker-volumes": true,
-      "cli": true,
+      "cli": false,
       "core": true,
       "design_docs": true,
       "dockerfiles": true,

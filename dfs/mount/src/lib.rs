@@ -5,7 +5,6 @@
 //! - `budget`: how the configured maximum delay splits between the write delay and the cache TTL.
 //!
 //! The mount root is built by the mount itself: it lists the folders the caller configures.
-//! Listing dfs directories returns `EOPNOTSUPP` until the mount uses the server's `List`.
 
 mod attributes;
 mod budget;

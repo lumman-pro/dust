@@ -1,3 +1,4 @@
+import { isUnavailableRunUsage } from "@app/lib/api/assistant/agent_message_consumption_attribution/allocation";
 import { AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION } from "@app/lib/api/assistant/agent_message_consumption_attribution/attribution_builder";
 import {
   canEnableSkill,
@@ -71,10 +72,8 @@ export type ConsumptionAnalyticsMessageMetadata = {
 export type AgentMessageConsumptionAnalyticsInput =
   ConsumptionAnalyticsMessageMetadata & {
     actions: AgentMCPActionResource[];
-    billedCredits: number;
     dustRunIds: string[];
     enabledSkillIdsByActionId: ReadonlyMap<string, string[]>;
-    hasUnbilledExecution: boolean;
     items: AgentMessageConsumptionItemResource[];
     runs: RunResource[];
     skills: SkillResource[];
@@ -100,18 +99,6 @@ function isBilledRunUsage(
     default:
       return assertNever(usage.usageType);
   }
-}
-
-function filterUsagesAttributedByItems(
-  usages: BilledRunUsage[],
-  items: AgentMessageConsumptionItemResource[]
-): BilledRunUsage[] {
-  const attributedRunUsageModelIds = new Set(
-    items.map((item) => item.runUsageId)
-  );
-  return usages.filter((usage) =>
-    attributedRunUsageModelIds.has(usage.runUsageModelId)
-  );
 }
 
 async function loadApiKeyName(
@@ -205,9 +192,15 @@ async function loadAnalyticsUser({
 /**
  * @cc [owner:sfriquet,label:product;backend] unbilled-execution-snapshot
  * A terminal message whose status is not tracked for billing (`failed`) MUST return null when its
- * `costCredits` is null. Otherwise it MUST be loaded with `hasUnbilledExecution` set and `usages`
- * restricted to the billed run usages referenced by its stored attribution items, so that the
- * indexed snapshot covers only the executions billed before the message failed.
+ * `costCredits` is null. Otherwise it MUST be loaded like any other message: the indexed snapshot
+ * is restricted to its reconciled attribution items, whose amounts add up to the bill of the
+ * executions finalized before the message failed.
+ */
+/**
+ * @cc [owner:sfriquet,label:product;backend] unbilled-unavailable-calls-not-indexed
+ * A message whose `costCredits` is null and whose billed run usages are all `unavailable` MUST
+ * return null. For a message with a tracked status, a null `costCredits` alongside a reported
+ * billed run usage MUST NOT return null.
  */
 export async function loadAgentMessageConsumptionAnalyticsInput(
   auth: Authenticator,
@@ -267,12 +260,18 @@ export async function loadAgentMessageConsumptionAnalyticsInput(
     includeUnavailable: true,
     runs,
   });
+  // Attribution no longer writes items for free usage (see `isFreeRunUsage`), so this filter is no
+  // longer needed. It is kept for backward compatibility: messages attributed before still have
+  // unreconciled items for their free usage.
   const billedUsages = usages.filter(isBilledRunUsage);
   if (billedUsages.length === 0) {
     return null;
   }
-  if (agentMessage.costCredits === null) {
-    throw new Error("Billed agent message is missing costCredits");
+  if (
+    agentMessage.costCredits === null &&
+    billedUsages.every(isUnavailableRunUsage)
+  ) {
+    return null;
   }
 
   const apiKeyName = await loadApiKeyName(
@@ -284,9 +283,6 @@ export async function loadAgentMessageConsumptionAnalyticsInput(
       agentMessageModelIds: [agentMessage.agentMessageModelId],
       maxAttributionVersion: AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION,
     });
-  const indexedUsages = hasUnbilledExecution
-    ? filterUsagesAttributedByItems(billedUsages, items)
-    : billedUsages;
   const actions =
     preloadedActions ??
     (await AgentMCPActionResource.listByAgentMessageIds(auth, [
@@ -353,13 +349,11 @@ export async function loadAgentMessageConsumptionAnalyticsInput(
     },
     agentMessageId,
     apiKeyName,
-    billedCredits: agentMessage.costCredits,
     completedAt,
     contextOrigin: triggeringUserMessage.origin,
     conversationId: conversation.conversationId,
     dustRunIds,
     enabledSkillIdsByActionId,
-    hasUnbilledExecution,
     items,
     messageStatus: agentMessage.status,
     messageVersion: agentMessage.version,
@@ -386,7 +380,7 @@ export async function loadAgentMessageConsumptionAnalyticsInput(
       conversation.triggerModelId,
       workspace.id
     ),
-    usages: indexedUsages,
+    usages: billedUsages,
     // userId is a nullable FK with ON DELETE SET NULL. Never substitute the worker identity.
     user,
     workspaceId: workspace.sId,

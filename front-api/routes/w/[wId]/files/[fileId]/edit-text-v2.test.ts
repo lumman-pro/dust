@@ -1,5 +1,6 @@
 // @vitest-environment node
 
+import { enterFrameDraftMode } from "@app/lib/api/frames/draft_mode";
 import {
   MAX_FRAME_TEXT_EDITS,
   publishFrameV2FromSource,
@@ -98,7 +99,6 @@ describe("POST /api/w/:wId/files/:fileId/edit-text for Frames v2", () => {
       conversation,
       frame,
       manifestPath,
-      mode: "live",
     });
     if (firstPublication.isErr()) {
       throw firstPublication.error;
@@ -178,7 +178,7 @@ describe("POST /api/w/:wId/files/:fileId/edit-text for Frames v2", () => {
     ).toBe(activePublicationId);
   });
 
-  it("saves as a draft while a draft is pending", async () => {
+  it("saves as a draft in draft mode, before anything else changed", async () => {
     const { auth, workspace } = await createPrivateApiMockRequest({
       method: "POST",
       role: "admin",
@@ -230,26 +230,16 @@ describe("POST /api/w/:wId/files/:fileId/edit-text for Frames v2", () => {
       conversation,
       frame,
       manifestPath,
-      mode: "live",
     });
     if (livePublication.isErr()) {
       throw livePublication.error;
     }
-    sourceByPath.set(sourcePath, uiSource.replace("Ready", "Almost ready"));
-    const draftPublication = await publishFrameV2FromSource(auth, {
-      conversation,
-      frame,
-      manifestPath,
-      mode: "draft",
-    });
-    if (draftPublication.isErr()) {
-      throw draftPublication.error;
-    }
-    expect(draftPublication.value.status).toBe("draft");
+    const draftMode = await enterFrameDraftMode(auth, { frame });
+    assert(draftMode.isOk(), "draft mode is on");
 
     const response = await postEdit(workspace, frame.sId, {
       conversationId: conversation.sId,
-      oldText: "Almost ready",
+      oldText: "Ready",
       newText: "Done",
       source: "index.tsx:1:1",
     });
@@ -261,9 +251,8 @@ describe("POST /api/w/:wId/files/:fileId/edit-text for Frames v2", () => {
     expect(reloaded.useCaseMetadata?.activePublicationId).toBe(
       livePublication.value.publicationId
     );
-    const draftPublicationId = reloaded.pendingDraftPublicationId;
-    assert(draftPublicationId);
-    expect(draftPublicationId).not.toBe(draftPublication.value.publicationId);
+    expect(reloaded.pendingDraftPublicationId).toBeDefined();
+    expect(reloaded.isInFrameDraftMode).toBe(true);
   });
 
   it("applies edits[] in one publish for Frames v2", async () => {
@@ -320,7 +309,6 @@ describe("POST /api/w/:wId/files/:fileId/edit-text for Frames v2", () => {
       conversation,
       frame,
       manifestPath,
-      mode: "live",
     });
     if (firstPublication.isErr()) {
       throw firstPublication.error;

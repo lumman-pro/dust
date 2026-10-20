@@ -152,10 +152,10 @@ function mockDocs(docs: AgentMessageConsumptionAnalyticsData[]) {
       timed_out: false,
       _shards: { failed: 0, successful: 1, total: 1 },
       hits: {
-        hits: docs.map((doc) => ({
+        hits: docs.map((doc, index) => ({
           _index: "consumption_analytics",
           _source: doc,
-          sort: [],
+          sort: [index],
         })),
       },
     })
@@ -213,12 +213,12 @@ describe("runConsumptionExportBucketActivity", () => {
       workspace.sId,
       "consumption-export-test-run"
     );
-    const saveCalls = fileStorageMock.saveFileCalls.filter((call) =>
+    const writeCalls = fileStorageMock.writeStreamCalls.filter((call) =>
       call.filePath.startsWith(tmpPrefix)
     );
-    expect(saveCalls).toHaveLength(1);
-    expect(saveCalls[0].filePath).toBe(`${tmpPrefix}0.csv`);
-    expect(saveCalls[0].contentType).toBe("text/csv");
+    expect(writeCalls).toHaveLength(1);
+    expect(writeCalls[0].filePath).toBe(`${tmpPrefix}0.csv`);
+    expect(writeCalls[0].contentType).toBe("text/csv");
 
     // A bucket part must never live under the prefix `listConsumptionExports` scans,
     // or an in-progress (or abandoned-after-failure) export would show up as a broken,
@@ -227,7 +227,7 @@ describe("runConsumptionExportBucketActivity", () => {
       tmpPrefix.startsWith(buildConsumptionExportGcsPrefix(workspace.sId))
     ).toBe(false);
 
-    const csv = saveCalls[0].content.toString();
+    const csv = fileStorageMock.getObject(`${tmpPrefix}0.csv`) ?? "";
     expect(csv).not.toContain("completedAt,conversationId");
     expect(csv).toContain(
       "2026-08-01T00:00:00.000Z,conv1,space1,msg1,llm,agent1,'@dust"
@@ -237,6 +237,39 @@ describe("runConsumptionExportBucketActivity", () => {
     );
 
     expect(notifyConsumptionExportReady).not.toHaveBeenCalled();
+  });
+
+  it("writes every page of a bucket spanning several search pages", async () => {
+    mockedSearchConsumptionAnalytics.mockClear();
+    mockDocs(Array.from({ length: 10_000 }, () => LLM_DOC));
+    mockDocs([TOOL_DOC]);
+    mockLabels({ agent1: "@dust", api: "API" });
+    const { authenticator, workspace } = await setup();
+
+    await runConsumptionExportBucketActivity(authenticator.toJSON(), {
+      period: PERIOD,
+      filter: {},
+      exportId: "multi-page-export",
+      bucketIndex: 0,
+    });
+
+    expect(mockedSearchConsumptionAnalytics).toHaveBeenCalledTimes(2);
+    expect(
+      mockedSearchConsumptionAnalytics.mock.calls[0][1]?.search_after
+    ).toBeUndefined();
+    expect(
+      mockedSearchConsumptionAnalytics.mock.calls[1][1]?.search_after
+    ).toEqual([9_999]);
+    const tmpPrefix = buildConsumptionExportBucketPartsGcsPrefix(
+      workspace.sId,
+      "multi-page-export"
+    );
+    const lines = (fileStorageMock.getObject(`${tmpPrefix}0.csv`) ?? "")
+      .trimEnd()
+      .split("\n");
+    expect(lines).toHaveLength(10_001);
+    expect(lines.filter((line) => line.includes(",llm,"))).toHaveLength(10_000);
+    expect(lines[10_000]).toContain(",tool,");
   });
 
   it("throws and uploads nothing when the search fails", async () => {
@@ -258,10 +291,7 @@ describe("runConsumptionExportBucketActivity", () => {
       workspace.sId,
       "consumption-export-test-run"
     );
-    const saveCalls = fileStorageMock.saveFileCalls.filter((call) =>
-      call.filePath.startsWith(tmpPrefix)
-    );
-    expect(saveCalls).toHaveLength(0);
+    expect(fileStorageMock.getObject(`${tmpPrefix}0.csv`)).toBeUndefined();
   });
 
   it("does not surface an in-progress or abandoned-after-failure bucket part as an export", async () => {

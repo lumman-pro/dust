@@ -1,5 +1,10 @@
-import { useCollabConnection } from "@app/hooks/useCollabConnection";
+import {
+  nextAttemptDelayMs,
+  reconnectDelayMs,
+  useCollabConnection,
+} from "@app/hooks/useCollabConnection";
 import type { DfmComment } from "@app/lib/markdown/dfm";
+import datadogLogger from "@app/logger/datadogLogger";
 import type { Configuration } from "@hocuspocus/server";
 import { Server } from "@hocuspocus/server";
 import { act, renderHook, waitFor } from "@testing-library/react";
@@ -14,6 +19,39 @@ const getTicket = async () => "ticket";
 // configuration. No signal handlers in tests.
 const newServer = (configuration: Partial<Configuration> = {}) =>
   new Server({ quiet: true, port: 0, stopOnSignals: false, ...configuration });
+
+describe("reconnectDelayMs", () => {
+  it("doubles from 1 s and stops at 5 s", () => {
+    expect(
+      [0, 1, 2, 3, 4, 10].map((failures) => reconnectDelayMs(failures, 1))
+    ).toEqual([1_000, 2_000, 4_000, 5_000, 5_000, 5_000]);
+  });
+
+  it("waits at least half of that, at random", () => {
+    expect(reconnectDelayMs(0, 0)).toBe(500);
+    expect(reconnectDelayMs(10, 0)).toBe(2_500);
+    expect(reconnectDelayMs(10, 0.5)).toBe(3_750);
+  });
+});
+
+describe("nextAttemptDelayMs", () => {
+  it("waits 30 s after a refusal, whatever the failures", () => {
+    expect(
+      [0, 3, 10].map((failures) =>
+        nextAttemptDelayMs({ failures, isRefused: true })
+      )
+    ).toEqual([30_000, 30_000, 30_000]);
+  });
+
+  it("backs off as `reconnectDelayMs` otherwise", () => {
+    const random = vi.spyOn(Math, "random").mockReturnValue(1);
+    try {
+      expect(nextAttemptDelayMs({ failures: 2, isRefused: false })).toBe(4_000);
+    } finally {
+      random.mockRestore();
+    }
+  });
+});
 
 describe("useCollabConnection", () => {
   let server: Server;
@@ -146,6 +184,45 @@ describe("useCollabConnection", () => {
     unmount();
   });
 
+  it("logs a lost connection once, then how long it was offline when a fresh one syncs", async () => {
+    // When each log is sent, to compare with the offline time it reports.
+    const loggedAtMs: number[] = [];
+    const info = vi
+      .spyOn(datadogLogger, "info")
+      .mockImplementation(() => loggedAtMs.push(performance.now()));
+    try {
+      const { result, unmount } = renderSession();
+      await waitFor(() => expect(result.current.status).toBe("live"));
+      const first = result.current.connection;
+      expect(info).not.toHaveBeenCalled();
+
+      server.hocuspocus.closeConnections(DOCUMENT_NAME);
+
+      await waitFor(
+        () => expect(result.current.connection?.id).not.toBe(first?.id),
+        { timeout: 3_000 }
+      );
+      expect(info.mock.calls).toEqual([
+        ["Collab connection lost"],
+        [
+          { offlineMs: expect.any(Number), attempts: 1 },
+          "Collab connection restored",
+        ],
+      ]);
+      // Offline from the first log to the second, at least the first wait (half of 1 s).
+      const elapsedMs = loggedAtMs[1] - loggedAtMs[0];
+      expect(elapsedMs).toBeGreaterThanOrEqual(500);
+      expect(info.mock.calls[1][0]).toMatchObject({
+        offlineMs: expect.toSatisfy(
+          (ms: number) => Math.abs(ms - elapsedMs) <= 1
+        ),
+      });
+      unmount();
+    } finally {
+      info.mockRestore();
+    }
+  });
+
   it("starts a fresh connection from the threads the old one last received", async () => {
     const threads: DfmComment[] = [
       {
@@ -198,18 +275,54 @@ describe("useCollabConnection", () => {
     expect(second?.comments.getThreads()).toBeNull();
   });
 
-  it("retries when no ticket can be fetched", async () => {
+  // `attempts` counts the connection attempts that reached the refusing step.
+  async function expectRetryAfter30Seconds(
+    tickets: () => Promise<string>,
+    attempts: () => number
+  ) {
+    // Real time still runs for the sockets; the clock jumps over the wait.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const { result, unmount } = renderSession(tickets);
+
+      await waitFor(() => expect(result.current.status).toBe("refused"));
+      await act(() => vi.advanceTimersByTimeAsync(25_000));
+      // Time for an early attempt to open its socket and get refused again.
+      await act(() => new Promise((resolve) => setTimeout(resolve, 500)));
+      expect(attempts()).toBe(1);
+      await act(() => vi.advanceTimersByTimeAsync(5_000));
+      await waitFor(() => expect(result.current.status).toBe("live"));
+      unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  }
+
+  it("retries 30 s after the server refuses the connection", async () => {
+    await server.destroy();
+    let authentications = 0;
+    server = newServer({
+      async onAuthenticate() {
+        authentications++;
+        if (authentications === 1) {
+          throw new Error(
+            "The Markdown uses formatting the editor cannot keep."
+          );
+        }
+      },
+    });
+    await server.listen();
+
+    await expectRetryAfter30Seconds(getTicket, () => authentications);
+  });
+
+  it("retries 30 s after the ticket cannot be fetched", async () => {
     const tickets = vi
       .fn<() => Promise<string>>()
       .mockRejectedValueOnce(new Error("Service unavailable."))
       .mockResolvedValue("ticket");
-    const { result, unmount } = renderSession(tickets);
 
-    await waitFor(() => expect(result.current.status).toBe("refused"));
-    await waitFor(() => expect(result.current.status).toBe("live"), {
-      timeout: 3_000,
-    });
-    unmount();
+    await expectRetryAfter30Seconds(tickets, () => tickets.mock.calls.length);
   });
 
   it("waits longer between attempts while the server stays down", async () => {
@@ -224,6 +337,8 @@ describe("useCollabConnection", () => {
       }
     };
     server = newServer();
+    // Full waits, without the random shortening: the count below depends on them.
+    const random = vi.spyOn(Math, "random").mockReturnValue(1);
     try {
       const { unmount } = renderHook(() =>
         useCollabConnection({
@@ -237,6 +352,7 @@ describe("useCollabConnection", () => {
       unmount();
     } finally {
       globalThis.WebSocket = RealWebSocket;
+      random.mockRestore();
     }
 
     // Attempts at 0, 1 s and 3 s; a fixed delay would make five.

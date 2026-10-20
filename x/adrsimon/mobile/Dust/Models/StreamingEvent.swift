@@ -18,6 +18,7 @@ struct ConversationEventEnvelope: Decodable {
 enum ConversationEventData: Decodable {
     case agentMessageNew(AgentMessageNewEvent)
     case agentMessageDone(AgentMessageDoneEventData)
+    case agentMessageConsumptionUpdated(AgentMessageConsumptionUpdatedEvent)
     case userMessageNew(UserMessageNewEvent)
     case userMessagePromoted(UserMessagePromotedEvent)
     case conversationTitle(ConversationTitleEvent)
@@ -36,6 +37,8 @@ enum ConversationEventData: Decodable {
             self = try .agentMessageNew(AgentMessageNewEvent(from: decoder))
         case "agent_message_done":
             self = try .agentMessageDone(AgentMessageDoneEventData(from: decoder))
+        case "agent_message_consumption_updated":
+            self = try .agentMessageConsumptionUpdated(AgentMessageConsumptionUpdatedEvent(from: decoder))
         case "user_message_new":
             self = try .userMessageNew(UserMessageNewEvent(from: decoder))
         case "user_message_promoted":
@@ -61,6 +64,11 @@ struct AgentMessageDoneEventData: Decodable {
     let configurationId: String
     let messageId: String
     let status: String
+}
+
+struct AgentMessageConsumptionUpdatedEvent: Decodable {
+    let messageId: String
+    let costCredits: Double?
 }
 
 struct UserMessageNewEvent: Decodable {

@@ -288,11 +288,6 @@ export const WHITELISTABLE_FEATURES_CONFIG = {
     stage: "self_serve",
     owner: "fabiencelier",
   },
-  collapsible_messages: {
-    description: "Enable collapsible messages in conversations",
-    stage: "dust_only",
-    owner: "ykmsd",
-  },
   conversation_consumption_details: {
     description:
       "Show the detailed credit attribution for agent messages in conversations",

@@ -161,6 +161,7 @@ struct AgentMessage: Codable, Identifiable {
     var generatedFiles: [GeneratedFile]?
     var citations: [String: CitationReference]?
     var error: StreamingError?
+    var costCredits: Double?
 
     var id: String {
         sId

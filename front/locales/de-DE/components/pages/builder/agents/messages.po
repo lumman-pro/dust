@@ -46,10 +46,6 @@ msgid "No agents to show."
 msgstr "Keine Agenten vorhanden."
 
 #: front/components/pages/builder/agents/ManageAgentsPage.tsx
-msgid "Dust - Manage agents"
-msgstr "Dust - Agenten verwalten"
-
-#: front/components/pages/builder/agents/ManageAgentsPage.tsx
 msgid "Search agents"
 msgstr "Agenten suchen"
 
@@ -68,6 +64,10 @@ msgstr "Erstellen und verwalten Sie Agenten, die mit dem Wissen und den Tools Ih
 #: front/components/pages/builder/agents/ManageAgentsPage.tsx
 msgid "Hidden agents"
 msgstr "Ausgeblendete Agenten"
+
+#: front/components/pages/builder/agents/ManageAgentsPage.tsx
+msgid "Dust - Manage agents"
+msgstr "Dust - Agenten verwalten"
 
 #: front/components/pages/builder/agents/NotAvailableErrorPage.tsx
 msgid "Configure model providers"

@@ -46,10 +46,6 @@ msgid "No agents to show."
 msgstr "No agents to show."
 
 #: front/components/pages/builder/agents/ManageAgentsPage.tsx
-msgid "Dust - Manage agents"
-msgstr "Dust - Manage agents"
-
-#: front/components/pages/builder/agents/ManageAgentsPage.tsx
 msgid "Search agents"
 msgstr "Search agents"
 
@@ -68,6 +64,10 @@ msgstr "Build and manage agents that work with your team's knowledge and tools."
 #: front/components/pages/builder/agents/ManageAgentsPage.tsx
 msgid "Hidden agents"
 msgstr "Hidden agents"
+
+#: front/components/pages/builder/agents/ManageAgentsPage.tsx
+msgid "Dust - Manage agents"
+msgstr "Dust - Manage agents"
 
 #: front/components/pages/builder/agents/NotAvailableErrorPage.tsx
 msgid "Configure model providers"

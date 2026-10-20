@@ -101,6 +101,9 @@
   /* Spacing additions. Numeric keys (100/125/150) feed the width, height,
      min and max size utilities — they were the preset's sizeScale. */
   --spacing-sidebar-side-spacing: 0.75rem;
+  /* Height of the sidebar's icon buttons (NavTabPill triggers and the
+     show-sidebar button that replaces them when the sidebar is collapsed). */
+  --spacing-nav-button: 2rem;
   --spacing-100: 400px;
   --spacing-125: 500px;
   --spacing-150: 600px;

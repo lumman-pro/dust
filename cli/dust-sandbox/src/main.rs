@@ -46,7 +46,10 @@ enum Commands {
         #[command(subcommand)]
         command: commands::FilesystemCommand,
     },
-    /// Interact with MCP servers and tools
+    /// Interact with MCP servers and tools.
+    /// Pass arguments with `--args-json` (a JSON object matching the tool's
+    /// `input_schema` from `dsbx tools <server>`). Legacy `--key value` pairs
+    /// still work but are not the preferred interface.
     Tools {
         /// Emit the tool execution result as JSON (`{ content, isError }`)
         /// instead of plain text; failures emit
@@ -55,9 +58,9 @@ enum Commands {
         /// Ignored when listing servers or tools.
         #[arg(long)]
         json: bool,
-        /// Tool arguments as a single JSON object (`-` reads it from stdin),
-        /// bypassing per-key parsing and coercion entirely. Must be placed
-        /// before the positional arguments and cannot be combined with
+        /// Preferred way to pass tool arguments: a single JSON object matching
+        /// the tool's `input_schema` (`-` reads it from stdin). Must be placed
+        /// before the positional arguments and cannot be combined with legacy
         /// --key value pairs.
         #[arg(long)]
         args_json: Option<String>,
@@ -65,7 +68,7 @@ enum Commands {
         server_name: Option<String>,
         /// Tool name to execute
         tool_name: Option<String>,
-        /// Tool arguments as --key value pairs
+        /// Legacy --key value pairs (prefer --args-json). Kept for backward compatibility.
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },

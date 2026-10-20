@@ -53,10 +53,24 @@ export function caretAfter(built: Editor, text: string) {
 }
 
 // Keys go through the view like a browser's.
-export function press(built: Editor, key: string) {
+export function press(built: Editor, key: string, { shiftKey = false } = {}) {
   built.view.someProp("handleKeyDown", (handle) =>
-    handle(built.view, new KeyboardEvent("keydown", { key }))
+    handle(built.view, new KeyboardEvent("keydown", { key, shiftKey }))
   );
+}
+
+export function type(built: Editor, text: string) {
+  [...text].forEach((character) => {
+    const { from, to } = built.state.selection;
+    const handled = built.view.someProp("handleTextInput", (handle) =>
+      handle(built.view, from, to, character, () =>
+        built.state.tr.insertText(character, from, to)
+      )
+    );
+    if (!handled) {
+      built.view.dispatch(built.state.tr.insertText(character, from, to));
+    }
+  });
 }
 
 export const markdown = (built: Editor) => built.getMarkdown().trim();

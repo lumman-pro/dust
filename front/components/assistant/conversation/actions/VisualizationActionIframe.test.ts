@@ -245,6 +245,54 @@ describe("VisualizationActionIframe", () => {
     expect(getLocaleParam(container)).toBe("fr-FR");
   });
 
+  it("passes the Frame's props to viz as props. params, changing the URL only when they change", () => {
+    const props = {
+      agentConfigurationId: null,
+      canInvokeFunctions: false,
+      conversationId: null,
+      viewer: null,
+      visualization: VisualizationFactory.buildPublic(),
+      vizUrl: "https://viz.dust.tt",
+      workspaceId: "w_current",
+    };
+    const getSrc = (container: HTMLElement) => {
+      const iframe = container.querySelector("iframe");
+      if (!iframe) {
+        throw new Error("Expected the visualization iframe to be mounted.");
+      }
+      return iframe.src;
+    };
+    const getPropParams = (src: string) =>
+      [...new URL(src).searchParams].filter(([param]) =>
+        param.startsWith("props.")
+      );
+
+    const { container, rerender } = render(
+      createElement(VisualizationActionIframe, props)
+    );
+    expect(getPropParams(getSrc(container))).toEqual([]);
+
+    rerender(
+      createElement(VisualizationActionIframe, {
+        ...props,
+        frameProps: { region: "EU & UK", year: "2026" },
+      })
+    );
+    const src = getSrc(container);
+    expect(getPropParams(src)).toEqual([
+      ["props.region", "EU & UK"],
+      ["props.year", "2026"],
+    ]);
+
+    rerender(
+      createElement(VisualizationActionIframe, {
+        ...props,
+        frameProps: { year: "2026", region: "EU & UK" },
+      })
+    );
+    expect(getSrc(container)).toBe(src);
+  });
+
   it("records missing styles only for the mounted Frame and accepts bounded messages", () => {
     const { container } = render(
       createElement(VisualizationActionIframe, {

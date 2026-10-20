@@ -259,6 +259,12 @@
  *           type: array
  *           items:
  *             type: string
+ *         excludedRetrievalTags:
+ *           type: array
+ *           nullable: true
+ *           description: Data source tags to exclude from retrieval for this run, as opaque `key:value` strings.
+ *           items:
+ *             type: string
  *         agenticMessageData:
  *           type: object
  *           properties:

@@ -1342,6 +1342,90 @@ describe("moveConversationOutOfProject", () => {
       expect(user2After.lastReadAt < newUpdatedAt).toBe(true);
     }
   });
+
+  it("removes participants who lose access to the conversation's required spaces", async () => {
+    const user1 = auth.getNonNullableUser();
+    const user2 = await UserFactory.basic();
+    await MembershipFactory.associate(workspace, user2, { role: "user" });
+    const auth2 = await Authenticator.fromUserIdAndWorkspaceId(
+      user2.sId,
+      workspace.sId
+    );
+    const internalAdminAuth = await Authenticator.internalAdminForWorkspace(
+      workspace.sId
+    );
+
+    // Both users are members of the project.
+    const projectSpace = await SpaceFactory.project(workspace, user1.id);
+    const projectSpaceGroup = await fetchRegularAutoGroup(
+      projectSpace,
+      internalAdminAuth
+    );
+    if (!projectSpaceGroup) {
+      throw new Error("Project space regular group not found");
+    }
+    await projectSpaceGroup.dangerouslyAddMember(internalAdminAuth, {
+      user: user1.toJSON(),
+    });
+    await projectSpaceGroup.dangerouslyAddMember(internalAdminAuth, {
+      user: user2.toJSON(),
+    });
+
+    // Only user1 is a member of the restricted space the agent requires.
+    const restrictedSpace = await SpaceFactory.regular(workspace);
+    const restrictedSpaceGroup = await fetchRegularAutoGroup(
+      restrictedSpace,
+      internalAdminAuth
+    );
+    if (!restrictedSpaceGroup) {
+      throw new Error("Restricted space regular group not found");
+    }
+    await restrictedSpaceGroup.dangerouslyAddMember(internalAdminAuth, {
+      user: user1.toJSON(),
+    });
+
+    await auth.refresh();
+    await auth2.refresh();
+
+    const agentConfig = await AgentConfigurationFactory.createTestAgent(auth, {
+      requestedSpaceIds: [restrictedSpace.id],
+    });
+    const conversation = await ConversationFactory.create(auth, {
+      agentConfigurationId: agentConfig.sId,
+      messagesCreatedAt: [new Date()],
+      spaceId: projectSpace.id,
+    });
+
+    await ConversationResource.upsertParticipation(auth, {
+      conversation,
+      action: "posted",
+      user: user1.toJSON(),
+    });
+    await ConversationResource.upsertParticipation(auth2, {
+      conversation,
+      action: "posted",
+      user: user2.toJSON(),
+    });
+
+    const result = await moveConversationOutOfProject(auth, {
+      conversation,
+    });
+
+    expect(result.isOk()).toBe(true);
+
+    const conversationResourceAfter = await ConversationResource.fetchById(
+      auth,
+      conversation.sId
+    );
+    if (!conversationResourceAfter) {
+      throw new Error("Conversation not found after move");
+    }
+    const participantsAfter =
+      await conversationResourceAfter.listParticipants(auth);
+
+    // user2 lost access to the restricted space requirement and is removed.
+    expect(participantsAfter.map((p) => p.sId)).toEqual([user1.sId]);
+  });
 });
 
 describe("toPodConversationListItem", () => {

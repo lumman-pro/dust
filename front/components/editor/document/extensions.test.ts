@@ -3,7 +3,7 @@ import { buildDocumentEditorExtensions } from "@app/components/editor/document/e
 import type { MessageDescriptor } from "@lingui/core";
 import { Editor } from "@tiptap/core";
 import { MarkdownManager } from "@tiptap/markdown";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 // A comment mark whose thread the editor does not hold, as in a live document.
 const ORPHAN_MARK_DOCUMENT = {
@@ -153,5 +153,52 @@ describe("numbered lists", () => {
     expect(
       editor?.getJSON().content?.filter(({ type }) => type === "orderedList")
     ).toHaveLength(2);
+  });
+});
+
+describe("pasted code blocks", () => {
+  const pasteHTML = (current: Editor, html: string) => {
+    // jsdom has no ClipboardEvent, which ProseMirror builds for a programmatic paste.
+    vi.stubGlobal("ClipboardEvent", class extends Event {});
+    current.view.pasteHTML(html);
+    vi.unstubAllGlobals();
+  };
+
+  const createEditor = () => {
+    editor = new Editor({
+      extensions: buildDocumentEditorExtensions(translate, {
+        resolveImageSource: () => null,
+      }),
+    });
+    return editor;
+  };
+
+  it("drops the newline ending a code block pasted as HTML, and keeps its line breaks", () => {
+    const current = createEditor();
+    pasteHTML(
+      current,
+      '<pre><code class="language-jsx">def a():\n    print("b")\n</code></pre>' +
+        "<pre><code>a<br>b</code></pre>" +
+        "<pre>c\n</pre>"
+    );
+    expect(current.getMarkdown().trim()).toBe(
+      '```jsx\ndef a():\n    print("b")\n```\n\n```\na\nb\n```\n\n```\nc\n```'
+    );
+  });
+
+  it("keeps the newline ending a code block copied from the editor", () => {
+    const current = createEditor();
+    current.commands.setContent({
+      type: "doc",
+      content: [
+        { type: "codeBlock", content: [{ type: "text", text: "a\n" }] },
+      ],
+    });
+    const { dom } = current.view.serializeForClipboard(
+      current.state.doc.slice(0, current.state.doc.content.size)
+    );
+    current.commands.clearContent();
+    pasteHTML(current, dom.innerHTML);
+    expect(current.state.doc.firstChild?.textContent).toBe("a\n");
   });
 });

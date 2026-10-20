@@ -1,5 +1,4 @@
 import { loadAgentMessageConsumptionAnalyticsInput } from "@app/lib/analytics/agent_message_consumption/load";
-import { AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION } from "@app/lib/api/assistant/agent_message_consumption_attribution/attribution_builder";
 import type { Authenticator } from "@app/lib/auth";
 import {
   USAGE_TYPE_FREE,
@@ -8,9 +7,7 @@ import {
 } from "@app/lib/metronome/constants";
 import type { UsageType } from "@app/lib/metronome/types";
 import { AgentMessageModel } from "@app/lib/models/agent/conversation";
-import { AgentMessageConsumptionItemResource } from "@app/lib/resources/agent_message_consumption_item_resource";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
-import { RunResource } from "@app/lib/resources/run_resource";
 import { AgentConfigurationFactory } from "@app/tests/utils/AgentConfigurationFactory";
 import { ConversationFactory } from "@app/tests/utils/ConversationFactory";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
@@ -220,7 +217,6 @@ describe("loadAgentMessageConsumptionAnalyticsInput", () => {
         depth: 0,
       },
       agentMessageId: context.agentMessage.sId,
-      billedCredits: 5,
       completedAt: context.completedAt,
       conversationId: context.conversation.sId,
       usages: [
@@ -489,7 +485,6 @@ describe("loadAgentMessageConsumptionAnalyticsInput", () => {
     );
 
     expect(input).toMatchObject({
-      billedCredits: 5,
       conversationId: context.conversation.sId,
     });
   });
@@ -502,20 +497,6 @@ describe("loadAgentMessageConsumptionAnalyticsInput", () => {
         agentMessageId: context.agentMessage.sId,
       })
     ).rejects.toThrow("Run usage billing classification is incomplete");
-  });
-
-  it("fails when billed usage has no authoritative message cost", async () => {
-    const context = await setupSettledMessage();
-    await ConversationResource.updateAgentMessageCostCredits(context.auth, {
-      agentMessageModelId: context.agentMessage.agentMessageId!,
-      costCredits: null,
-    });
-
-    await expect(
-      loadAgentMessageConsumptionAnalyticsInput(context.auth, {
-        agentMessageId: context.agentMessage.sId,
-      })
-    ).rejects.toThrow("Billed agent message is missing costCredits");
   });
 
   it("returns null when a failed message was never billed", async () => {
@@ -538,44 +519,51 @@ describe("loadAgentMessageConsumptionAnalyticsInput", () => {
     expect(input).toBeNull();
   });
 
-  it("keeps only the attributed usages of a failed message", async () => {
+  it("returns null when only unavailable model calls ran and nothing was billed", async () => {
     const context = await setupSettledMessage();
-    const agentMessageModelId = context.agentMessage.agentMessageId!;
-    const [billedUsage] = await RunResource.listRunUsagesForRuns(context.auth, {
-      runs: [context.run],
-    });
-    await AgentMessageConsumptionItemResource.recordItemsIdempotently(
-      context.auth,
-      {
-        conversation: context.conversation,
-        agentMessageModelId,
-        attributionVersion: AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION,
-        records: [
-          {
-            itemType: "input",
-            runUsageModelId: billedUsage.runUsageModelId,
-            inputTokensCount: 100,
-            grossAttributedCreditAmountMicro: 4_000_000,
-          },
-          {
-            itemType: "output",
-            runUsageModelId: billedUsage.runUsageModelId,
-            outputTokensCount: 20,
-            grossAttributedCreditAmountMicro: 1_000_000,
-          },
-        ],
-        pendingToolItems: [],
-      }
-    );
-    const { run: unbilledRun } = await RunFactory.createWithUsage(context.auth);
+    const { run } = await RunFactory.createWithUnavailableUsage(context.auth);
     await AgentMessageModel.update(
-      {
-        runIds: [context.run.dustRunId, unbilledRun.dustRunId],
-        status: "failed",
-      },
+      { costCredits: null, runIds: [run.dustRunId] },
       {
         where: {
-          id: agentMessageModelId,
+          id: context.agentMessageModelId,
+          workspaceId: context.workspace.id,
+        },
+      }
+    );
+
+    const input = await loadAgentMessageConsumptionAnalyticsInput(
+      context.auth,
+      { agentMessageId: context.agentMessage.sId }
+    );
+
+    expect(input).toBeNull();
+  });
+
+  it("loads a reported model call that was never billed", async () => {
+    const context = await setupSettledMessage();
+    await ConversationResource.updateAgentMessageCostCredits(context.auth, {
+      agentMessageModelId: context.agentMessageModelId,
+      costCredits: null,
+    });
+
+    const input = await loadAgentMessageConsumptionAnalyticsInput(
+      context.auth,
+      { agentMessageId: context.agentMessage.sId }
+    );
+
+    expect(input).toMatchObject({
+      usages: [{ runModelId: context.run.id }],
+    });
+  });
+
+  it("loads a failed message that was billed before it failed", async () => {
+    const context = await setupSettledMessage();
+    await AgentMessageModel.update(
+      { status: "failed" },
+      {
+        where: {
+          id: context.agentMessage.agentMessageId!,
           workspaceId: context.workspace.id,
         },
       }
@@ -587,10 +575,8 @@ describe("loadAgentMessageConsumptionAnalyticsInput", () => {
     );
 
     expect(input).toMatchObject({
-      billedCredits: 5,
-      hasUnbilledExecution: true,
       messageStatus: "failed",
-      usages: [{ runUsageModelId: billedUsage.runUsageModelId }],
+      usages: [{ runModelId: context.run.id }],
     });
   });
 
@@ -617,7 +603,6 @@ describe("loadAgentMessageConsumptionAnalyticsInput", () => {
     );
 
     expect(input).toMatchObject({
-      billedCredits: 5,
       completedAt: analyticsContext?.agentMessage.updatedAt,
       messageStatus: "created",
     });

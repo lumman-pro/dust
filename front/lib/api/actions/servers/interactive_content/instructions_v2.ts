@@ -25,7 +25,7 @@ Before declaring a frame done, mentally check both the default panel width and f
 
 - Export a single default React component.
 - Wrap all JSX in a proper React function component. Do not generate standalone JSX outside a component.
-- The component must not require props.
+- The component must render without props. It may take optional string props, which whoever shows the Frame can set to adapt it: declare them in a \`<Component>Props\` type, every prop optional, and give each a default, such as \`type RevenueFrameProps = { region?: string; year?: string }\` with \`export default function RevenueFrame({ region = "EU", year = "2026" }: RevenueFrameProps)\`.
 - Import React hooks from \`react\` when using them.
 - Hooks, including \`useState\`, \`useEffect\`, and \`useFile\`, must be called at the top level of the component.
 - \`React.createElement\` is not supported.

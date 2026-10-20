@@ -26,7 +26,7 @@ an element in the host's header bar, to show the comments button there instead.
 
 `loadDfm` in `dfm_persistence.ts` decides. Hosts mount the editor for every Markdown file
 they hand it; a file opens for editing when it is valid DFM, its body is Markdown the editor
-reproduces, and every comment anchor the codec reads is one the editor can highlight. Task lists, HTML and reference
+reproduces, and every comment anchor the codec reads is one the editor can highlight. HTML and reference
 links are refused for now, since the TipTap Markdown parser cannot preserve them. Every code
 block opens, and saves fenced with backticks: a tilde or indented fence is rewritten, and the
 fence grows longer than any run of backticks in the code. A fence whose info string holds a
@@ -34,9 +34,11 @@ backtick saves with tildes instead, since a backtick fence cannot hold one. Inli
 or linked text, but never in a comment. A refused file is shown as read-only source
 with the reason. Line endings are not preserved: a CRLF file opens and is written back with LF.
 
-An empty paragraph in a list item or a quote saves as `&nbsp;`, TipTap's marker for an empty
-paragraph that blank lines would drop, and reads back as an empty paragraph, so an empty list item
-saves as `- &nbsp;`. An empty heading saves as its `#` marker alone.
+An empty paragraph in a list item or a quote, or alone between two lists of the same type, saves
+as `&nbsp;`, TipTap's marker for an empty paragraph that blank lines would drop, and reads back as
+an empty paragraph, so an empty list item saves as `- &nbsp;`. An empty heading saves as its `#`
+marker alone. A list directly after a list of the same type saves with the other marker, `*` or
+`1)`, so Markdown reads it as its own list.
 
 ## Tables
 
@@ -53,6 +55,16 @@ is refused when a row has more cells than its header, since marked would drop th
 Front matter is kept in an envelope and written back unchanged on save. The editor rewrites
 the body and the comment threads, and only when the codec confirms the result reads back
 identically.
+
+## Task lists
+
+GFM task items, `- [ ]` and `1. [x]`, are list items with `task` and `checked` attributes on
+StarterKit's `listItem` (`DocumentListItem.ts`), so a list mixing tasks and plain items stays one
+list. marked's GFM lexer reads every list, numbered ones included (`DocumentOrderedList.ts`
+turns off TipTap's own numbered list tokenizer), so `a.` and `i.` numbering reads as text. GFM
+has no empty task: a task with no text on its first line saves as an empty item.
+`anchorComment` refuses an agent's comment anchor that would land on a task marker, since the
+DFM codec's structure check reads GFM task markers (`front/lib/markdown/dfm/parser.ts`).
 
 ## Comments
 

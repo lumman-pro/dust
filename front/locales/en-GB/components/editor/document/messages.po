@@ -42,7 +42,6 @@ msgid "Insert"
 msgstr ""
 
 #: front/components/editor/document/DocumentBlockMenu.tsx
-#: front/components/editor/document/DocumentCommentThread.tsx
 msgid "Close"
 msgstr ""
 
@@ -123,7 +122,11 @@ msgid "Resolve"
 msgstr ""
 
 #: front/components/editor/document/DocumentCommentThread.tsx
-msgid "Delete comment"
+msgid "More actions"
+msgstr ""
+
+#: front/components/editor/document/DocumentCommentThread.tsx
+msgid "Delete"
 msgstr ""
 
 #. placeholder {0}: replies.length
@@ -216,10 +219,6 @@ msgstr ""
 
 #: front/components/editor/document/DocumentMarkdownPreview.tsx
 msgid "This document can't be edited here yet because it has HTML."
-msgstr ""
-
-#: front/components/editor/document/DocumentMarkdownPreview.tsx
-msgid "This document can't be edited here yet because it has a task list."
 msgstr ""
 
 #: front/components/editor/document/DocumentMarkdownPreview.tsx

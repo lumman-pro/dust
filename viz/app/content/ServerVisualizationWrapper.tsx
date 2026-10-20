@@ -1,6 +1,7 @@
 import { ServerVisualizationWrapperClient } from "@viz/app/content/ServerVisualizationWrapperClient";
 import { concurrentExecutor } from "@viz/app/lib/async_utils";
 import type { PreFetchedFile } from "@viz/app/lib/data-apis/cache-data-api";
+import type { FrameProps } from "@viz/app/lib/frame-props";
 import type { VizCatalog } from "@viz/app/lib/i18n/catalogs";
 import logger from "@viz/app/lib/logger";
 import { extractFileRefs } from "@viz/app/lib/parseFileRefs";
@@ -167,6 +168,7 @@ interface ServerSideVisualizationWrapperProps {
   identifier: string;
   isFullHeight?: boolean;
   isPdfMode?: boolean;
+  frameProps: FrameProps;
   catalog: VizCatalog;
 }
 
@@ -187,6 +189,7 @@ export async function ServerSideVisualizationWrapper({
   identifier,
   isFullHeight = false,
   isPdfMode = false,
+  frameProps,
   catalog,
 }: ServerSideVisualizationWrapperProps) {
   let prefetchedCode: string | undefined;
@@ -239,6 +242,7 @@ export async function ServerSideVisualizationWrapper({
       identifier={identifier}
       isFullHeight={isFullHeight}
       isPdfMode={isPdfMode}
+      frameProps={frameProps}
       prefetchedCode={prefetchedCode}
       prefetchedFiles={preFetchedFiles}
       isAuthenticatedMember={isAuthenticatedMember}

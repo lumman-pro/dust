@@ -20,6 +20,9 @@ struct MessageBubbleView: View {
     var onAnswerQuestion: ((UserQuestionAnswer) -> Void)?
     var onRetry: ((String) -> Void)?
     var onOpenInBrowser: (() -> Void)?
+    var isBranching: Bool = false
+    var onCopyLink: ((String) -> Void)?
+    var onBranch: ((String) -> Void)?
 
     var body: some View {
         switch message {
@@ -48,7 +51,10 @@ struct MessageBubbleView: View {
                 onValidateAction: onValidateAction,
                 onAnswerQuestion: onAnswerQuestion,
                 onRetry: onRetry,
-                onOpenInBrowser: onOpenInBrowser
+                onOpenInBrowser: onOpenInBrowser,
+                isBranching: isBranching,
+                onCopyLink: onCopyLink,
+                onBranch: onBranch
             )
         }
     }
@@ -142,6 +148,9 @@ struct AgentMessageBubble: View {
     var onAnswerQuestion: ((UserQuestionAnswer) -> Void)?
     var onRetry: ((String) -> Void)?
     var onOpenInBrowser: (() -> Void)?
+    var isBranching: Bool = false
+    var onCopyLink: ((String) -> Void)?
+    var onBranch: ((String) -> Void)?
 
     // While streaming, directive parsing is throttled to avoid re-scanning the whole
     // message on every token (~30/sec → ~7/sec). Once finished, the content is stable
@@ -176,6 +185,10 @@ struct AgentMessageBubble: View {
 
     private var showsCitations: Bool {
         !message.isStreaming && message.citations?.isEmpty == false && !rendered.citeMapping.isEmpty
+    }
+
+    private var showsActions: Bool {
+        !message.isStreaming && message.status != .failed
     }
 
     var body: some View {
@@ -267,6 +280,16 @@ struct AgentMessageBubble: View {
 
             if message.status == .failed, let error = effectiveError {
                 ErrorCardView(error: error, onRetry: { onRetry?(message.sId) })
+            }
+
+            if showsActions {
+                AgentMessageActions(
+                    copyText: copyableAgentMessage(rawContent, citations: message.citations),
+                    costCredits: message.costCredits,
+                    isBranching: isBranching,
+                    onCopyLink: { onCopyLink?(message.sId) },
+                    onBranch: { onBranch?(message.sId) }
+                )
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -901,6 +924,88 @@ struct UserQuestionInlineView: View {
             selectedOptions: selectedOptions.sorted(),
             customResponse: trimmedResponse.isEmpty ? nil : trimmedResponse
         )
+    }
+}
+
+// MARK: - Agent Message Actions
+
+struct AgentMessageActions: View {
+    let copyText: String
+    let costCredits: Double?
+    let isBranching: Bool
+    let onCopyLink: () -> Void
+    let onBranch: () -> Void
+
+    @State private var isCopied = false
+    @State private var copyFeedback = 0
+
+    private static let copiedResetDelay: Duration = .seconds(2)
+
+    private var formattedCredits: String? {
+        guard let costCredits, costCredits > 0 else { return nil }
+        return costCredits.formatted(.number.precision(.fractionLength(0 ... 1)))
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Button {
+                UIPasteboard.general.string = copyText
+                isCopied = true
+                copyFeedback += 1
+            } label: {
+                actionIcon(isCopied ? .clipboardCheck : .clipboard)
+            }
+            .accessibilityLabel(isCopied ? "Copied" : "Copy to clipboard")
+
+            if let formattedCredits {
+                HStack(spacing: 4) {
+                    Text(formattedCredits)
+                        .sparkleCopyXs()
+                    SparkleIcon.coinsStacked01.image
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 12, height: 12)
+                }
+                .padding(.horizontal, 6)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(
+                    "\(formattedCredits) \(formattedCredits == "1" ? "credit" : "credits") used for this message"
+                )
+            }
+
+            Menu {
+                Button {
+                    onCopyLink()
+                    copyFeedback += 1
+                } label: {
+                    Label { Text("Copy message link") } icon: { SparkleIcon.link01.image }
+                }
+                Button(action: onBranch) {
+                    Label { Text("Branch from here") } icon: { SparkleIcon.gitBranch01.image }
+                }
+                .disabled(isBranching)
+            } label: {
+                actionIcon(.dotsHorizontal)
+            }
+            .accessibilityLabel("More message actions")
+        }
+        .foregroundStyle(Color.dustFaint)
+        .buttonStyle(.plain)
+        .sensoryFeedback(.success, trigger: copyFeedback)
+        .task(id: isCopied) {
+            guard isCopied else { return }
+            try? await Task.sleep(for: Self.copiedResetDelay)
+            isCopied = false
+        }
+    }
+
+    private func actionIcon(_ icon: SparkleIcon) -> some View {
+        icon.image
+            .resizable()
+            .scaledToFit()
+            .frame(width: 14, height: 14)
+            .frame(width: 28, height: 28)
+            .contentShape(Rectangle())
     }
 }
 

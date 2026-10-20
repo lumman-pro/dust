@@ -46,6 +46,7 @@ import { AgentMCPActionResource } from "@app/lib/resources/agent_mcp_action_reso
 import { AgentMessageConsumptionItemResource } from "@app/lib/resources/agent_message_consumption_item_resource";
 import { AgentStepContentResource } from "@app/lib/resources/agent_step_content_resource";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
+import { InternalMCPServerInMemoryResource } from "@app/lib/resources/internal_mcp_server_in_memory_resource";
 import { MCPServerViewResource } from "@app/lib/resources/mcp_server_view_resource";
 import { RemoteMCPServerToolMetadataResource } from "@app/lib/resources/remote_mcp_server_tool_metadata_resource";
 import { SpaceResource } from "@app/lib/resources/space_resource";
@@ -56,6 +57,7 @@ import { launchSandboxChildToolWorkflow } from "@app/temporal/agent_loop/client"
 import { AgentConfigurationFactory } from "@app/tests/utils/AgentConfigurationFactory";
 import { AgentMCPServerConfigurationFactory } from "@app/tests/utils/AgentMCPServerConfigurationFactory";
 import { ConversationFactory } from "@app/tests/utils/ConversationFactory";
+import { DataSourceViewFactory } from "@app/tests/utils/DataSourceViewFactory";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
 import { MCPServerViewFactory } from "@app/tests/utils/MCPServerViewFactory";
 import { RemoteMCPServerFactory } from "@app/tests/utils/RemoteMCPServerFactory";
@@ -69,6 +71,7 @@ import type {
 import { Ok } from "@app/types/shared/result";
 import { slugify } from "@app/types/shared/utils/string_utils";
 import type { WorkspaceType } from "@app/types/user";
+import { INTERNAL_MIME_TYPES } from "@dust-tt/client";
 
 const TOOL_NAME = "get-available-tables";
 const SECOND_TOOL_NAME = "get-audience-fields";
@@ -643,5 +646,48 @@ describe("createSandboxChildAction", () => {
     );
     expect(child?.status).toBe("blocked_validation_required");
     expect(child?.toolConfiguration.permission).toBe("high");
+  });
+
+  it("injects preconfigured dataSources into child tool inputs", async () => {
+    const warehouses = await InternalMCPServerInMemoryResource.makeNew(auth, {
+      name: "data_warehouses",
+      useCase: null,
+    });
+    const warehousesView = await MCPServerViewFactory.create(
+      workspace,
+      warehouses.id,
+      globalSpace
+    );
+    const warehouseDsv = await DataSourceViewFactory.fromConnector(
+      workspace,
+      globalSpace,
+      "snowflake"
+    );
+    await AgentMCPServerConfigurationFactory.create(auth, globalSpace, {
+      agent: agentConfig,
+      mcpServerView: warehousesView,
+      dataSourceViews: [warehouseDsv],
+    });
+
+    const result = await callChildTool(
+      {},
+      { serverViewId: warehousesView.sId, toolName: "find" }
+    );
+    if (result.isErr()) {
+      throw result.error;
+    }
+
+    const child = await AgentMCPActionResource.fetchById(
+      auth,
+      result.value.actionId
+    );
+    expect(child?.augmentedInputs.dataSources).toEqual([
+      expect.objectContaining({
+        mimeType: INTERNAL_MIME_TYPES.TOOL_INPUT.DATA_WAREHOUSE,
+        uri: expect.stringMatching(
+          /^data_source_configuration:\/\/dust\/w\/.+\/data_source_configurations\/.+/
+        ),
+      }),
+    ]);
   });
 });

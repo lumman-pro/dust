@@ -1,6 +1,8 @@
 import { autoInternalMCPServerNameToSId } from "@app/lib/actions/mcp_helper";
 import type { Authenticator } from "@app/lib/auth";
+import { AgentDataSourceConfigurationModel } from "@app/lib/models/agent/actions/data_sources";
 import { AgentMCPServerConfigurationModel } from "@app/lib/models/agent/actions/mcp";
+import type { DataSourceViewResource } from "@app/lib/resources/data_source_view_resource";
 import type { MCPServerViewResource } from "@app/lib/resources/mcp_server_view_resource";
 import type { SpaceResource } from "@app/lib/resources/space_resource";
 import { generateRandomModelSId } from "@app/lib/resources/string_ids_server";
@@ -15,6 +17,11 @@ export class AgentMCPServerConfigurationFactory {
     options?: {
       agent?: AgentConfigurationType;
       mcpServerView?: MCPServerViewResource;
+      /**
+       * When set, links each data source view to the created MCP server
+       * configuration (agent tooling dataSources / warehouses).
+       */
+      dataSourceViews?: DataSourceViewResource[];
     }
   ): Promise<AgentMCPServerConfigurationModel> {
     const owner = auth.getNonNullableWorkspace();
@@ -33,7 +40,7 @@ export class AgentMCPServerConfigurationFactory {
         space
       ));
 
-    return AgentMCPServerConfigurationModel.create({
+    const config = await AgentMCPServerConfigurationModel.create({
       sId: generateRandomModelSId(),
       agentConfigurationId: agent.id,
       workspaceId: owner.id,
@@ -46,5 +53,20 @@ export class AgentMCPServerConfigurationFactory {
       singleToolDescriptionOverride: null,
       appId: null,
     });
+
+    for (const dataSourceView of options?.dataSourceViews ?? []) {
+      await AgentDataSourceConfigurationModel.create({
+        workspaceId: owner.id,
+        dataSourceId: dataSourceView.dataSource.id,
+        dataSourceViewId: dataSourceView.id,
+        mcpServerConfigurationId: config.id,
+        tagsMode: null,
+        tagsIn: null,
+        tagsNotIn: null,
+        parentsIn: null,
+      });
+    }
+
+    return config;
   }
 }

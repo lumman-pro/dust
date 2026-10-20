@@ -10,6 +10,7 @@ import { SpaceResource } from "@app/lib/resources/space_resource";
 import { GroupPermissionModel } from "@app/lib/resources/storage/models/group_permissions";
 import { AgentConfigurationFactory } from "@app/tests/utils/AgentConfigurationFactory";
 import { AgentMCPServerConfigurationFactory } from "@app/tests/utils/AgentMCPServerConfigurationFactory";
+import { DataSourceViewFactory } from "@app/tests/utils/DataSourceViewFactory";
 import { GroupFactory } from "@app/tests/utils/GroupFactory";
 import { MCPServerViewFactory } from "@app/tests/utils/MCPServerViewFactory";
 import { RemoteMCPServerFactory } from "@app/tests/utils/RemoteMCPServerFactory";
@@ -18,6 +19,7 @@ import {
   createSandboxTokenTestContext,
 } from "@app/tests/utils/SandboxTokenFactory";
 import { SpaceFactory } from "@app/tests/utils/SpaceFactory";
+import { INTERNAL_MIME_TYPES } from "@dust-tt/client";
 import { honoApp } from "@front-api/app";
 import { assert, describe, expect, it } from "vitest";
 
@@ -223,11 +225,13 @@ describe("GET /api/v1/w/[wId]/sandbox/actions", () => {
 
     expect(response.status).toBe(200);
     const body = await response.json();
+    // `search` needs data-source configuration and has no company default, so it is
+    // omitted for function tokens (same rule as `/call`).
     expect(
       body.serverViews
         .map((sv: { server: { name: string } }) => sv.server.name)
         .sort()
-    ).toEqual(["common_utilities", "remote_server", "search"]);
+    ).toEqual(["common_utilities", "remote_server"]);
   });
 
   it("hides the files server", async () => {
@@ -244,6 +248,15 @@ describe("GET /api/v1/w/[wId]/sandbox/actions", () => {
       useCase: null,
     });
     await MCPServerViewFactory.create(workspace, search.id, globalSpace);
+    const commonUtilities = await InternalMCPServerInMemoryResource.makeNew(
+      auth,
+      { name: "common_utilities", useCase: null }
+    );
+    await MCPServerViewFactory.create(
+      workspace,
+      commonUtilities.id,
+      globalSpace
+    );
 
     const response = await getSandboxActions(workspace, token);
 
@@ -251,7 +264,7 @@ describe("GET /api/v1/w/[wId]/sandbox/actions", () => {
     const body = await response.json();
     expect(
       body.serverViews.map((sv: { server: { name: string } }) => sv.server.name)
-    ).toEqual(["search"]);
+    ).toEqual(["common_utilities"]);
   });
 
   it("hides the tools an admin disabled on the server", async () => {
@@ -329,5 +342,82 @@ describe("GET /api/v1/w/[wId]/sandbox/actions", () => {
     expect(await viewIdsFor("gmail2")).toEqual([second.sId]);
     expect(await viewIdsFor("gmail")).toEqual([first.sId, second.sId].sort());
     expect(await viewIdsFor("gmail3")).toEqual([]);
+  });
+
+  it("hides required configurable tool inputs from listed schemas", async () => {
+    const { auth, token, workspace, globalSpace } =
+      await createSandboxFunctionInvocationTokenTestContext();
+
+    // Company warehouses so data_warehouses stays listable under function-token rules.
+    await DataSourceViewFactory.fromConnector(
+      workspace,
+      globalSpace,
+      "snowflake"
+    );
+    const warehouses = await InternalMCPServerInMemoryResource.makeNew(auth, {
+      name: "data_warehouses",
+      useCase: null,
+    });
+    await MCPServerViewFactory.create(workspace, warehouses.id, globalSpace);
+
+    const response = await getSandboxActions(workspace, token);
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    const warehouseView = body.serverViews.find(
+      (sv: { server: { name: string } }) => sv.server.name === "data_warehouses"
+    );
+    expect(warehouseView).toBeDefined();
+    for (const tool of warehouseView.server.tools) {
+      expect(tool.inputSchema?.properties?.dataSources).toBeUndefined();
+      expect(tool.inputSchema?.required ?? []).not.toContain("dataSources");
+      const schemaText = JSON.stringify(tool.inputSchema ?? {});
+      expect(schemaText).not.toContain(
+        INTERNAL_MIME_TYPES.TOOL_INPUT.DATA_WAREHOUSE
+      );
+    }
+  });
+
+  it("omits data_warehouses when the workspace has no company warehouses", async () => {
+    const { auth, token, workspace, globalSpace } =
+      await createSandboxFunctionInvocationTokenTestContext();
+
+    const warehouses = await InternalMCPServerInMemoryResource.makeNew(auth, {
+      name: "data_warehouses",
+      useCase: null,
+    });
+    await MCPServerViewFactory.create(workspace, warehouses.id, globalSpace);
+
+    const response = await getSandboxActions(workspace, token);
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(
+      body.serverViews.map((sv: { server: { name: string } }) => sv.server.name)
+    ).not.toContain("data_warehouses");
+  });
+
+  it("lists data_warehouses when company warehouses exist", async () => {
+    const { auth, token, workspace, globalSpace } =
+      await createSandboxFunctionInvocationTokenTestContext();
+
+    await DataSourceViewFactory.fromConnector(
+      workspace,
+      globalSpace,
+      "snowflake"
+    );
+    const warehouses = await InternalMCPServerInMemoryResource.makeNew(auth, {
+      name: "data_warehouses",
+      useCase: null,
+    });
+    await MCPServerViewFactory.create(workspace, warehouses.id, globalSpace);
+
+    const response = await getSandboxActions(workspace, token);
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(
+      body.serverViews.map((sv: { server: { name: string } }) => sv.server.name)
+    ).toContain("data_warehouses");
   });
 });

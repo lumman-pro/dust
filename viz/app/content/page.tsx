@@ -1,5 +1,6 @@
 import { ClientVisualizationWrapper } from "@viz/app/content/ClientVisualizationWrapper";
 import { ServerSideVisualizationWrapper } from "@viz/app/content/ServerVisualizationWrapper";
+import { getFramePropsFromSearchParams } from "@viz/app/lib/frame-props";
 import { getVizCatalog } from "@viz/app/lib/i18n/catalogs";
 import { resolveVizLocale } from "@viz/app/lib/i18n/resolveVizLocale";
 import { headers } from "next/headers";
@@ -24,7 +25,8 @@ const { ALLOWED_VISUALIZATION_ORIGIN } = process.env;
 export default function RenderVisualization({
   searchParams,
 }: {
-  searchParams: RenderVisualizationSearchParams;
+  searchParams: RenderVisualizationSearchParams &
+    Record<string, string | string[] | undefined>;
 }) {
   const allowedOrigins = ALLOWED_VISUALIZATION_ORIGIN
     ? ALLOWED_VISUALIZATION_ORIGIN.split(",").map((s) => s.trim())
@@ -44,6 +46,7 @@ export default function RenderVisualization({
   const isStagedEdits = stagedEdits === "true";
   const isFullHeight = fullHeight === "true";
   const isPdfMode = pdfMode === "true";
+  const frameProps = getFramePropsFromSearchParams(searchParams);
   // Resolved here rather than in the browser, so that server and client render the same language,
   // and only that language's catalog is sent to the browser.
   const catalog = getVizCatalog(
@@ -64,6 +67,7 @@ export default function RenderVisualization({
         identifier={identifier!}
         isFullHeight={isFullHeight}
         isPdfMode={isPdfMode}
+        frameProps={frameProps}
         catalog={catalog}
       />
     );
@@ -78,6 +82,7 @@ export default function RenderVisualization({
         isEditable={isEditable}
         stagedEdits={isStagedEdits}
         isFullHeight={isFullHeight}
+        frameProps={frameProps}
         catalog={catalog}
       />
     );

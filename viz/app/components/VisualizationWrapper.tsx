@@ -374,6 +374,11 @@ export function VisualizationWrapperWithErrorBoundary({
 
 // This component renders the generated code.
 // It gets the generated code via message passing to the host window.
+/**
+ * @cc [owner:tdraier,label:product] frame-component-props
+ * The Frame's default export MUST render with exactly the config's `frameProps`, and none
+ * without them.
+ */
 export function VisualizationWrapper({
   config,
   api,
@@ -387,6 +392,7 @@ export function VisualizationWrapper({
     stagedEdits = false,
     isFullHeight = false,
     isPdfMode = false,
+    frameProps,
   } = config;
   const [runnerParams, setRunnerParams] = useState<RunnerParams | null>(null);
   const [vizReady, setVizReady] = useState(false);
@@ -544,7 +550,7 @@ export function VisualizationWrapper({
         });
 
         setRunnerParams({
-          code: "() => {import Comp from '@dust/generated-code'; return (<Comp />);}",
+          code: "() => {import Comp from '@dust/generated-code'; return (<Comp {...frameProps} />);}",
           scope: {
             import: {
               ...baseImports,
@@ -638,13 +644,23 @@ export function VisualizationWrapper({
     () => ({ isPdfMode, editText, addEventListener, editMode }),
     [addEventListener, editMode, editText, isPdfMode]
   );
+  // Runner re-runs the Frame whenever its scope changes, so build the scope only when the code or
+  // the props change.
+  const runnerScope = useMemo(
+    () =>
+      runnerParams && {
+        ...runnerParams.scope,
+        frameProps: frameProps ?? {},
+      },
+    [runnerParams, frameProps]
+  );
 
   if (errored) {
     // Throw the error to the ErrorBoundary.
     throw errored;
   }
 
-  if (!runnerParams) {
+  if (!runnerParams || !runnerScope) {
     // Return null while loading. The parent (VisualizationActionIframe) already
     // shows a Lottie spinner overlay for this period. Returning null keeps
     // contentHeight at 0 (no height message sent), so the parent spinner stays
@@ -661,7 +677,7 @@ export function VisualizationWrapper({
     <div ref={ref}>
       <Runner
         code={runnerParams.code}
-        scope={runnerParams.scope}
+        scope={runnerScope}
         onRendered={(error) => {
           if (error) {
             setErrorMessage(error);

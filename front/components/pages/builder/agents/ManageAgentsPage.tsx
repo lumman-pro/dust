@@ -11,6 +11,7 @@ import {
 } from "@app/components/assistant/manager/agentFilter";
 import { AgentFilterPanel } from "@app/components/assistant/manager/AgentFilterPanel";
 import { AgentSearchTable } from "@app/components/assistant/manager/AgentSearchTable";
+import { PageLayout } from "@app/components/layouts/PageLayout";
 import {
   ManageTrackingContext,
   trackManageDetails,
@@ -28,10 +29,7 @@ import {
   getSearchFilterPresets,
 } from "@app/components/shared/filter_panel/searchFilter";
 import { useSearchPageHashState } from "@app/components/shared/filter_panel/searchFilterHash";
-import {
-  useSetContentWidth,
-  useSetPageTitle,
-} from "@app/components/sparkle/AppLayoutContext";
+import { useSetPageTitle } from "@app/components/sparkle/AppLayoutContext";
 import { useHashParam } from "@app/hooks/useHashParams";
 import { useSearchAgents } from "@app/hooks/useSearchAgents";
 import { useAuth, useWorkspace } from "@app/lib/auth/AuthContext";
@@ -284,7 +282,7 @@ function AgentsList({
   );
 }
 
-interface ManageAgentsPageProps {
+interface ManageAgentsContentProps {
   readOnly?: boolean;
   showHeader?: boolean;
   searchEndpoint?: string;
@@ -307,7 +305,7 @@ interface ManageAgentsPageProps {
  * Only visible filter categories may constrain results and facets; hidden selections remain
  * available when switching back to a tab that supports them.
  */
-export function ManageAgentsPage({
+export function ManageAgentsContent({
   readOnly = false,
   showHeader = true,
   searchEndpoint,
@@ -316,7 +314,7 @@ export function ManageAgentsPage({
   searchActions,
   onSelect,
   renderActions,
-}: ManageAgentsPageProps) {
+}: ManageAgentsContentProps) {
   const { t } = useLingui();
   const owner = useWorkspace();
   const { user, isAdmin } = useAuth();
@@ -360,8 +358,6 @@ export function ManageAgentsPage({
     permissionFilteringOverride === undefined &&
     isAdmin &&
     selectedTab === "all";
-  useSetContentWidth("wide");
-  useSetPageTitle(t`Dust - Manage agents`);
 
   // Only admins may list the agents they neither edit nor share a space with. Archived agents
   // are listed unrestricted for admins, as in the legacy page.
@@ -441,7 +437,6 @@ export function ManageAgentsPage({
               </div>
             }
             description={t`Build and manage agents that work with your team's knowledge and tools.`}
-            noTopPadding
           />
         )}
         {searchActions ? (
@@ -567,5 +562,18 @@ export function ManageAgentsPage({
         />
       )}
     </ManageTrackingContext.Provider>
+  );
+}
+
+// The app's agents management page; poke embeds ManageAgentsContent without this
+// page layout.
+export function ManageAgentsPage() {
+  const { t } = useLingui();
+  useSetPageTitle(t`Dust - Manage agents`);
+
+  return (
+    <PageLayout>
+      <ManageAgentsContent />
+    </PageLayout>
   );
 }

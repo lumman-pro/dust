@@ -33,7 +33,31 @@ private func replaceInlineDirectives(_ markdown: String) -> String {
 /// Single-pass processing of :cite directives. Returns both the transformed markdown
 /// and the ordered mapping of ref keys to sequential numbers.
 func processCiteDirectives(_ markdown: String) -> (text: String, mapping: [CiteEntry]) {
-    var counter = 0
+    replaceCiteDirectives(markdown) { numbers in
+        numbers.map(superscript).joined(separator: "\u{2009}")
+    }
+}
+
+/**
+ * @cc [owner:adrsimon,label:product] copied-agent-message-matches-web
+ * Copied text MUST mirror the web copy button: `:cite[a,b]` becomes `[1,2]` numbered by first
+ * appearance, and cited sources with an href MUST be appended as a `References:` list.
+ */
+func copyableAgentMessage(_ content: String, citations: [String: CitationReference]?) -> String {
+    let cited = replaceCiteDirectives(extractSuggestionBatches(content).text) { numbers in
+        "[\(numbers.map(String.init).joined(separator: ","))]"
+    }
+    let references = cited.mapping.compactMap { entry in
+        citations?[entry.ref]?.href.map { "[\(entry.number)] \($0)" }
+    }
+    guard !references.isEmpty else { return cited.text }
+    return cited.text + "\n\nReferences:\n" + references.joined(separator: "\n")
+}
+
+private func replaceCiteDirectives(
+    _ markdown: String,
+    format: ([Int]) -> String
+) -> (text: String, mapping: [CiteEntry]) {
     var seen: [String: Int] = [:]
     var ordered: [CiteEntry] = []
     var result = ""
@@ -47,17 +71,16 @@ func processCiteDirectives(_ markdown: String) -> (text: String, mapping: [CiteE
 
         result += markdown[lastEnd ..< matchRange.lowerBound]
 
-        let markers = markdown[refsRange].split(separator: ",").compactMap { part -> String? in
+        let numbers = markdown[refsRange].split(separator: ",").compactMap { part -> Int? in
             let ref = part.trimmingCharacters(in: .whitespaces)
             guard !ref.isEmpty else { return nil }
-            if seen[ref] == nil {
-                counter += 1
-                seen[ref] = counter
-                ordered.append(CiteEntry(ref: ref, number: counter))
-            }
-            return superscript(seen[ref]!)
+            if let number = seen[ref] { return number }
+            let number = ordered.count + 1
+            seen[ref] = number
+            ordered.append(CiteEntry(ref: ref, number: number))
+            return number
         }
-        result += markers.joined(separator: "\u{2009}")
+        result += format(numbers)
         lastEnd = matchRange.upperBound
     }
     result += markdown[lastEnd...]

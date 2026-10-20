@@ -9,6 +9,7 @@ on:
         options:
           - connectors
           - core
+          - dfs
           - front
           - front-edge
           - oauth

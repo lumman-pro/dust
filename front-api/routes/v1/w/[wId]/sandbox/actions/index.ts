@@ -1,3 +1,4 @@
+import { hideInternalConfiguration } from "@app/lib/actions/mcp_internal_actions/input_configuration";
 import { isServerSideMCPServerConfiguration } from "@app/lib/actions/types/guards";
 import { FILES_SERVER_NAME } from "@app/lib/api/actions/servers/files/metadata";
 import { SANDBOX_TOOL_NAME } from "@app/lib/api/actions/servers/sandbox/metadata";
@@ -9,6 +10,7 @@ import {
   isSandboxExecTokenPayload,
   isSandboxFunctionInvocationTokenPayload,
 } from "@app/lib/api/sandbox/access_tokens";
+import { filterSandboxFunctionServerViews } from "@app/lib/api/sandbox/company_default_configurations";
 import { selectServerViewsByReference } from "@app/lib/api/sandbox/server_view_reference";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { MCPServerViewResource } from "@app/lib/resources/mcp_server_view_resource";
@@ -64,15 +66,41 @@ function withoutDisabledTools(view: MCPServerViewType): MCPServerViewType {
   };
 }
 
-// Response shaping shared by both token kinds: disabled tools removal, `?server=` reference
-// resolution and `?light=true` inputSchema stripping.
+// Match the agent-loop path (`buildToolSpecification`): required TOOL_INPUT.* props are
+// injected server-side, so exposing them in `dsbx tools` only makes agents invent URIs.
+function withoutInternalConfiguration(
+  view: MCPServerViewType
+): MCPServerViewType {
+  if (view.serverType !== "internal") {
+    return view;
+  }
+
+  return {
+    ...view,
+    server: {
+      ...view.server,
+      tools: view.server.tools.map((tool) =>
+        tool.inputSchema
+          ? {
+              ...tool,
+              inputSchema: hideInternalConfiguration(tool.inputSchema),
+            }
+          : tool
+      ),
+    },
+  };
+}
+
+// Response shaping shared by both token kinds: disabled tools removal, hide required
+// configurable inputs, `?server=` reference resolution and `?light=true` inputSchema stripping.
 function filterServerViews(
   views: MCPServerViewType[],
   { server, light }: { server?: string; light?: string }
 ): MCPServerViewType[] {
   let serverViews = views
     .filter((sv) => !SANDBOX_HIDDEN_SERVER_NAMES.includes(sv.server.name))
-    .map(withoutDisabledTools);
+    .map(withoutDisabledTools)
+    .map(withoutInternalConfiguration);
 
   if (server !== undefined) {
     serverViews = selectServerViewsByReference(serverViews, server);
@@ -101,8 +129,8 @@ app.get("/", async (ctx): HandlerResult<GetSandboxToolsResponseType> => {
   const claims = ctx.get("sandboxClaims");
 
   // Sandbox function invocations have no agent configuration or conversation: they see the
-  // servers of their pod space (+ global space). Tools that require an agent-loop context error
-  // at execution based on the run context.
+  // servers of their pod space (+ global space). Servers that still need agent-side config after
+  // Dust company defaults are omitted (same set `/call` can satisfy).
   if (isSandboxFunctionInvocationTokenPayload(claims)) {
     // Deliberately not the EnsuringAutoViews variant: token read paths must not write. Auto
     // views not yet materialized in the global space stay invisible until another surface
@@ -116,7 +144,10 @@ app.get("/", async (ctx): HandlerResult<GetSandboxToolsResponseType> => {
       }
     );
 
-    const serverViews = views.map((view) => view.toJSON());
+    const serverViews = await filterSandboxFunctionServerViews(
+      auth,
+      views.map((view) => view.toJSON())
+    );
 
     return ctx.json(
       { serverViews: filterServerViews(serverViews, ctx.req.query()) },

@@ -6,6 +6,7 @@ struct ConversationDetailView: View {
     let conversation: Conversation
     let currentUserEmail: String
     let currentUserSId: String?
+    let onConversationBranched: (Conversation) -> Void
 
     private let workspaceId: String
     private let tokenProvider: TokenProvider
@@ -23,11 +24,13 @@ struct ConversationDetailView: View {
         tokenProvider: TokenProvider,
         user: User,
         currentUserEmail: String,
-        currentUserSId: String?
+        currentUserSId: String?,
+        onConversationBranched: @escaping (Conversation) -> Void
     ) {
         self.conversation = conversation
         self.currentUserEmail = currentUserEmail
         self.currentUserSId = currentUserSId
+        self.onConversationBranched = onConversationBranched
         self.workspaceId = workspaceId
         self.tokenProvider = tokenProvider
         _viewModel = StateObject(
@@ -257,6 +260,23 @@ struct ConversationDetailView: View {
                                         let path = "/w/\(workspaceId)/assistant/\(conversation.sId)"
                                         if let url = URL(string: base + path) {
                                             UIApplication.shared.open(url)
+                                        }
+                                    },
+                                    isBranching: viewModel.isBranching,
+                                    onCopyLink: { messageId in
+                                        UIPasteboard.general.url = AppConfig.messageURL(
+                                            workspaceId: workspaceId,
+                                            conversationId: conversation.sId,
+                                            messageId: messageId
+                                        )
+                                    },
+                                    onBranch: { messageId in
+                                        Task {
+                                            if let branched = await viewModel
+                                                .branchConversation(fromMessageId: messageId)
+                                            {
+                                                onConversationBranched(branched)
+                                            }
                                         }
                                     }
                                 )

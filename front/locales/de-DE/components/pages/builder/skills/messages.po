@@ -38,10 +38,6 @@ msgid "No skills to show."
 msgstr "Keine Fähigkeiten vorhanden."
 
 #: front/components/pages/builder/skills/ManageSkillsPage.tsx
-msgid "Dust - Manage skills"
-msgstr "Dust - Fähigkeiten verwalten"
-
-#: front/components/pages/builder/skills/ManageSkillsPage.tsx
 msgid "Search skills"
 msgstr "Fähigkeiten suchen"
 
@@ -60,3 +56,7 @@ msgstr "Wiederverwendbare Pakete aus Anweisungen und Tools, die Agenten gemeinsa
 #: front/components/pages/builder/skills/ManageSkillsPage.tsx
 msgid "Hidden skills"
 msgstr "Ausgeblendete Fähigkeiten"
+
+#: front/components/pages/builder/skills/ManageSkillsPage.tsx
+msgid "Dust - Manage skills"
+msgstr "Dust - Fähigkeiten verwalten"

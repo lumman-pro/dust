@@ -1,3 +1,4 @@
+import { PageLayout } from "@app/components/layouts/PageLayout";
 import {
   ManageTrackingContext,
   trackManageDetails,
@@ -33,10 +34,7 @@ import {
   SkillsBatchEditBar,
 } from "@app/components/skills/SkillsBatchEdit";
 import { SkillSearchTable } from "@app/components/skills/SkillSearchTable";
-import {
-  useSetContentWidth,
-  useSetPageTitle,
-} from "@app/components/sparkle/AppLayoutContext";
+import { useSetPageTitle } from "@app/components/sparkle/AppLayoutContext";
 import { useHashParam } from "@app/hooks/useHashParams";
 import { useAuth, useWorkspace } from "@app/lib/auth/AuthContext";
 import { useWorkspacePermissions } from "@app/lib/swr/permissions";
@@ -311,7 +309,7 @@ function SkillsList({
   );
 }
 
-interface ManageSkillsPageProps {
+interface ManageSkillsContentProps {
   readOnly?: boolean;
   showHeader?: boolean;
   searchEndpoint?: string;
@@ -326,7 +324,7 @@ interface ManageSkillsPageProps {
  * In readOnly mode, built-in creation, batch-edit and detail controls MUST NOT render.
  * Table and facet requests MUST use the same searchEndpoint when supplied.
  */
-export function ManageSkillsPage({
+export function ManageSkillsContent({
   readOnly = false,
   showHeader = true,
   searchEndpoint,
@@ -334,7 +332,7 @@ export function ManageSkillsPage({
   permissionFiltering: permissionFilteringOverride,
   searchActions,
   onSelect,
-}: ManageSkillsPageProps) {
+}: ManageSkillsContentProps) {
   const { t } = useLingui();
   const owner = useWorkspace();
   const { user, isAdmin } = useAuth();
@@ -383,8 +381,6 @@ export function ManageSkillsPage({
     });
   const filter = resolveFilter(toSkillSearchFilterFacets(selectionFacets));
   const searchFilters = toSkillSearchFilters(filter);
-  useSetContentWidth("wide");
-  useSetPageTitle(t`Dust - Manage skills`);
 
   const searchInput = (
     <div className="w-full md:w-1/2">
@@ -427,7 +423,6 @@ export function ManageSkillsPage({
               </div>
             }
             description={t`Reusable packages of instructions and tools that agents can share.`}
-            noTopPadding
           />
         )}
         {searchActions ? (
@@ -545,5 +540,18 @@ export function ManageSkillsPage({
         />
       )}
     </ManageTrackingContext.Provider>
+  );
+}
+
+// The app's skills management page; poke embeds ManageSkillsContent without this
+// page layout.
+export function ManageSkillsPage() {
+  const { t } = useLingui();
+  useSetPageTitle(t`Dust - Manage skills`);
+
+  return (
+    <PageLayout>
+      <ManageSkillsContent />
+    </PageLayout>
   );
 }

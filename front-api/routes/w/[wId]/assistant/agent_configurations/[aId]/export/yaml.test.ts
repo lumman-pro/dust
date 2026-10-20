@@ -31,14 +31,15 @@ async function createAgentUsingFolder({
   const agent = await AgentConfigurationFactory.createTestAgent(auth, {
     scope: "hidden",
   });
+  const mcpServerView = await MCPServerViewFactory.internal(
+    workspace,
+    "search",
+    globalSpace
+  );
   const mcpServerConfiguration =
     await AgentMCPServerConfigurationFactory.create(auth, globalSpace, {
       agent,
-      mcpServerView: await MCPServerViewFactory.internal(
-        workspace,
-        "search",
-        globalSpace
-      ),
+      mcpServerView,
     });
   await AgentDataSourceConfigurationModel.create({
     workspaceId: workspace.id,
@@ -51,7 +52,14 @@ async function createAgentUsingFolder({
     tagsNotIn: null,
   });
 
-  return { workspace, auth, agent, dataSourceView };
+  return {
+    workspace,
+    auth,
+    agent,
+    dataSourceView,
+    mcpServerView,
+    mcpServerConfiguration,
+  };
 }
 
 function exportYaml(workspace: { sId: string }, aId: string) {
@@ -199,5 +207,19 @@ describe("GET /api/w/:wId/assistant/agent_configurations/:aId/export/yaml", () =
     expect(response.status).toBe(404);
     const data = await response.json();
     expect(data.error.type).toBe("data_source_view_not_found");
+  });
+
+  it("returns a 404 for an agent using a deleted MCP server view", async () => {
+    const { workspace, auth, agent, mcpServerView, mcpServerConfiguration } =
+      await createAgentUsingFolder({ parentsIn: null });
+    await mcpServerView.delete(auth, { hardDelete: false });
+
+    const response = await exportYaml(workspace, agent.sId);
+
+    expect(response.status).toBe(404);
+    const data = await response.json();
+    expect(data.error.type).toBe("mcp_server_view_not_found");
+    expect(data.error.message).toContain('"search"');
+    expect(data.error.message).toContain(mcpServerConfiguration.sId);
   });
 });

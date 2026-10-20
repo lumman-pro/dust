@@ -1,3 +1,4 @@
+import type { FrameProps } from "@viz/app/lib/frame-props";
 import type {
   UserIdentityState,
   WriteFileParams,
@@ -79,5 +80,6 @@ export interface VisualizationConfig {
   stagedEdits?: boolean;
   isFullHeight?: boolean;
   isPdfMode?: boolean;
+  frameProps?: FrameProps;
   dataAPI: VisualizationDataAPI;
 }

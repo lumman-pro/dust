@@ -1,6 +1,10 @@
-import type { ServerSideMCPToolConfigurationType } from "@app/lib/actions/mcp";
+import type {
+  ServerSideMCPServerConfigurationType,
+  ServerSideMCPToolConfigurationType,
+} from "@app/lib/actions/mcp";
 import { MCP_TOOL_CONFIGURATION_FIELDS_TO_OMIT } from "@app/lib/actions/mcp";
 import { buildToolConfigurationsFromRawTools } from "@app/lib/actions/mcp_actions";
+import { getAugmentedInputs } from "@app/lib/actions/mcp_execution";
 import type { SandboxFunctionMCPApproveExecutionEvent } from "@app/lib/actions/mcp_internal_actions/events";
 import { validateToolInputs } from "@app/lib/actions/mcp_utils";
 import { makeMCPApproveExecutionEventBase } from "@app/lib/actions/tool_approval_events";
@@ -10,6 +14,7 @@ import {
   emitAuditLogEvent,
   getAuditLogContext,
 } from "@app/lib/api/audit/workos_audit";
+import { resolveSandboxFunctionServerConfiguration } from "@app/lib/api/sandbox/company_default_configurations";
 import { buildSandboxFunctionAuditMetadata } from "@app/lib/api/sandbox_functions/audit";
 import { publishSandboxFunctionInvocationEvent } from "@app/lib/api/sandbox_functions/events";
 import type { SandboxFunctionMcpActionServerTimingsMs } from "@app/lib/api/sandbox_functions/sandbox_function_mcp_action_server_timings";
@@ -19,7 +24,6 @@ import { MCPServerViewResource } from "@app/lib/resources/mcp_server_view_resour
 import { SandboxFunctionInvocationResource } from "@app/lib/resources/sandbox_function_invocation_resource";
 import { SandboxFunctionMCPActionResource } from "@app/lib/resources/sandbox_function_mcp_action_resource";
 import { SandboxFunctionResource } from "@app/lib/resources/sandbox_function_resource";
-import { generateRandomModelSId } from "@app/lib/resources/string_ids_server";
 import logger from "@app/logger/logger";
 import { launchSandboxFunctionToolWorkflow } from "@app/temporal/sandbox_functions/client";
 import type { Result } from "@app/types/shared/result";
@@ -41,13 +45,21 @@ class SandboxFunctionMCPActionError extends Error {
 }
 
 // Resolves a tool for execution from a sandbox function invocation. The tool must exist and be
-// enabled. Tools that need an agent-loop context error at execution based on the run context.
+// enabled. `companyConfig` is set when Dust company defaults apply (warehouses / company data);
+// callers inject those into args and otherwise leave caller-supplied rawInputs alone so explicit
+// dataSources URIs keep working without a company default.
 async function resolveSandboxFunctionTool(
   auth: Authenticator,
   view: MCPServerViewResource<"configuration">,
   toolName: string
 ): Promise<
-  Result<ServerSideMCPToolConfigurationType, SandboxFunctionMCPActionError>
+  Result<
+    {
+      toolConfiguration: ServerSideMCPToolConfigurationType;
+      companyConfig: ServerSideMCPServerConfigurationType | null;
+    },
+    SandboxFunctionMCPActionError
+  >
 > {
   const viewJSON = view.toJSON();
   const tool = viewJSON.server.tools.find((t) => t.name === toolName);
@@ -60,31 +72,26 @@ async function resolveSandboxFunctionTool(
     );
   }
 
-  // View-default server configuration: there is no agent configuration to inject settings from
-  // (same synthesized shape as JIT servers, see `jit/common_utilities.ts`).
+  // No agent on the token: Dust company defaults (warehouses / company data) when available,
+  // otherwise the empty view-default shape (same as JIT common utilities).
+  const { companyConfig, serverConfiguration } =
+    await resolveSandboxFunctionServerConfiguration(auth, viewJSON);
+
   const toolConfigurationsRes = await buildToolConfigurationsFromRawTools(
     auth,
     view.mcpServerId,
     {
-      id: -1,
-      sId: generateRandomModelSId(),
-      type: "mcp_server_configuration",
+      ...serverConfiguration,
+      // Prefer the called view's display name over the company-default action name.
       name: viewJSON.name ?? viewJSON.server.name,
       description: viewJSON.description ?? viewJSON.server.description,
-      dataSources: null,
-      tables: null,
-      childAgentId: null,
-      timeFrame: null,
-      jsonSchema: null,
-      additionalConfiguration: {},
       mcpServerViewId: viewJSON.sId,
-      dustAppConfiguration: null,
-      secretName: null,
-      dustProject: null,
       // Null for remote servers, matching the agent path (see `configuration/actions.ts`).
       internalMCPServerId: view.internalMCPServerId,
     },
-    [{ name: tool.name, description: tool.description }],
+    // Pass the full tool (including inputSchema) so getAugmentedInputs can inject
+    // company-default TOOL_INPUT.* fields.
+    [tool],
     view.remoteMCPServerUrl
   );
   if (toolConfigurationsRes.isErr()) {
@@ -107,7 +114,7 @@ async function resolveSandboxFunctionTool(
     );
   }
 
-  return new Ok(toolConfiguration);
+  return new Ok({ toolConfiguration, companyConfig });
 }
 
 /**
@@ -225,12 +232,22 @@ export async function createSandboxFunctionMCPAction(
     );
   }
 
-  const toolConfiguration = toolConfigurationRes.value;
+  const { toolConfiguration, companyConfig } = toolConfigurationRes.value;
+  // Inject company defaults when we have them. Without a company default, keep rawInputs
+  // unchanged so callers that already pass configuration URIs (pre-hideInternalConfiguration
+  // clients) still work — MCP validation rejects missing required fields.
+  const augmentedInputs = companyConfig
+    ? getAugmentedInputs(auth, {
+        actionConfiguration: toolConfiguration,
+        rawInputs,
+      })
+    : rawInputs;
+
   const stakeStatusStarted = performance.now();
   const { status: executionStatus } = await getExecutionStatusFromConfig(auth, {
     actionConfiguration: toolConfiguration,
     context: {
-      toolInputs: rawInputs,
+      toolInputs: augmentedInputs,
     },
   });
   const stakeStatusMs = roundMs(stakeStatusStarted);
@@ -252,7 +269,7 @@ export async function createSandboxFunctionMCPAction(
     invocation,
     mcpServerView: view,
     toolName,
-    inputs: rawInputs,
+    inputs: augmentedInputs,
     toolConfiguration: omit(
       toolConfiguration,
       MCP_TOOL_CONFIGURATION_FIELDS_TO_OMIT
@@ -280,7 +297,7 @@ export async function createSandboxFunctionMCPAction(
       const approvalEventBase = await makeMCPApproveExecutionEventBase(auth, {
         actionId: action.sId,
         toolConfiguration,
-        inputs: rawInputs,
+        inputs: augmentedInputs,
         approvalSubjectName: sandboxFunction.slug,
       });
       const approvalEvent: SandboxFunctionMCPApproveExecutionEvent = {

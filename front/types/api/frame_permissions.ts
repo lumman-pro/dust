@@ -25,6 +25,11 @@ export type GetFramePermissionsResponseBody = {
    * callers who can edit the Frame.
    */
   draftPublicationId: string | null;
+  /**
+   * Whether the Frame is in draft mode (every publish is a draft until one is made live), reported
+   * only to callers who can edit the Frame.
+   */
+  draftMode: boolean;
   /** Live publication's frame-level tools.call pairs; empty when none or no publication. */
   requiredTools: FrameToolCallPair[];
   /**

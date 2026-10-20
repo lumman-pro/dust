@@ -4,6 +4,10 @@ import { Button } from "@sparkle/components/Button";
 import type { ContentMessageProps } from "@sparkle/components/ContentMessage";
 import { ContentMessage } from "@sparkle/components/ContentMessage";
 import { Icon } from "@sparkle/components/Icon";
+import type {
+  InputSizeType,
+  InputVariantType,
+} from "@sparkle/components/Input";
 import { Input } from "@sparkle/components/Input";
 import {
   PopoverContent,
@@ -36,6 +40,19 @@ export interface SearchInputProps {
   disabled?: boolean;
   /** Replaces the trailing icon with a small spinner while results are being fetched. */
   isLoading?: boolean;
+  /** Field height, same scale as `Input`: "xs" (24px), "sm" (32px, default), or "md" (40px). */
+  size?: InputSizeType;
+  /**
+   * "default" draws the form border; "borderless" drops border and fill for a field
+   * framed by its surface, such as the search field of a command palette.
+   */
+  variant?: InputVariantType;
+  /**
+   * Where the search icon sits: "right" (default) shares the trailing slot with the
+   * clear button and spinner; "left" renders it as the field's leading icon, so the
+   * trailing slot stays empty until there is something to clear or a search in flight.
+   */
+  iconPosition?: "left" | "right";
   className?: string;
 }
 
@@ -61,6 +78,9 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
       name,
       disabled = false,
       isLoading = false,
+      size = "sm",
+      variant = "default",
+      iconPosition = "right",
       className,
     },
     ref
@@ -88,6 +108,9 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
           onBlur={onBlur}
           onKeyDown={onKeyDown}
           disabled={disabled}
+          size={size}
+          variant={variant}
+          icon={iconPosition === "left" ? SearchMd : undefined}
           ref={ref}
         />
         <div className="absolute inset-y-0 right-0 flex items-center pr-1">
@@ -103,7 +126,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
               size="xs"
               onClick={clearInputField}
             />
-          ) : (
+          ) : iconPosition === "right" ? (
             <div
               className={cn(
                 "px-2",
@@ -116,7 +139,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
                 className="text-muted-foreground"
               />
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     );

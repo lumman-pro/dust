@@ -29,8 +29,8 @@ const app = workspaceApp();
  * `hasFunctions` MUST describe the latest publication only when the request asks for
  * `publication=latest` AND the caller passes `canWriteFrameV2Source`; otherwise it describes the
  * live one, matching what `frame-view-serves-latest-only-when-asked` serves the same caller.
- * `draftPublicationId` MUST be reported to every writer whatever `publication` is, and to no one
- * else.
+ * `draftPublicationId` and `draftMode` MUST be reported to every writer whatever `publication`
+ * is, and to no one else.
  */
 app.get(
   "/",
@@ -112,6 +112,7 @@ app.get(
       draftPublicationId: canWriteFrameSource
         ? (frame.pendingDraftPublicationId ?? null)
         : null,
+      draftMode: canWriteFrameSource && frame.isInFrameDraftMode,
       requiredTools,
       authorizedTools,
       isLastPublisher,

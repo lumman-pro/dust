@@ -71,6 +71,8 @@ import {
   useState,
 } from "react";
 
+const FRAME_PROP_URL_PARAM_PREFIX = "props.";
+
 interface BaseVisualization {
   complete: boolean;
   identifier: string;
@@ -809,6 +811,7 @@ export interface VisualizationActionIframeProps {
   functionTarget?: FramePublicationTarget;
   /** The rendered Frame's file, legacy or v2, whose saved allowlist admits out-of-scope reads. */
   frameFileId?: string | null;
+  frameProps?: Record<string, string>;
   isEditable?: boolean;
   /**
    * Frames v2 authors only: edits are staged in the viz until Save. Switching between Preview and
@@ -836,6 +839,11 @@ export interface VisualizationActionIframeProps {
  * @cc [owner:ykmsd,label:product] frame-locale-from-host
  * When `locale` is set, the iframe URL MUST carry it as `locale`; otherwise the URL MUST omit
  * `locale`, so that viz falls back to the browser's language.
+ */
+/**
+ * @cc [owner:tdraier,label:product] frame-props-in-url
+ * The iframe URL MUST carry each of `frameProps` as a `props.<name>` search param, and no
+ * `props.` param without them. Only a change to their names or values MUST change the URL.
  */
 /**
  * @cc [owner:flvndvd,label:security] frame-host-file-writes
@@ -1129,6 +1137,13 @@ export const VisualizationActionIframe = forwardRef<
 
   // Only whether edits are staged is part of the URL; the current mode is posted instead.
   const hasStagedEdits = stagedEditMode !== undefined;
+  // Encoded outside the URL's memo, sorted by name, so that the props compare by value, not by
+  // object identity or key order.
+  const framePropsQuery = new URLSearchParams(
+    Object.entries(props.frameProps ?? {})
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([name, value]) => [`${FRAME_PROP_URL_PARAM_PREFIX}${name}`, value])
+  ).toString();
   const vizUrl = useMemo(() => {
     const params = new URLSearchParams();
     params.set("identifier", visualization.identifier);
@@ -1154,6 +1169,10 @@ export const VisualizationActionIframe = forwardRef<
       params.set("locale", props.locale);
     }
 
+    for (const [param, value] of new URLSearchParams(framePropsQuery)) {
+      params.append(param, value);
+    }
+
     return `${props.vizUrl.replace(/\/$/, "")}/content?${params.toString()}`;
   }, [
     visualization,
@@ -1162,6 +1181,7 @@ export const VisualizationActionIframe = forwardRef<
     hasStagedEdits,
     props.locale,
     props.vizUrl,
+    framePropsQuery,
   ]);
 
   // Toggle Preview|Edit affordances inside the already-loaded viz (no URL / remount change).

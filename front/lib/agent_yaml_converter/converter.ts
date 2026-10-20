@@ -238,23 +238,17 @@ export class AgentYAMLConverter {
       return null;
     }
 
-    try {
-      const mcpServerView = await MCPServerViewResource.fetchById(
-        auth,
-        configuration.mcpServerViewId
-      );
-      if (!mcpServerView) {
-        return null;
-      }
-      // Match the precedence used to resolve names back on import
-      // (see MCPServerViewResource.resolveAttachableByName): the view's
-      // custom display name, if set, takes priority over the server's name.
-      return (
-        mcpServerView.name ?? mcpServerView.getServerDisplayMetadata().name
-      );
-    } catch {
+    const mcpServerView = await MCPServerViewResource.fetchById(
+      auth,
+      configuration.mcpServerViewId
+    );
+    if (!mcpServerView) {
       return null;
     }
+    // Match the precedence used to resolve names back on import
+    // (see MCPServerViewResource.resolveAttachableByName): the view's
+    // custom display name, if set, takes priority over the server's name.
+    return mcpServerView.name ?? mcpServerView.getServerDisplayMetadata().name;
   }
 
   private static convertDataSources(

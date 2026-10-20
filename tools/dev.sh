@@ -42,7 +42,7 @@ if ! command -v cargo-watch >/dev/null 2>&1; then
 fi
 
 if ! "$SCRIPT_DIR/install-fdb-client.sh" --check; then
-  echo "The FoundationDB client library (needed by dfs-api) is not installed."
+  echo "The FoundationDB client library is missing or does not match the version required by dfs-api."
   echo "Install it with: tools/install-fdb-client.sh"
   exit 1
 fi

@@ -90,7 +90,7 @@ const NavTabPillTrigger = React.forwardRef<
     };
 
     const triggerClassName = cn(
-      "group flex h-8 items-center justify-center whitespace-nowrap rounded-lg pl-2 group-data-[state=active]:pl-2.5 [&:not([data-state=active])]:pr-2 text-sm",
+      "group flex h-nav-button items-center justify-center whitespace-nowrap rounded-lg pl-2 group-data-[state=active]:pl-2.5 [&:not([data-state=active])]:pr-2 text-sm",
       "text-muted-foreground",
       "hover:bg-hover",
       "font-medium",

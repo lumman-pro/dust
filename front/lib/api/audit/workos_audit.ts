@@ -195,6 +195,7 @@ export const AUDIT_ACTIONS = [
   "frame.deleted_admin",
   "frame.domain_grant_added",
   "frame.domain_grant_revoked",
+  "frame.draft_mode_updated",
   "frame.email_grant_added",
   "frame.email_grant_revoked",
   "frame.publication_activated",

@@ -103,6 +103,31 @@ describe("Frame publication pointers", () => {
     expect(reloaded?.pendingDraftPublicationId).toBeUndefined();
   });
 
+  it("reads as in draft mode only while the flag is set", async () => {
+    const { auth, frame } = await setupLiveFrame();
+    expect(frame.isInFrameDraftMode).toBe(false);
+
+    await frame.enterFrameDraftMode({ userSId: auth.getNonNullableUser().sId });
+    expect(frame.isInFrameDraftMode).toBe(true);
+
+    await frame.exitFrameDraftMode();
+    expect(frame.isInFrameDraftMode).toBe(false);
+  });
+
+  it("ends draft mode when a publication is activated", async () => {
+    const { auth, frame } = await setupLiveFrame();
+    await frame.enterFrameDraftMode({ userSId: auth.getNonNullableUser().sId });
+
+    await frame.setActiveFramePublication({
+      publicationId: "publication-next",
+      description: "Track tasks.",
+    });
+
+    const reloaded = await FileResource.fetchById(auth, frame.sId);
+    expect(reloaded?.useCaseMetadata?.frameDraftMode).toBeUndefined();
+    expect(reloaded?.isInFrameDraftMode).toBe(false);
+  });
+
   it("records the agent on a draft", async () => {
     const { auth, frame } = await setupLiveFrame();
 

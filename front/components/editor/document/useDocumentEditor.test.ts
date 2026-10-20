@@ -43,10 +43,10 @@ describe("useDocumentEditor", () => {
   });
 
   it("keeps the refused source and reason when the content prop changes", () => {
-    const taskList = "Intro.\n\n- [ ] todo\n";
-    const { result, rerender } = renderEditor(taskList);
+    const html = "Intro.\n\n<div>x</div>\n";
+    const { result, rerender } = renderEditor(html);
     const refused = result.current.unsupported;
-    expect(refused?.source).toBe(taskList);
+    expect(refused?.source).toBe(html);
 
     rerender({ initialContent: "# Plain\n" });
 

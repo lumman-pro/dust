@@ -1,11 +1,14 @@
+import { getConversation } from "@app/lib/api/assistant/conversation/fetch";
 import { AgentConfigurationModel } from "@app/lib/models/agent/agent";
 import { AgentConfigurationFactory } from "@app/tests/utils/AgentConfigurationFactory";
 import { ConversationFactory } from "@app/tests/utils/ConversationFactory";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
 import {
+  buildAgentLoopDataFromConversation,
   getAgentLoopRuntimeDataWithAuth,
   isAgentLoopConfigNotFoundError,
 } from "@app/types/assistant/agent_run";
+import { isUserMessageType } from "@app/types/assistant/conversation";
 import { AUTO_MODEL_ID } from "@app/types/assistant/models/auto";
 import { describe, expect, it } from "vitest";
 
@@ -114,5 +117,87 @@ describe("getAgentLoopRuntimeDataWithAuth", () => {
     expect(result.error.message).toBe(
       "The selected model was not found claude-smores-eap."
     );
+  });
+});
+
+describe("buildAgentLoopDataFromConversation excludedRetrievalTags", () => {
+  async function setup() {
+    const { authenticator: auth, workspace } = await createResourceTest({});
+    const agentConfig = await AgentConfigurationFactory.createTestAgent(auth);
+    const conversation = await ConversationFactory.create(auth, {
+      agentConfigurationId: agentConfig.sId,
+      messagesCreatedAt: [],
+    });
+    const { messageRow: userMessageRow, userMessage } =
+      await ConversationFactory.createUserMessage({
+        auth,
+        workspace,
+        conversation,
+        content: "Hello",
+      });
+    const { agentMessage } = await ConversationFactory.createAgentMessage(
+      auth,
+      {
+        workspace,
+        conversation,
+        agentConfig,
+        parentMessageModelId: userMessageRow.id,
+        rank: 1,
+      }
+    );
+
+    const conversationRes = await getConversation(auth, conversation.sId);
+    if (conversationRes.isErr()) {
+      throw conversationRes.error;
+    }
+
+    const baseArgs = {
+      agentMessageId: agentMessage.sId,
+      agentMessageVersion: agentMessage.version,
+      conversationId: conversation.sId,
+      conversationTitle: conversation.title,
+      userMessageId: userMessage.sId,
+      userMessageVersion: userMessage.version,
+      userMessageOrigin: userMessage.context.origin,
+    };
+
+    return { auth, conversationType: conversationRes.value, baseArgs };
+  }
+
+  it("injects the args tags onto the run user message without mutating the source", async () => {
+    const { auth, conversationType, baseArgs } = await setup();
+
+    const result = await buildAgentLoopDataFromConversation(
+      auth,
+      { ...baseArgs, excludedRetrievalTags: ["threadId:123"] },
+      conversationType
+    );
+    if (result.isErr()) {
+      throw result.error;
+    }
+
+    expect(result.value.userMessage.context.excludedRetrievalTags).toEqual([
+      "threadId:123",
+    ]);
+
+    const sourceUserMessage = conversationType.content
+      .flat()
+      .find(isUserMessageType);
+    expect(sourceUserMessage?.context.excludedRetrievalTags).toBeUndefined();
+  });
+
+  it("defaults to null when the args omit the tags", async () => {
+    const { auth, conversationType, baseArgs } = await setup();
+
+    const result = await buildAgentLoopDataFromConversation(
+      auth,
+      baseArgs,
+      conversationType
+    );
+    if (result.isErr()) {
+      throw result.error;
+    }
+
+    expect(result.value.userMessage.context.excludedRetrievalTags).toBeNull();
   });
 });

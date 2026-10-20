@@ -1,7 +1,10 @@
 import { z } from "zod";
 
 export const MakeFrameDraftLiveRequestBodySchema = z.object({
-  /** The draft publication the caller is showing, or got back from its draft publish. */
+  /**
+   * The latest publication the caller is showing: the pending draft, or the live publication when
+   * nothing changed in draft mode (making it live then only ends draft mode).
+   */
   draftPublicationId: z.string().min(1),
 });
 

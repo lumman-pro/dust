@@ -240,8 +240,7 @@ async function handleDataSourceWithProvider({
         status_code: 401,
         api_error: {
           type: "plan_limit_error",
-          message:
-            "Your plan does not allow you to create more connected data sources. You already have at least ${plan.limits.connections.count} data sources",
+          message: `Your plan does not allow you to create more connected data sources. You already have at least ${plan.limits.connections.count} data sources.`,
         },
       });
     }

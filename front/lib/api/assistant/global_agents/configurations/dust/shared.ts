@@ -1,4 +1,4 @@
-import type { MCPServerConfigurationType } from "@app/lib/actions/mcp";
+import type { ServerSideMCPServerConfigurationType } from "@app/lib/actions/mcp";
 import type {
   MCPServerViewsForGlobalAgentsMap,
   PrefetchedDataSourcesType,
@@ -9,14 +9,17 @@ import {
 } from "@app/lib/data_sources";
 import { GLOBAL_AGENTS_SID } from "@app/types/assistant/assistant";
 
-export function getCompanyDataAction(
-  preFetchedDataSources: PrefetchedDataSourcesType | null,
-  mcpServerViews: MCPServerViewsForGlobalAgentsMap
-): MCPServerConfigurationType | null {
-  const { data_sources_file_system: dataSourcesFileSystemMCPServerView } =
-    mcpServerViews;
+/** Minimal view identity for company-default MCP configs (global agents or sandbox). */
+export type CompanyDefaultMcpViewRef = {
+  sId: string;
+  internalMCPServerId: string | null;
+};
 
-  if (!preFetchedDataSources || !dataSourcesFileSystemMCPServerView) {
+export function buildCompanyDataConfiguration(
+  preFetchedDataSources: PrefetchedDataSourcesType | null,
+  dataSourcesFileSystemView: CompanyDefaultMcpViewRef | null
+): ServerSideMCPServerConfigurationType | null {
+  if (!preFetchedDataSources || !dataSourcesFileSystemView) {
     return null;
   }
 
@@ -35,8 +38,8 @@ export function getCompanyDataAction(
     type: "mcp_server_configuration",
     name: "company_data",
     description: "The user's internal company data.",
-    mcpServerViewId: dataSourcesFileSystemMCPServerView.sId,
-    internalMCPServerId: dataSourcesFileSystemMCPServerView.internalMCPServerId,
+    mcpServerViewId: dataSourcesFileSystemView.sId,
+    internalMCPServerId: dataSourcesFileSystemView.internalMCPServerId,
     dataSources: dataSourceViews.map((dsView) => ({
       dataSourceViewId: dsView.sId,
       workspaceId: preFetchedDataSources.workspaceId,
@@ -59,13 +62,11 @@ export function getCompanyDataAction(
   };
 }
 
-export function getCompanyDataWarehousesAction(
+export function buildCompanyDataWarehousesConfiguration(
   preFetchedDataSources: PrefetchedDataSourcesType | null,
-  mcpServerViews: MCPServerViewsForGlobalAgentsMap
-): MCPServerConfigurationType | null {
-  const { data_warehouses: dataWarehousesMCPServerView } = mcpServerViews;
-
-  if (!preFetchedDataSources || !dataWarehousesMCPServerView) {
+  dataWarehousesView: CompanyDefaultMcpViewRef | null
+): ServerSideMCPServerConfigurationType | null {
+  if (!preFetchedDataSources || !dataWarehousesView) {
     return null;
   }
 
@@ -83,8 +84,8 @@ export function getCompanyDataWarehousesAction(
     type: "mcp_server_configuration",
     name: "data_warehouses",
     description: "The user's data warehouses.",
-    mcpServerViewId: dataWarehousesMCPServerView.sId,
-    internalMCPServerId: dataWarehousesMCPServerView.internalMCPServerId,
+    mcpServerViewId: dataWarehousesView.sId,
+    internalMCPServerId: dataWarehousesView.internalMCPServerId,
     dataSources: globalWarehouses.map((dsView) => ({
       dataSourceViewId: dsView.sId,
       workspaceId: preFetchedDataSources.workspaceId,
@@ -102,4 +103,24 @@ export function getCompanyDataWarehousesAction(
     secretName: null,
     dustProject: null,
   };
+}
+
+export function getCompanyDataAction(
+  preFetchedDataSources: PrefetchedDataSourcesType | null,
+  mcpServerViews: MCPServerViewsForGlobalAgentsMap
+): ServerSideMCPServerConfigurationType | null {
+  return buildCompanyDataConfiguration(
+    preFetchedDataSources,
+    mcpServerViews.data_sources_file_system
+  );
+}
+
+export function getCompanyDataWarehousesAction(
+  preFetchedDataSources: PrefetchedDataSourcesType | null,
+  mcpServerViews: MCPServerViewsForGlobalAgentsMap
+): ServerSideMCPServerConfigurationType | null {
+  return buildCompanyDataWarehousesConfiguration(
+    preFetchedDataSources,
+    mcpServerViews.data_warehouses
+  );
 }

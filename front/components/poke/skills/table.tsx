@@ -1,4 +1,4 @@
-import { ManageSkillsPage } from "@app/components/pages/builder/skills/ManageSkillsPage";
+import { ManageSkillsContent } from "@app/components/pages/builder/skills/ManageSkillsPage";
 import { CreateSkillSuggestionSheet } from "@app/components/poke/skills/CreateSkillSuggestionSheet";
 import { useAppRouter } from "@app/lib/platform";
 import type { LightWorkspaceType } from "@app/types/user";
@@ -38,7 +38,7 @@ export function SkillsDataTable({ owner }: SkillsDataTableProps) {
         onClose={() => setShowCreateSuggestionSheet(false)}
         owner={owner}
       />
-      <ManageSkillsPage
+      <ManageSkillsContent
         showHeader={false}
         readOnly
         searchEndpoint={`/api/poke/workspaces/${owner.sId}/skills/search`}
