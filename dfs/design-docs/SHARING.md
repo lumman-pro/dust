@@ -98,9 +98,10 @@ Instead, the popover warns when you add someone who can't read some of the conve
 requested spaces: they'll see data from those spaces. Sharing it anyway is the sharer's call.
 
 This is a change for standalone conversations, where today a conversation using a restricted space
-is never visible to people outside that space. But that ship has sailed with Pods: a pod
-conversation is visible to every pod member, whatever spaces its agents read from
-(`requestedSpaceIds` is forced to the pod's space).
+is never visible to people outside that space. Simplifying this is a goal of dfs in the end, so
+it's only a concern for the transition. And that ship has sailed with Pods: a pod conversation is
+visible to every pod member, whatever spaces its agents read from (`requestedSpaceIds` is forced
+to the pod's space).
 
 In any case, backfilling grants from participants isn't a trapdoor: it only grants people who can
 access the conversation today, and grants can be tightened later if we change our mind.
@@ -203,7 +204,9 @@ enlarge. Keeping link access would mean making everything readable, so searchabl
 4. **API-created conversations.** Which folder and owner without a user?
 5. **Sub-conversations.** TBD: nest the folder under the parent's, or handle them in the backfill
    by tracing back the user and adding grants.
-6. **Session cache.** Memory or Redis? Session keys are bearer credentials.
+6. **Session cache.** Rec: in memory, per process. Creating a session per request means an FDB
+   write and a session record living an hour each, and misses the server's 30s auth cache.
+   Alt: Redis, shared across pods, but session keys are bearer credentials.
 7. **Ownership transfer.** Move the folder under another user?
 
 ## Maybe one day
