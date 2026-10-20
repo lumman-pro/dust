@@ -4,20 +4,31 @@ import { normalizeError } from "@extension/shared/lib/utils";
 import type { Program } from "acorn";
 import { type Expression, parse, type SpreadElement, type Super } from "acorn";
 
-// The values a method argument can be: plain JSON-like data, nothing executable.
-export type ExcelArg =
+// The value of a literal argument: plain JSON-like data, nothing executable.
+export type LiteralValue =
   | string
   | number
   | boolean
-  | ExcelArg[]
-  | { [key: string]: ExcelArg };
+  | LiteralValue[]
+  | { [key: string]: LiteralValue };
+
+// One argument of a method call. A path is an Office.js object, written as an expression that
+// starts with `workbook`. Some methods take an object and no string. `charts.add` needs a
+// `Range` for the data of the chart, so its second argument is a path:
+//
+//   charts.add('ColumnClustered', workbook.worksheets.getItem('Report').getRange('A1:B10'))
+//
+// `rowHierarchies.add` is the same: it needs a `PivotHierarchy`, and not the name of a field.
+export type Argument =
+  | { kind: "literal"; value: LiteralValue }
+  | { kind: "path"; steps: Step[] };
 
 // One step of the expression after `workbook`: a property access or a method call.
 // `workbook.worksheets.getItem('Sheet1')` gives the property `worksheets`, then the call
 // `getItem('Sheet1')`.
 export type Step =
   | { kind: "property"; name: string }
-  | { kind: "call"; name: string; args: ExcelArg[] };
+  | { kind: "call"; name: string; args: Argument[] };
 
 const LITERAL_ONLY =
   "only strings, numbers, booleans, and arrays and objects of them are allowed.";
@@ -95,9 +106,9 @@ function toSteps(node: Expression | Super): Result<Step[], string> {
         return steps;
       }
       // Each argument must be a literal.
-      const args: ExcelArg[] = [];
+      const args: Argument[] = [];
       for (const [index, argument] of node.arguments.entries()) {
-        const arg = toArg(argument);
+        const arg = toArgument(argument);
         if (arg.isErr()) {
           return new Err(`argument ${index + 1} of "${name}": ${arg.error}`);
         }
@@ -123,6 +134,34 @@ function toSteps(node: Expression | Super): Result<Step[], string> {
 }
 
 /**
+ * Returns the value of one argument of a method call: a literal, or a path to an Office.js
+ * object.
+ */
+function toArgument(
+  node: Expression | SpreadElement
+): Result<Argument, string> {
+  // A path can end with a property or with a method call, so acorn gives one of two node types:
+  //   - `MemberExpression`, a path that ends with a property:
+  //     `workbook.worksheets.getItem('Report').protection`
+  //   - `CallExpression`, a path that ends with a method call:
+  //     `workbook.worksheets.getItem('Report').getRange('A1:B10')`
+  //
+  // `toSteps` refuses a path that does not start with `workbook`.
+  if (node.type === "MemberExpression" || node.type === "CallExpression") {
+    const steps = toSteps(node);
+    if (steps.isErr()) {
+      return steps;
+    }
+    return new Ok({ kind: "path", steps: steps.value });
+  }
+  const arg = toLiteral(node);
+  if (arg.isErr()) {
+    return arg;
+  }
+  return new Ok({ kind: "literal", value: arg.value });
+}
+
+/**
  * Returns the value of a literal argument, or an error that explains why the argument is not
  * allowed.
  *
@@ -138,7 +177,9 @@ function toSteps(node: Expression | Super): Result<Step[], string> {
  *   - `ObjectExpression`: an object, for example `{ completeMatch: true }`. `properties` is the
  *     list of its `key: value` pairs. Each pair is a `Property`, with a `key` and a `value`.
  */
-function toArg(node: Expression | SpreadElement): Result<ExcelArg, string> {
+function toLiteral(
+  node: Expression | SpreadElement
+): Result<LiteralValue, string> {
   switch (node.type) {
     // `'Sheet1'`, `1`, `true`. A regex literal or `null` is not allowed.
     case "Literal":
@@ -158,13 +199,13 @@ function toArg(node: Expression | SpreadElement): Result<ExcelArg, string> {
 
     // `['A1', 'B2']`. Each item must be a literal.
     case "ArrayExpression": {
-      const items: ExcelArg[] = [];
+      const items: LiteralValue[] = [];
       for (const element of node.elements) {
         // Acorn gives null for a hole in an array, as in `[1, , 2]`.
         if (element === null) {
           return new Err("an empty item in an array is not allowed.");
         }
-        const item = toArg(element);
+        const item = toLiteral(element);
         if (item.isErr()) {
           return item;
         }
@@ -175,7 +216,7 @@ function toArg(node: Expression | SpreadElement): Result<ExcelArg, string> {
 
     // `{ key: value }` or `{ "key": value }`. Each value must be a literal.
     case "ObjectExpression": {
-      const object: { [key: string]: ExcelArg } = {};
+      const object: { [key: string]: LiteralValue } = {};
       for (const property of node.properties) {
         // A spread (`{ ...a }`), a getter or setter (`{ get a() {} }`), a method (`{ a() {} }`)
         // or a key in brackets (`{ [a]: 1 }`) is not allowed.
@@ -201,7 +242,7 @@ function toArg(node: Expression | SpreadElement): Result<ExcelArg, string> {
         if (key === "__proto__") {
           return new Err('the object key "__proto__" is not allowed.');
         }
-        const value = toArg(property.value);
+        const value = toLiteral(property.value);
         if (value.isErr()) {
           return value;
         }

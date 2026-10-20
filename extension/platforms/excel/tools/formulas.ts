@@ -1,6 +1,6 @@
 import { Err, Ok, type Result } from "@app/types/shared/result";
 import { isNumberOrBoolean, isString } from "@app/types/shared/utils/general";
-import type { ExcelArg } from "@extension/platforms/excel/tools/parseExpression";
+import type { LiteralValue } from "@extension/platforms/excel/tools/parseExpression";
 
 // Excel reads a string that starts with one of these as a formula.
 const FORMULA_STARTS: ReadonlySet<string> = new Set(["=", "+", "-"]);
@@ -468,8 +468,8 @@ function checkFormulaFunctions(value: string): Result<undefined, string> {
  * For these two reasons, the check reads every string of the arguments. It does not look at the
  * name of the property.
  */
-export function checkFormulasInArgument(
-  arg: ExcelArg
+export function checkFormulasInValue(
+  arg: LiteralValue
 ): Result<undefined, string> {
   if (isString(arg)) {
     return checkFormulaFunctions(arg);
@@ -480,7 +480,7 @@ export function checkFormulasInArgument(
     return new Ok(undefined);
   }
   for (const value of Object.values(arg)) {
-    const check = checkFormulasInArgument(value);
+    const check = checkFormulasInValue(value);
     if (check.isErr()) {
       return check;
     }

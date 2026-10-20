@@ -1,6 +1,9 @@
 import { Err, Ok, type Result } from "@app/types/shared/result";
 import { assertNever } from "@app/types/shared/utils/assert_never";
-import type { Step } from "@extension/platforms/excel/tools/parseExpression";
+import type {
+  Argument,
+  Step,
+} from "@extension/platforms/excel/tools/parseExpression";
 import { normalizeError } from "@extension/shared/lib/utils";
 
 /**
@@ -27,6 +30,25 @@ import { normalizeError } from "@extension/shared/lib/utils";
  * checks that it is the kind of value that it needs. The loop checks that each step starts from
  * an Office.js object.
  */
+/**
+ * Gives the value that a method receives. A literal is given as it is. A path gives the
+ * Office.js object that its steps point to, as in
+ * `charts.add('ColumnClustered', workbook.worksheets.getItem('S').getRange('A1:B10'))`.
+ */
+function resolveArg(
+  workbook: Excel.Workbook,
+  arg: Argument
+): Result<unknown, string> {
+  switch (arg.kind) {
+    case "literal":
+      return new Ok(arg.value);
+    case "path":
+      return resolveSteps(workbook, arg.steps);
+    default:
+      return assertNever(arg);
+  }
+}
+
 export function resolveSteps(
   workbook: Excel.Workbook,
   steps: Step[]
@@ -63,13 +85,23 @@ export function resolveSteps(
         }
         // `Reflect.apply(getItem, worksheets, ["Sheet1"])` is `worksheets.getItem("Sheet1")`.
         // The second argument is the object that the method runs on.
-        // The method of Office.js checks its arguments when it runs, and it throws here.
-        try {
-          current = Reflect.apply(member, current, step.args);
-        } catch (error) {
-          return new Err(
-            `"${step.name}" failed: ${normalizeError(error).message}`
-          );
+        {
+          const args: unknown[] = [];
+          for (const arg of step.args) {
+            const resolved = resolveArg(workbook, arg);
+            if (resolved.isErr()) {
+              return resolved;
+            }
+            args.push(resolved.value);
+          }
+          // The method of Office.js checks its arguments when it runs, and it throws here.
+          try {
+            current = Reflect.apply(member, current, args);
+          } catch (error) {
+            return new Err(
+              `"${step.name}" failed: ${normalizeError(error).message}`
+            );
+          }
         }
         break;
       default:

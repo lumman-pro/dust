@@ -32,6 +32,8 @@ const WRITE_WORKBOOK_TOOL_DESCRIPTION = `Writes to the Excel workbook that the u
 
 Each write is an Office.js Excel expression that starts with \`workbook\` and ends with a method that changes the workbook, as in \`... .insert('Down')\`. To change the properties of an object, call \`set(...)\` with the properties as one object, as in \`... .set({ values: [[1, 2]] })\`. An assignment with \`=\` is not allowed. The arguments must be written in the expression: no variable, no computation.
 
+Some methods need an Office.js object and not a string. Give it as a path that starts with \`workbook\`, as in \`charts.add('ColumnClustered', workbook.worksheets.getItem('Report').getRange('A1:B10'))\`.
+
 The writes run in the order given, in one sync. A write that fails stops the call, and the writes after it do not run.
 
 Write a formula as text, in the \`formulas\` or the \`values\` property of \`set\`.
@@ -43,7 +45,8 @@ Example:
   { "expression": "workbook.worksheets.add('Report')" },
   { "expression": "workbook.worksheets.getItem('Report').getRange('A1:B2').set({ values: [['Month', 'Total'], ['January', 120]] })" },
   { "expression": "workbook.worksheets.getItem('Report').getRange('A1:B1').set({ format: { font: { bold: true } } })" },
-  { "expression": "workbook.worksheets.getItem('Report').getRange('A1:B2').format.autofitColumns()" }
+  { "expression": "workbook.worksheets.getItem('Report').getRange('A1:B2').format.autofitColumns()" },
+  { "expression": "workbook.worksheets.getItem('Report').charts.add('ColumnClustered', workbook.worksheets.getItem('Report').getRange('A1:B2'))" }
 ] }`;
 
 const writeSchema = z.object({
@@ -51,7 +54,7 @@ const writeSchema = z.object({
     .string()
     .max(MAX_EXPRESSION_LENGTH)
     .describe(
-      "An Office.js Excel expression that starts with `workbook` and ends with a method that changes the workbook, such as `set({ values: [[1]] })`. Use only properties and method calls with literal arguments. Do not use `context`, `await` or `sync()`."
+      "An Office.js Excel expression that starts with `workbook` and ends with a method that changes the workbook, such as `set({ values: [[1]] })`. Use only properties and method calls. An argument is a literal, or a path that starts with `workbook` when the method needs an Office.js object. Do not use `context`, `await` or `sync()`."
     ),
 });
 

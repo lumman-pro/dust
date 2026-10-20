@@ -1,6 +1,10 @@
 import { Err, Ok, type Result } from "@app/types/shared/result";
-import { checkFormulasInArgument } from "@extension/platforms/excel/tools/formulas";
-import type { Step } from "@extension/platforms/excel/tools/parseExpression";
+import { assertNever } from "@app/types/shared/utils/assert_never";
+import { checkFormulasInValue } from "@extension/platforms/excel/tools/formulas";
+import type {
+  Argument,
+  Step,
+} from "@extension/platforms/excel/tools/parseExpression";
 
 // The member names of all the Excel classes. Example: "getRange" is in this type.
 //   1. `keyof typeof Excel` gives each name in the `Excel` namespace. Example: "Range".
@@ -161,7 +165,7 @@ const READ_METHODS: ReadonlySet<string> = new Set<ExcelMember>([
 //
 // `insertWorksheetsFromBase64` is not in the list on purpose: it inserts the worksheets of
 // another workbook, given as a base64 string. Their cells carry their own formulas, which stay
-// inside that string, so `checkFormulasInArgument` never reads them. It is a way around the only
+// inside that string, so `checkFormulasInValue` never reads them. It is a way around the only
 // rule that stops a formula from reaching outside the workbook.
 const WRITE_METHODS: ReadonlySet<string> = new Set<ExcelMember>([
   "set",
@@ -207,6 +211,7 @@ const WRITE_METHODS: ReadonlySet<string> = new Set<ExcelMember>([
   "copyFrom",
   "delete",
   "displayBlankLineAfterEachItem",
+  "duplicate",
   "flashFill",
   "freezeAt",
   "freezeColumns",
@@ -220,18 +225,26 @@ const WRITE_METHODS: ReadonlySet<string> = new Set<ExcelMember>([
   "reapplyFilters",
   "refresh",
   "refreshAll",
+  "remove",
   "removeDuplicates",
   "repeatAllItemLabels",
   "replaceAll",
   "resize",
   "select",
+  "selectItems",
   "setAutoSortOnCell",
+  "setBubbleSizes",
+  "setCategoryNames",
   "setCellProperties",
   "setColumnProperties",
+  "setCustomDisplayUnit",
+  "setData",
+  "setDefault",
   "setDirty",
   "setFormula",
   "setHeight",
   "setPosition",
+  "setPositionAt",
   "setPrintArea",
   "setPrintMargins",
   "setPrintTitleColumns",
@@ -240,10 +253,13 @@ const WRITE_METHODS: ReadonlySet<string> = new Set<ExcelMember>([
   "setRowProperties",
   "setSolidColor",
   "setToDefault",
+  "setValues",
   "setWidth",
+  "setXAxisValues",
   "showGroupDetails",
   "showOutlineLevels",
   "sortByLabels",
+  "sortByValues",
   "unfreeze",
   "ungroup",
   "unmerge",
@@ -290,6 +306,44 @@ function isInternalName(name: string): boolean {
 }
 
 /**
+ * Checks the paths that the arguments of a call carry. A path gives an Office.js object to the
+ * method, as in `charts.add('ColumnClustered', workbook...getRange('A1:B10'))`.
+ *
+ * A path only moves to an object. So every step of a path must pass the check of a read step.
+ */
+function checkPathSteps(steps: Step[]): Result<undefined, string> {
+  for (const step of steps) {
+    const check = checkReadStep(step, false);
+    if (check.isErr()) {
+      return check;
+    }
+  }
+  return new Ok(undefined);
+}
+
+/**
+ * Checks the paths that the arguments of a read carry. A literal holds no step.
+ */
+function checkPathArguments(args: Argument[]): Result<undefined, string> {
+  for (const arg of args) {
+    switch (arg.kind) {
+      case "literal":
+        break;
+      case "path": {
+        const check = checkPathSteps(arg.steps);
+        if (check.isErr()) {
+          return check;
+        }
+        break;
+      }
+      default:
+        assertNever(arg);
+    }
+  }
+  return new Ok(undefined);
+}
+
+/**
  * Checks a step that only reads: every step of a read, and every step of a write before the one
  * that writes.
  *
@@ -317,7 +371,7 @@ function checkReadStep(
           `"${step.name}" is not allowed: only read methods are allowed.`
         );
       }
-      return new Ok(undefined);
+      return checkPathArguments(step.args);
   }
 }
 
@@ -361,9 +415,25 @@ function checkWriteStep(step: Step): Result<undefined, string> {
   // formula in the workbook: the properties of `set`, the reference of `names.add`, the rule of
   // a conditional format. The steps before it only read.
   for (const arg of step.args) {
-    const check = checkFormulasInArgument(arg);
-    if (check.isErr()) {
-      return check;
+    switch (arg.kind) {
+      // A literal can hold a formula, and this step is the one that writes it.
+      case "literal": {
+        const check = checkFormulasInValue(arg.value);
+        if (check.isErr()) {
+          return check;
+        }
+        break;
+      }
+      // A path gives an Office.js object to the method, and it must only read.
+      case "path": {
+        const check = checkPathSteps(arg.steps);
+        if (check.isErr()) {
+          return check;
+        }
+        break;
+      }
+      default:
+        assertNever(arg);
     }
   }
   return new Ok(undefined);
