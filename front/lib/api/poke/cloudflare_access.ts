@@ -146,10 +146,23 @@ export async function getPokeRolesForUserViaCloudflareAccess(
 
   if (response.ok) {
     const data = await response.json();
-    const parsedData = CloudFlareIdentityResponseSchema.parse(data);
+    // Roles only gate plugins: an identity without groups (e.g. IdP not sending them) must not
+    // fail poke authentication, it grants no role.
+    const parsedData = CloudFlareIdentityResponseSchema.safeParse(data);
+    if (!parsedData.success) {
+      logger.error(
+        {
+          issues: parsedData.error.issues,
+          responseKeys:
+            typeof data === "object" && data !== null ? Object.keys(data) : [],
+        },
+        "[poke] Cloudflare Access get-identity response is invalid"
+      );
+      return [];
+    }
 
     return mapAccessGroupNamesToPokeRoles(
-      parsedData.groups.map((group) => group.name)
+      parsedData.data.groups.map((group) => group.name)
     );
   } else {
     logger.error("cloudflare access get-identity request failed", {
