@@ -206,6 +206,7 @@ export const INTERNAL_ALLOWED_ICONS = [
   "CostoryLogo",
   "CursorLogo",
   "DriveLogo",
+  "DropboxLogo",
   "FathomLogo",
   "FirefliesLogo",
   "FreshserviceLogo",

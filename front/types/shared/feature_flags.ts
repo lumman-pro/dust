@@ -243,6 +243,12 @@ export const WHITELISTABLE_FEATURES_CONFIG = {
     stage: "self_serve",
     owner: "LeandreLeBizec",
   },
+  dropbox_mcp: {
+    description:
+      "Dropbox MCP tool for browsing, reading and managing Dropbox files",
+    stage: "dust_only",
+    owner: "LeandreLeBizec",
+  },
   figma_mcp: {
     description:
       "Offer the Figma MCP to a workspace that is not on a credit-based plan",

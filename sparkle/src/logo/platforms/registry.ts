@@ -32,6 +32,7 @@ import DeepseekLogo from "./Deepseek";
 import DiscordLogo from "./Discord";
 import DocLogo from "./Doc";
 import DriveLogo from "./Drive";
+import DropboxLogo from "./Dropbox";
 import FathomLogo from "./Fathom";
 import FigmaLogo from "./Figma";
 import FirefliesLogo from "./Fireflies";
@@ -167,6 +168,7 @@ export const PLATFORM_LOGOS = {
   DiscordLogo,
   DocLogo,
   DriveLogo,
+  DropboxLogo,
   FathomLogo,
   FigmaLogo,
   FirefliesLogo,

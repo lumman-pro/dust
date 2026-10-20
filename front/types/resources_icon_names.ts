@@ -213,6 +213,7 @@ export const INTERNAL_ALLOWED_ICONS = [
   "CursorLogo",
   "DatabricksLogo",
   "DriveLogo",
+  "DropboxLogo",
   "FathomLogo",
   "FigmaLogo",
   "FirefliesLogo",

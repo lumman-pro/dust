@@ -30,6 +30,7 @@ export { default as DeepseekLogo } from "./Deepseek";
 export { default as DiscordLogo } from "./Discord";
 export { default as DocLogo } from "./Doc";
 export { default as DriveLogo } from "./Drive";
+export { default as DropboxLogo } from "./Dropbox";
 export { default as FathomLogo } from "./Fathom";
 export { default as FigmaLogo } from "./Figma";
 export { default as FirefliesLogo } from "./Fireflies";

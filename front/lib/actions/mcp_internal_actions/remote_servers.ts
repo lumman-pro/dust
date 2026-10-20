@@ -7599,6 +7599,154 @@ export const DEFAULT_REMOTE_MCP_SERVERS: DefaultRemoteMCPServerConfig[] = [
       },
     },
   },
+  {
+    id: 10059,
+    name: "Dropbox",
+    description:
+      "Dropbox tools for browsing, searching and reading files, and for creating, moving, sharing and restoring files and folders.",
+    url: "https://mcp.dropbox.com/mcp",
+    icon: "DropboxLogo",
+    documentationUrl:
+      "https://help.dropbox.com/integrations/connect-dropbox-mcp-server",
+    connectionInstructions:
+      "Dropbox uses OAuth. You will be prompted to sign in with your Dropbox account. The MCP can only access the files and folders you can already see in Dropbox.",
+    featureFlag: "dropbox_mcp",
+    authMethod: "oauth-static-dust-app",
+    oauthProvider: "dropbox",
+    supportedOAuthUseCases: ["personal_actions", "platform_actions"],
+    toolStakes: {
+      ListFolder: "never_ask",
+      GetFileMetadata: "never_ask",
+      GetFileContent: "never_ask",
+      GetUsageAndQuota: "never_ask",
+      Search: "never_ask",
+      WhoAmI: "never_ask",
+      CheckJobStatus: "never_ask",
+      ListSharedLinks: "never_ask",
+      GetSharedLinkMetadata: "never_ask",
+      ListFileRequests: "never_ask",
+      GetFileRequest: "never_ask",
+      ListFileRevisions: "never_ask",
+      ListRestoreEvents: "never_ask",
+      GetTranscript: "never_ask",
+      GetMarkdown: "never_ask",
+
+      CreateFolder: "low",
+      CreateFile: "low",
+      Copy: "low",
+      CreateFileRequest: "low",
+
+      Move: "high",
+      Delete: "high",
+      RestoreFileRevision: "high",
+      RestoreFolder: "high",
+      // Shared and download links expose file content outside of Dropbox.
+      CreateSharedLink: "high",
+      DownloadLink: "high",
+    },
+    toolDisplayLabels: {
+      ListFolder: {
+        running: "Listing a Dropbox folder",
+        done: "Listed a Dropbox folder",
+      },
+      GetFileMetadata: {
+        running: "Reading file metadata on Dropbox",
+        done: "Read file metadata on Dropbox",
+      },
+      GetFileContent: {
+        running: "Reading a file on Dropbox",
+        done: "Read a file on Dropbox",
+      },
+      GetUsageAndQuota: {
+        running: "Checking storage usage on Dropbox",
+        done: "Checked storage usage on Dropbox",
+      },
+      Search: {
+        running: "Searching on Dropbox",
+        done: "Searched on Dropbox",
+      },
+      WhoAmI: {
+        running: "Checking identity on Dropbox",
+        done: "Checked identity on Dropbox",
+      },
+      CheckJobStatus: {
+        running: "Checking a job status on Dropbox",
+        done: "Checked a job status on Dropbox",
+      },
+      ListSharedLinks: {
+        running: "Listing shared links on Dropbox",
+        done: "Listed shared links on Dropbox",
+      },
+      GetSharedLinkMetadata: {
+        running: "Reading a shared link on Dropbox",
+        done: "Read a shared link on Dropbox",
+      },
+      ListFileRequests: {
+        running: "Listing file requests on Dropbox",
+        done: "Listed file requests on Dropbox",
+      },
+      GetFileRequest: {
+        running: "Reading a file request on Dropbox",
+        done: "Read a file request on Dropbox",
+      },
+      ListFileRevisions: {
+        running: "Listing file revisions on Dropbox",
+        done: "Listed file revisions on Dropbox",
+      },
+      ListRestoreEvents: {
+        running: "Listing activity on Dropbox",
+        done: "Listed activity on Dropbox",
+      },
+      GetTranscript: {
+        running: "Transcribing a file on Dropbox",
+        done: "Transcribed a file on Dropbox",
+      },
+      GetMarkdown: {
+        running: "Converting a file to Markdown on Dropbox",
+        done: "Converted a file to Markdown on Dropbox",
+      },
+      CreateFolder: {
+        running: "Creating a folder on Dropbox",
+        done: "Created a folder on Dropbox",
+      },
+      CreateFile: {
+        running: "Creating a file on Dropbox",
+        done: "Created a file on Dropbox",
+      },
+      Copy: {
+        running: "Copying on Dropbox",
+        done: "Copied on Dropbox",
+      },
+      CreateFileRequest: {
+        running: "Creating a file request on Dropbox",
+        done: "Created a file request on Dropbox",
+      },
+      Move: {
+        running: "Moving on Dropbox",
+        done: "Moved on Dropbox",
+      },
+      Delete: {
+        running: "Deleting on Dropbox",
+        done: "Deleted on Dropbox",
+      },
+      RestoreFileRevision: {
+        running: "Restoring a file revision on Dropbox",
+        done: "Restored a file revision on Dropbox",
+      },
+      RestoreFolder: {
+        running: "Restoring a folder on Dropbox",
+        done: "Restored a folder on Dropbox",
+      },
+      CreateSharedLink: {
+        running: "Creating a shared link on Dropbox",
+        done: "Created a shared link on Dropbox",
+      },
+      DownloadLink: {
+        running: "Creating a download link on Dropbox",
+        done: "Created a download link on Dropbox",
+      },
+    },
+  },
 ];
 
 export const getDefaultRemoteMCPServerByURL = (
