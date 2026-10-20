@@ -880,7 +880,6 @@ const WhitelistableFeaturesSchema = FlexibleEnumSchema<
   | "disable_frames_v2"
   | "disable_gpt_6_astra"
   | "disable_run_logs"
-  | "dropbox_mcp"
   | "dummy_feature_for_flag_testing"
   | "dust_agent_sonnet_5_default"
   | "dust_internal_dangerous_in_cluster_mcp_servers"

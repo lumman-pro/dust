@@ -7610,7 +7610,6 @@ export const DEFAULT_REMOTE_MCP_SERVERS: DefaultRemoteMCPServerConfig[] = [
       "https://help.dropbox.com/integrations/connect-dropbox-mcp-server",
     connectionInstructions:
       "Dropbox uses OAuth. You will be prompted to sign in with your Dropbox account. The MCP can only access the files and folders you can already see in Dropbox.",
-    featureFlag: "dropbox_mcp",
     authMethod: "oauth-static-dust-app",
     oauthProvider: "dropbox",
     supportedOAuthUseCases: ["personal_actions", "platform_actions"],
