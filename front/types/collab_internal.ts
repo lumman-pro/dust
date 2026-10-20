@@ -76,6 +76,7 @@ export const COLLAB_EDIT_REFUSAL_CODES = [
   "outside_body",
   "unexpected_count",
   "anchors_invalid",
+  "too_large",
 ] as const;
 
 export type CollabEditRefusalCode = (typeof COLLAB_EDIT_REFUSAL_CODES)[number];

@@ -39,8 +39,10 @@ export async function readAgentDocument(
  * Line breaks in the source and `oldString` MUST be matched normalized to `\n`, so a passage
  * quoted from a CRLF source still matches; they MAY be normalized to `\n` and trailing ones
  * dropped from the edited body. It MUST leave the front matter and the comment threads unchanged,
- * and refuse with `anchors_invalid` an edit that adds anchors or breaks a pair. It MAY remove
- * whole anchor pairs, keeping their threads. While a live session holds the document, the session
+ * and refuse with `anchors_invalid` an edit that adds anchors or breaks a pair, and with
+ * `too_large`, before building it, an edit whose body would exceed
+ * `WRITE_CANONICAL_FILE_CONTENT_MAX_BYTES` characters. It MAY remove whole anchor pairs, keeping
+ * their threads. While a live session holds the document, the session
  * MUST apply it to its source at its turn (`editLiveDocument`), so changes made since the agent's
  * call do not refuse it; otherwise it MUST be written through `writeDocumentChange`.
  */

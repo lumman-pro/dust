@@ -3,6 +3,7 @@ import {
   saveCollabSession,
 } from "@app/lib/api/collab/session_file";
 import { dfmToYDoc } from "@app/lib/api/collab/ydoc";
+import { WRITE_CANONICAL_FILE_CONTENT_MAX_BYTES } from "@app/lib/api/files/file_system_ops";
 import { toSessionName } from "@app/types/collab";
 import { Ok } from "@app/types/shared/result";
 import {
@@ -382,6 +383,28 @@ describe("readSessionSource, writeSessionSource and editSessionSource", () => {
     expect(edited.isOk() && edited.value).toMatchObject({
       result: "edit_refused",
       code: "string_not_found",
+    });
+    expect(await openSource(hocuspocus, name)).toBe(SOURCE);
+  });
+
+  it("refuse an edit too large to build before building it, changing nothing", async () => {
+    const hocuspocus = createCollabHocuspocus();
+    const { agent, reader, name } = await collabAccesses();
+    await hocuspocus.openDirectConnection(name, reader);
+
+    // "l" twice in the body: twice a replacement over half the limit.
+    const edited = await editSessionSource(hocuspocus, {
+      file: agent,
+      edit: {
+        oldString: "l",
+        newString: "a".repeat(WRITE_CANONICAL_FILE_CONTENT_MAX_BYTES / 2 + 1),
+        expectedReplacements: 2,
+      },
+    });
+
+    expect(edited.isOk() && edited.value).toMatchObject({
+      result: "edit_refused",
+      code: "too_large",
     });
     expect(await openSource(hocuspocus, name)).toBe(SOURCE);
   });

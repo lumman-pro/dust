@@ -1,3 +1,4 @@
+import { WRITE_CANONICAL_FILE_CONTENT_MAX_BYTES } from "@app/lib/api/files/file_system_ops";
 import type { DfmDocument } from "@app/lib/markdown/dfm";
 import { extractAnchors, parseDfm, serializeDfm } from "@app/lib/markdown/dfm";
 import type {
@@ -88,6 +89,19 @@ function replaceInBody({
       new DfmAgentDocumentError(
         "unexpected_count",
         `Expected ${expectedReplacements} replacements, but found ${occurrences} occurrences.`
+      )
+    );
+  }
+  // Checked before building it: a short text replaced many times could take the process's memory.
+  // A string's length never exceeds its size in UTF-8 bytes, so a longer one is surely too large.
+  if (
+    body.length + occurrences * (newString.length - oldString.length) >
+    WRITE_CANONICAL_FILE_CONTENT_MAX_BYTES
+  ) {
+    return new Err(
+      new DfmAgentDocumentError(
+        "too_large",
+        "The edit would make the document too large. Make a smaller change."
       )
     );
   }
