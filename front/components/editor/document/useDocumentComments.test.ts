@@ -710,8 +710,7 @@ describe("useDocumentComments", () => {
         submitted = await result.current.comments.submitDraft("Too bold?");
         replied = await result.current.comments.reply("c1", "Not at all.");
       });
-      const message =
-        "This document can't be saved right now. Undo the last edit to try again.";
+      const message = "This document can't be saved right now.";
       expect(submitted?.isErr() && submitted.error).toBe(message);
       expect(replied?.isErr() && replied.error).toBe(message);
       expect(send).not.toHaveBeenCalled();

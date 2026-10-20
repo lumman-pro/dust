@@ -85,7 +85,7 @@ const EMPTY_STATE: EditorCommentsState = {
 const UNAVAILABLE_MESSAGE = msg`Commenting is unavailable.`;
 const UNANCHORED_MESSAGE = msg`The selected text can no longer take a comment. Select other text to comment.`;
 const UNSAVABLE_MESSAGE = msg`This comment can't be saved in this document. Try shortening or simplifying it.`;
-const DOCUMENT_UNSAVABLE_MESSAGE = msg`This document can't be saved right now. Undo the last edit to try again.`;
+const DOCUMENT_UNSAVABLE_MESSAGE = msg`This document can't be saved right now.`;
 
 const jumpToComment = (editor: Editor, id: string) => {
   editor.commands.setActiveComment(id);

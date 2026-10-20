@@ -519,8 +519,8 @@ msgid "This comment can't be saved in this document. Try shortening or simplifyi
 msgstr "Dieser Kommentar kann in diesem Dokument nicht gespeichert werden. Kürzen oder vereinfachen Sie ihn."
 
 #: front/components/editor/document/useDocumentComments.ts
-msgid "This document can't be saved right now. Undo the last edit to try again."
-msgstr "Dieses Dokument kann derzeit nicht gespeichert werden. Machen Sie die letzte Änderung rückgängig, um es erneut zu versuchen."
+msgid "This document can't be saved right now."
+msgstr "Dieses Dokument kann derzeit nicht gespeichert werden."
 
 #: front/components/editor/document/useDocumentComments.ts
 msgid "This suggestion can't be saved in this document."
