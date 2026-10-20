@@ -127,8 +127,8 @@ The no-access message is something like "You don't have access to this conversat
 person who shared the link to add you." Only workspace members reach it, and it shows no title,
 owner or participants.
 
-Technically this is an existence oracle: telling "not found" apart from "no access" lets a member
-check whether a conversation ID exists (enumeration). Not an issue: it's intra-workspace, no data
+Technically this allows resource enumeration: telling "not found" apart from "no access" lets a
+member check whether a conversation ID exists. Not an issue: it's intra-workspace, no data
 leaks at all, sIds are random (10 base62 characters) so guessing is impractical, and it's the model
 Google Drive and other mainstream platforms apply.
 
