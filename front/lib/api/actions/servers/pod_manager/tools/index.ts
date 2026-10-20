@@ -45,6 +45,7 @@ import {
 import { isContentNodeAttachmentType } from "@app/lib/api/assistant/conversation/attachments";
 import { getLightConversation } from "@app/lib/api/assistant/conversation/fetch";
 import config from "@app/lib/api/config";
+import { reflectPodOnDfs } from "@app/lib/api/dfs/pods";
 import { DustFileSystem, SCOPED_PREFIX_POD } from "@app/lib/api/file_system";
 import {
   addContentNodeToProject,
@@ -332,6 +333,7 @@ export function createProjectManagerTools(
                 })
               );
             }
+            await reflectPodOnDfs(auth, pod);
             updates.access = access;
           }
         }

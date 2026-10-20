@@ -172,9 +172,10 @@ create dfs://<userSId>--<user-folder-id>/.conversations/conv-<conversationSId>
   members and editors, `r` for the workspace global group on an open pod. It has no DENY, so it also
   inherits its parent's access, i.e. its owner's. Front attaches these grants whenever it has not
   stored the folder's ID yet, even if the folder already exists, and stores the ID only once they
-  are attached, so a failure in between is repaired by the next call. Changes to a pod's restriction
-  or attached groups are not reflected yet; membership changes need nothing, since grants name
-  groups.
+  are attached, so a failure in between is repaired by the next call. With the `dust_file_system`
+  feature flag, front creates the folder when the pod is created and makes its grants match the
+  pod's access again after each permission change (restriction, attached groups); membership
+  changes need nothing, since grants name groups.
 
 ## Virtual references
 

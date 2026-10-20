@@ -14,7 +14,7 @@ import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { DfsUserFolderResource } from "@app/lib/resources/dfs_user_folder_resource";
 import { SpaceResource } from "@app/lib/resources/space_resource";
 import { UserResource } from "@app/lib/resources/user_resource";
-import type { DfsGrantUpdate, DfsObjectId } from "@app/types/dfs";
+import type { DfsGrant, DfsObjectId } from "@app/types/dfs";
 import { DfsError, isDfsObjectId } from "@app/types/dfs";
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
@@ -173,10 +173,13 @@ export async function getOrCreatePodFolder(
     return folder;
   }
   // Attached even when the folder already existed, see `pod-folder-grants`.
-  // TODO(dfs): keep the grants in sync when the pod's restriction or attached groups change.
+  // Later permission changes are reflected by `syncPodFolderGrants`.
   const granted = await context.tenantClient.updateGrants({
     objectId: folder.value.id,
-    changes: await getPodFolderGrants(space),
+    changes: (await getPodFolderGrants(space)).map((grant) => ({
+      grant,
+      remove: false,
+    })),
   });
   if (granted.isErr()) {
     return granted;
@@ -191,18 +194,16 @@ export async function getOrCreatePodFolder(
   return new Ok(stored);
 }
 
-async function getPodFolderGrants(
+/** The grants of the pod folder of `space`, see `pod-folder-grants`. */
+export async function getPodFolderGrants(
   space: SpaceResource
-): Promise<DfsGrantUpdate[]> {
+): Promise<DfsGrant[]> {
   const references = await space.fetchGrantReferences();
   return references.map((reference) => ({
-    grant: {
-      type: "allow",
-      subject: createGroupSubject(reference.groupSId),
-      // Only the workspace global group holds a `reader` grant, on open pods.
-      mode: reference.isReader() ? 0o4 : 0o6,
-    },
-    remove: false,
+    type: "allow",
+    subject: createGroupSubject(reference.groupSId),
+    // Only the workspace global group holds a `reader` grant, on open pods.
+    mode: reference.isReader() ? 0o4 : 0o6,
   }));
 }
 

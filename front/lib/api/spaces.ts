@@ -7,6 +7,7 @@ import {
 } from "@app/lib/api/agent_data_sources";
 import { getWebhookSourcesUsage } from "@app/lib/api/agent_triggers";
 import { hardDeleteApp } from "@app/lib/api/apps";
+import { reflectPodOnDfs } from "@app/lib/api/dfs/pods";
 import { createDataSourceAndConnectorForProject } from "@app/lib/api/projects/connector";
 import { deleteOwnerPolicy } from "@app/lib/api/sandbox/egress_policy";
 import { getWorkspaceAdministrationVersionLock } from "@app/lib/api/workspace";
@@ -816,6 +817,8 @@ export async function createSpaceAndGroup(
     await auth.refresh();
 
     const space = result.value;
+    // The creator becomes the pod folder's owner.
+    await reflectPodOnDfs(auth, space, { user: auth.user() ?? undefined });
     if (space.kind === "project") {
       // If this is a project space, create the dust_project connector
       // Create connector outside transaction to avoid long-running transaction
