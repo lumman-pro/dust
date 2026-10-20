@@ -458,6 +458,11 @@ app.patch(
               status_code: 409,
               api_error: { type: "space_already_exists", message },
             });
+          case "pod_name_too_long":
+            return apiError(ctx, {
+              status_code: 400,
+              api_error: { type: "invalid_request_error", message },
+            });
           case "internal_error":
             return apiError(ctx, {
               status_code: 500,

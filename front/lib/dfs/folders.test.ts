@@ -1,4 +1,4 @@
-import { podFolderName } from "@app/lib/dfs/folders";
+import { isPodNameTooLong, podFolderName } from "@app/lib/dfs/folders";
 import { describe, expect, it } from "vitest";
 
 function nameOf(name: string) {
@@ -24,5 +24,13 @@ describe("podFolderName", () => {
     expect(nameOf("")).toBe("invalid_input");
     expect(nameOf("a".repeat(255))).toBe("a".repeat(255));
     expect(nameOf("/".repeat(86))).toBe("invalid_input");
+  });
+});
+
+describe("isPodNameTooLong", () => {
+  it("compares the encoded name with the 255-byte limit", () => {
+    expect(isPodNameTooLong("a".repeat(255))).toBe(false);
+    expect(isPodNameTooLong("/".repeat(85))).toBe(false);
+    expect(isPodNameTooLong("/".repeat(86))).toBe(true);
   });
 });

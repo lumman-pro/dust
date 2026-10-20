@@ -251,6 +251,14 @@ app.post(
               message: "Space with that name already exists.",
             },
           });
+        case "pod_name_too_long":
+          return apiError(ctx, {
+            status_code: 400,
+            api_error: {
+              type: "invalid_request_error",
+              message: spaceRes.error.message,
+            },
+          });
         case "internal_error":
           return apiError(ctx, {
             status_code: 500,

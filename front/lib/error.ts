@@ -114,6 +114,7 @@ export type DustErrorCode =
   | "frame_user_required"
   // Space errors
   | "space_already_exists"
+  | "pod_name_too_long"
   // Space errors (domain:spaces)
   | "project_space_required"
   | "global_space_not_renamable"

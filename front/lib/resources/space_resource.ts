@@ -1,4 +1,5 @@
 import type { Authenticator } from "@app/lib/auth";
+import { isPodNameTooLong } from "@app/lib/dfs/folders";
 import { DustError } from "@app/lib/error";
 import { AgentProjectConfigurationModel } from "@app/lib/models/agent/actions/projects";
 import { MessageModel } from "@app/lib/models/agent/conversation";
@@ -1018,6 +1019,7 @@ export class SpaceResource extends BaseResource<SpaceModel> {
         | "global_space_not_renamable"
         | "space_already_exists"
         | "internal_error"
+        | "pod_name_too_long"
       >
     >
   > {
@@ -1037,6 +1039,12 @@ export class SpaceResource extends BaseResource<SpaceModel> {
     }
 
     const trimmedName = newName.trim();
+    // A pod's folder in dfs is named after it, see `podFolderName`.
+    if (this.isProject() && isPodNameTooLong(trimmedName)) {
+      return new Err(
+        new DustError("pod_name_too_long", "This Pod name is too long.")
+      );
+    }
     const existingSpace = await SpaceResource.fetchByName(auth, trimmedName);
     if (existingSpace && existingSpace.id !== this.id) {
       return new Err(

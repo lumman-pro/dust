@@ -35,6 +35,30 @@ function percentEncode(char: string): string {
     .join("");
 }
 
+function encodePodName(name: string): string {
+  return [...name]
+    .map((char, i) =>
+      char === "%" ||
+      char === "/" ||
+      /\p{Cc}/u.test(char) ||
+      (i === 0 && char === ".")
+        ? percentEncode(char)
+        : char
+    )
+    .join("");
+}
+
+/** Whether the folder name of a pod named `name` would exceed dfs's basename limit. */
+/**
+ * @cc [owner:fabiencelier,label:product] pod-name-fits-folder
+ * Creating a pod (`createSpaceAndGroup`) and renaming one (`SpaceResource.updateName`) MUST fail
+ * with `pod_name_too_long`, without changing anything, when this is true for the new name, so that
+ * every pod name gives a valid folder name.
+ */
+export function isPodNameTooLong(name: string): boolean {
+  return Buffer.byteLength(encodePodName(name)) > MAX_NAME_BYTES;
+}
+
 /**
  * The name of the folder of the pod named `name`, see `pod-folder-name`.
  */
@@ -46,16 +70,7 @@ function percentEncode(char: string): string {
  * `invalid_input`: it is never cut or replaced.
  */
 export function podFolderName(name: string): Result<string, DfsError> {
-  const encoded = [...name]
-    .map((char, i) =>
-      char === "%" ||
-      char === "/" ||
-      /\p{Cc}/u.test(char) ||
-      (i === 0 && char === ".")
-        ? percentEncode(char)
-        : char
-    )
-    .join("");
+  const encoded = encodePodName(name);
   if (encoded === "" || Buffer.byteLength(encoded) > MAX_NAME_BYTES) {
     return new Err(
       new DfsError(

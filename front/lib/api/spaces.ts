@@ -11,6 +11,7 @@ import { createDataSourceAndConnectorForProject } from "@app/lib/api/projects/co
 import { deleteOwnerPolicy } from "@app/lib/api/sandbox/egress_policy";
 import { getWorkspaceAdministrationVersionLock } from "@app/lib/api/workspace";
 import type { Authenticator } from "@app/lib/auth";
+import { isPodNameTooLong } from "@app/lib/dfs/folders";
 import { DustError } from "@app/lib/error";
 import { listActiveConfigurationsRequestingSpace } from "@app/lib/resources/agent_configuration_rows";
 import { updateAgentRequestedSpaceIdsInPlace } from "@app/lib/resources/agent_requested_spaces";
@@ -595,6 +596,7 @@ export async function createSpaceAndGroup(
       | "internal_error"
       | "invalid_group_kind"
       | "unauthorized"
+      | "pod_name_too_long"
     >
   >
 > {
@@ -614,6 +616,12 @@ export async function createSpaceAndGroup(
   const { name: rawName, isRestricted, spaceKind } = params;
   const name = rawName.trim();
   const { memberIds = [], groupIds = [] } = params;
+  // A pod's folder in dfs is named after it, see `podFolderName`.
+  if (spaceKind === "project" && isPodNameTooLong(name)) {
+    return new Err(
+      new DustError("pod_name_too_long", "This Pod name is too long.")
+    );
+  }
 
   const result = await withTransaction(async (t) => {
     await getWorkspaceAdministrationVersionLock(owner, t);

@@ -192,6 +192,21 @@ describe("PATCH /api/w/:wId/spaces/:spaceId", () => {
     expect((await response.json()).error.type).toBe("space_already_exists");
   });
 
+  it("rejects renaming a pod to a name too long for its dfs folder", async () => {
+    const { workspace, user } = await createPrivateApiMockRequest({
+      role: "admin",
+    });
+    const pod = await SpaceFactory.project(workspace, user.id);
+
+    // Each `/` is percent-encoded to 3 bytes: 86 of them exceed the 255-byte limit.
+    const response = await patchSpace(workspace, pod.sId, {
+      name: "/".repeat(86),
+    });
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error.type).toBe("invalid_request_error");
+  });
+
   it("rejects renaming a space to a name longer than 256 characters", async () => {
     const { workspace } = await createPrivateApiMockRequest({
       role: "admin",

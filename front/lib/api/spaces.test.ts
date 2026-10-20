@@ -75,6 +75,18 @@ describe("createSpaceAndGroup", () => {
     await MembershipFactory.associate(workspace, user2, { role: "user" });
   });
 
+  it("refuses a pod whose name is too long for its dfs folder", async () => {
+    // Each `/` is percent-encoded to 3 bytes: 86 of them exceed the 255-byte limit.
+    const result = await createSpaceAndGroup(adminAuth, {
+      name: "/".repeat(86),
+      isRestricted: true,
+      spaceKind: "project",
+      memberIds: [],
+    });
+
+    expect(result.isErr() && result.error.code).toBe("pod_name_too_long");
+  });
+
   describe("successful creation", () => {
     it("should create a regular space with manual management mode and members", async () => {
       const result = await createSpaceAndGroup(adminAuth, {
