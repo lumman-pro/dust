@@ -125,6 +125,19 @@ interface SlideshowProps {
   children: React.ReactNode;
   className?: string;
   theme?: FrameTheme;
+  initialPageFromUrl?: boolean;
+  syncPageToUrl?: boolean;
+}
+
+const CURRENT_PAGE_URL_PARAM = "currentPage";
+
+function getInitialSlideIndexFromUrl(total: number): number {
+  const page = Number(
+    new URL(window.location.href).searchParams.get(CURRENT_PAGE_URL_PARAM)
+  );
+  return Number.isInteger(page) && page >= 1 && total > 0
+    ? Math.min(page, total) - 1
+    : 0;
 }
 
 /**
@@ -133,7 +146,20 @@ interface SlideshowProps {
  * Applying a theme MUST NOT add a wrapper or change the slideshow bounds.
  * Omitting the theme MUST preserve the existing appearance.
  */
-export function Slideshow({ children, className, theme }: SlideshowProps) {
+/**
+ * @cc [owner:tdraier,label:product] slideshow-current-page-url
+ * With `initialPageFromUrl`, the 1-based `currentPage` search param of the Frame's URL MUST select
+ * the initial slide, clamped to the last slide; a missing or invalid value MUST select the first.
+ * With `syncPageToUrl`, the active slide MUST be written back to `currentPage` without adding a
+ * history entry. Without either, the URL MUST be neither read nor written.
+ */
+export function Slideshow({
+  children,
+  className,
+  theme,
+  initialPageFromUrl = false,
+  syncPageToUrl = false,
+}: SlideshowProps) {
   const { isPdfMode } = useVizContext();
   const slides = React.Children.toArray(children);
 
@@ -146,7 +172,12 @@ export function Slideshow({ children, className, theme }: SlideshowProps) {
   }
 
   return (
-    <InteractiveSlideshow className={className} theme={theme}>
+    <InteractiveSlideshow
+      className={className}
+      theme={theme}
+      initialPageFromUrl={initialPageFromUrl}
+      syncPageToUrl={syncPageToUrl}
+    >
       {slides}
     </InteractiveSlideshow>
   );
@@ -187,10 +218,27 @@ function InteractiveSlideshow({
   children,
   className,
   theme,
+  initialPageFromUrl,
+  syncPageToUrl,
 }: SlideshowContentProps) {
   const { t } = useLingui();
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [activeIndex, setActiveIndex] = useState(() =>
+    initialPageFromUrl ? getInitialSlideIndexFromUrl(children.length) : 0
+  );
   const slideshowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!syncPageToUrl) {
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set(CURRENT_PAGE_URL_PARAM, String(activeIndex + 1));
+    // Browsers may refuse to rewrite the URL of the sandboxed (opaque-origin) Frame iframe; the
+    // slideshow must keep working regardless.
+    try {
+      window.history.replaceState(window.history.state, "", url);
+    } catch {}
+  }, [activeIndex, syncPageToUrl]);
 
   const onPrev = useCallback(() => {
     setActiveIndex((i) => Math.max(i - 1, 0));
