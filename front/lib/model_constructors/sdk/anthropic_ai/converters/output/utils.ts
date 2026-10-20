@@ -8,6 +8,7 @@ import {
 import type { BetaMessageBatchResult } from "@anthropic-ai/sdk/resources/beta/messages/batches";
 import type {
   BetaCacheCreation,
+  BetaIterationsUsage,
   BetaMessage,
   BetaMessageDeltaUsage,
   BetaRawContentBlockDeltaEvent,
@@ -45,6 +46,7 @@ import type {
   ToolCallDeltaEvent,
   ToolCallEvent,
   ToolCallStartedEvent,
+  TokenUsageContent,
 } from "@app/lib/model_constructors/types/output/events";
 import { buildErrorEvent } from "@app/lib/model_constructors/utils/build_error_event";
 import {
@@ -386,8 +388,43 @@ export function messageDeltaUsageToTokenUsageEvent(
       standardInput: uncachedInput,
       totalOutput: usage.output_tokens,
       ...(thinkingTokens !== undefined ? { reasoning: thinkingTokens } : {}),
+      ...fallbackUsageFields(usage.iterations),
     },
     metadata,
+  };
+}
+
+/**
+ * @cc [owner:fontanierh,label:product] served-model-from-fallback-iteration
+ * `servedModel` and `usageIterations` MUST be set if and only if `usage.iterations`
+ * contains a `fallback_message` entry, and `servedModel` MUST be the model of the last
+ * such entry. They MUST NOT be derived from `message_start.message.model`, from the
+ * `fallback` content blocks or from the presence of `iterations` alone, so responses
+ * without a server-side fallback (including server tool loops) keep their token usage
+ * unchanged.
+ */
+function fallbackUsageFields(
+  iterations: BetaIterationsUsage | null | undefined
+): Pick<TokenUsageContent, "servedModel" | "usageIterations"> {
+  // The `fallback_message` entry is Anthropic's served-by signal: it is present on
+  // pre-output, mid-stream and sticky fallbacks alike, while `message_start` names
+  // the declined model after a mid-stream switch and `message_delta` has no model.
+  const servingIteration = iterations
+    ?.filter((iteration) => iteration.type === "fallback_message")
+    .at(-1);
+  if (!iterations || !servingIteration) {
+    return {};
+  }
+  return {
+    servedModel: servingIteration.model,
+    usageIterations: iterations.map((iteration) => ({
+      type: iteration.type,
+      model: "model" in iteration ? iteration.model : null,
+      cacheCreated: iteration.cache_creation_input_tokens,
+      cacheHit: iteration.cache_read_input_tokens,
+      standardInput: iteration.input_tokens,
+      totalOutput: iteration.output_tokens,
+    })),
   };
 }
 

@@ -104,6 +104,25 @@ export type TokenUsageContent = {
   // Processing tier the provider reports having served this response on, which
   // is what it bills for. Absent for providers that do not report one.
   serviceTier?: ServiceTier;
+  // Model that produced the returned response when the provider switched away
+  // from the requested model (e.g. an Anthropic server-side refusal fallback).
+  // Absent when the requested model served the response. The usage above stays
+  // attributed to the requested model; consumers must not re-price on it yet.
+  servedModel?: string;
+  // Per-attempt usage the provider reported for a response it served on another
+  // model, one entry per model sampling attempt in call order. Absent when no
+  // model switch happened.
+  usageIterations?: TokenUsageIteration[];
+};
+export type TokenUsageIteration = {
+  // Provider label for the attempt, e.g. Anthropic "message" or
+  // "fallback_message" (the attempt that served the response).
+  type: string;
+  model: string | null;
+  cacheCreated: number;
+  cacheHit: number;
+  standardInput: number;
+  totalOutput: number;
 };
 export interface TokenUsageEvent {
   type: "token_usage";
