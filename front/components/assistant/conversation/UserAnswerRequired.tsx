@@ -7,6 +7,7 @@ import type {
   UserQuestionAnswer,
   UserQuestionOption,
 } from "@app/lib/actions/types";
+import { isRankingQuestion } from "@app/lib/actions/user_question";
 import { canCurrentUserRespondToParentUserMessage } from "@app/lib/api/assistant/conversation/can_current_user_respond";
 import { useAuth } from "@app/lib/auth/AuthContext";
 import { isEditableTarget } from "@app/lib/utils/dom";
@@ -15,10 +16,19 @@ import {
   assertNeverAndIgnore,
 } from "@app/types/shared/utils/assert_never";
 import type { LightWorkspaceType, UserType } from "@app/types/user";
-import { ArrowUp, Button, cn, OptionCard, Spinner } from "@dust-tt/sparkle";
+import {
+  ArrowUp,
+  Button,
+  ChevronSelectorVertical,
+  cn,
+  Icon,
+  OptionCard,
+  Spinner,
+  XClose,
+} from "@dust-tt/sparkle";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { useReducedMotion } from "framer-motion";
-import type { KeyboardEvent } from "react";
+import { Reorder, useDragControls, useReducedMotion } from "framer-motion";
+import type { KeyboardEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 
 interface UserAnswerRequiredProps {
@@ -35,7 +45,7 @@ type SubmissionState = {
   phase: "pending" | "exiting";
 } | null;
 
-type QuestionLayout = "list" | "yes_no" | "chips";
+type QuestionLayout = "list" | "yes_no" | "chips" | "ranking";
 
 /**
  * @cc [owner:aubin-tchoi,label:product] question-layout
@@ -44,6 +54,7 @@ type QuestionLayout = "list" | "yes_no" | "chips";
  * the field existed) or one this client does not know:
  * - `yes_no`: single select with exactly 2 options, as two buttons.
  * - `chips`: no option has a description (a blank one counts as none), as wrapping pills.
+ * - `ranking`: `isRankingQuestion` holds, as a list the user reorders and removes options from.
  */
 function getQuestionLayout(question: UserQuestion): QuestionLayout {
   switch (question.format) {
@@ -57,6 +68,8 @@ function getQuestionLayout(question: UserQuestion): QuestionLayout {
       return question.options.every((option) => !option.description?.trim())
         ? "chips"
         : "list";
+    case "ranking":
+      return isRankingQuestion(question) ? "ranking" : "list";
     default:
       assertNeverAndIgnore(question.format);
       return "list";
@@ -142,11 +155,75 @@ function getArrowKeyDirection(
   return null;
 }
 
+// Removed options keep their slot in the full ranking, so that restoring one puts it back where it
+// was.
+function getRankingWithKeptOrder(
+  ranking: number[],
+  removedOptions: number[],
+  keptRanking: number[]
+): number[] {
+  let keptPosition = 0;
+  return ranking.map((optionIndex) => {
+    if (removedOptions.includes(optionIndex)) {
+      return optionIndex;
+    }
+    const keptOption = keptRanking[keptPosition];
+    keptPosition += 1;
+    return keptOption;
+  });
+}
+
+function RankedOption({
+  optionIndex,
+  children,
+}: {
+  optionIndex: number;
+  children: (dragHandle: ReactNode) => ReactNode;
+}) {
+  const dragControls = useDragControls();
+  const shouldReduceMotion = useReducedMotion();
+
+  // A mouse drags the whole card, except from its button. Touch only drags from the handle, so that
+  // swiping the card still scrolls the page.
+  return (
+    <Reorder.Item
+      as="div"
+      value={optionIndex}
+      dragListener={false}
+      dragControls={dragControls}
+      transition={shouldReduceMotion ? { duration: 0 } : undefined}
+      className="select-none"
+      onPointerDown={(e) => {
+        if (
+          e.pointerType === "mouse" &&
+          !(e.target instanceof Element && e.target.closest("button"))
+        ) {
+          dragControls.start(e);
+        }
+      }}
+    >
+      {children(
+        <div
+          aria-hidden="true"
+          className="flex size-6 shrink-0 cursor-grab touch-none items-center justify-center text-faint active:cursor-grabbing"
+          onPointerDown={(e) => {
+            if (e.pointerType !== "mouse") {
+              dragControls.start(e);
+            }
+          }}
+        >
+          <Icon visual={ChevronSelectorVertical} size="sm" />
+        </div>
+      )}
+    </Reorder.Item>
+  );
+}
+
 /**
  * @cc [owner:aubin-tchoi,label:product] explicit-submit
- * A multi-select question MUST be submitted only with the send button or Cmd/Ctrl+Enter, so that
- * the user can pick several options first. In a single-select question, picking an option MUST
- * submit it right away.
+ * A multi-select or ranking question MUST be submitted only with the send button or Cmd/Ctrl+Enter,
+ * so that the user can pick or order several options first. In any other single-select question,
+ * picking an option MUST submit it right away.
  */
 export function UserAnswerRequired({
   blockedAction,
@@ -166,13 +243,17 @@ export function UserAnswerRequired({
   const [activeOptionIndex, setActiveOptionIndex] = useState(0);
   const [isCustomResponseFocused, setIsCustomResponseFocused] = useState(false);
   const [isKeyboardNavigating, setIsKeyboardNavigating] = useState(false);
+  const [ranking, setRanking] = useState(() =>
+    blockedAction.question.options.map((_, index) => index)
+  );
+  const [removedOptions, setRemovedOptions] = useState<number[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const customResponseInputRef = useRef<HTMLInputElement>(null);
   const shouldReduceMotion = useReducedMotion();
 
   const { question } = blockedAction;
   const layout = getQuestionLayout(question);
-  const requiresExplicitSubmit = question.multiSelect;
+  const requiresExplicitSubmit = question.multiSelect || layout === "ranking";
   const canCurrentUserRespond = canCurrentUserRespondToParentUserMessage({
     parentUserId: blockedAction.userId,
     currentUserId: user?.sId,
@@ -183,6 +264,17 @@ export function UserAnswerRequired({
     answerDraft.answerToSubmit?.customResponse !== undefined;
 
   const isSubmitting = submission !== null;
+
+  const keptRanking = ranking.filter(
+    (optionIndex) => !removedOptions.includes(optionIndex)
+  );
+
+  // A ranking can be submitted as is: without a custom response, the answer is the current order
+  // of the kept options.
+  const answerToSubmit =
+    layout === "ranking"
+      ? (answerDraft.answerToSubmit ?? { selectedOptions: keptRanking })
+      : answerDraft.answerToSubmit;
 
   // Reset the keyboard cursor and focus when a new blocked action replaces the current one.
   useEffect(() => {
@@ -258,11 +350,41 @@ export function UserAnswerRequired({
   }
 
   function handleSubmit() {
-    if (isSubmitting || answerDraft.answerToSubmit === null) {
+    if (isSubmitting || answerToSubmit === null) {
       return;
     }
 
-    void submitAnswer(answerDraft.answerToSubmit);
+    void submitAnswer(answerToSubmit);
+  }
+
+  function handleReorder(nextKeptRanking: number[]) {
+    setRanking(
+      getRankingWithKeptOrder(ranking, removedOptions, nextKeptRanking)
+    );
+    answerDraft.rankOptions(nextKeptRanking);
+  }
+
+  function updateRemovedOptions(nextRemovedOptions: number[]) {
+    const nextKeptRanking = ranking.filter(
+      (optionIndex) => !nextRemovedOptions.includes(optionIndex)
+    );
+    setRemovedOptions(nextRemovedOptions);
+    setActiveOptionIndex((prev) => Math.min(prev, nextKeptRanking.length - 1));
+    answerDraft.rankOptions(nextKeptRanking);
+  }
+
+  // In the ranking layout, the active option index is a position among the kept options.
+  function moveActiveRankedOption(direction: 1 | -1) {
+    const targetPosition = activeOptionIndex + direction;
+    if (targetPosition < 0 || targetPosition >= keptRanking.length) {
+      return;
+    }
+
+    const nextKeptRanking = [...keptRanking];
+    nextKeptRanking[activeOptionIndex] = keptRanking[targetPosition];
+    nextKeptRanking[targetPosition] = keptRanking[activeOptionIndex];
+    handleReorder(nextKeptRanking);
+    setActiveOptionIndex(targetPosition);
   }
 
   function handleSkip() {
@@ -361,7 +483,11 @@ export function UserAnswerRequired({
       e.preventDefault();
       setIsKeyboardNavigating(true);
       setIsCustomResponseFocused(false);
-      moveActiveOption(arrowKeyDirection);
+      if (layout === "ranking" && e.altKey) {
+        moveActiveRankedOption(arrowKeyDirection);
+      } else {
+        moveActiveOption(arrowKeyDirection);
+      }
       containerRef.current?.focus();
       return;
     }
@@ -369,7 +495,11 @@ export function UserAnswerRequired({
     switch (e.key) {
       case "Enter":
       case " ":
-        if (e.currentTarget === e.target && layout !== "yes_no") {
+        if (
+          e.currentTarget === e.target &&
+          layout !== "yes_no" &&
+          layout !== "ranking"
+        ) {
           e.preventDefault();
           setIsKeyboardNavigating(true);
           handleActiveOptionSelection();
@@ -407,6 +537,9 @@ export function UserAnswerRequired({
         return t`Tell the agent what to do differently`;
       case "chips":
         return t`Enter another value`;
+      // A custom response replaces the ranking: it is not sent along with it.
+      case "ranking":
+        return t`Describe your priorities instead`;
       default:
         return assertNever(layout);
     }
@@ -488,6 +621,82 @@ export function UserAnswerRequired({
                 )
               )}
             </div>
+          )}
+          {layout === "ranking" && (
+            <>
+              <Reorder.Group
+                as="div"
+                axis="y"
+                values={keptRanking}
+                onReorder={handleReorder}
+                className="flex flex-col gap-2"
+              >
+                {keptRanking.map((optionIndex, position) => (
+                  <RankedOption key={optionIndex} optionIndex={optionIndex}>
+                    {(dragHandle) => (
+                      <OptionCard
+                        label={question.options[optionIndex].label}
+                        description={question.options[optionIndex].description}
+                        counterValue={position + 1}
+                        startActions={dragHandle}
+                        endActions={
+                          <Button
+                            icon={XClose}
+                            variant="ghost-secondary"
+                            size="xs"
+                            tooltip={t`Remove`}
+                            onClick={() =>
+                              updateRemovedOptions([
+                                ...removedOptions,
+                                optionIndex,
+                              ])
+                            }
+                            // An empty ranking would read as a declined question.
+                            disabled={isSubmitting || keptRanking.length === 1}
+                          />
+                        }
+                        disableHover={isKeyboardNavigating}
+                        onMouseEnter={() => activateOption(position)}
+                        className={cn(
+                          activeOptionIndex === position &&
+                            !isCustomResponseActive &&
+                            "bg-primary-100",
+                          isKeyboardNavigating && "cursor-none"
+                        )}
+                        disabled={isSubmitting}
+                      />
+                    )}
+                  </RankedOption>
+                ))}
+              </Reorder.Group>
+              {removedOptions.length > 0 && (
+                <div className="flex flex-col gap-2 rounded-2xl bg-muted-background p-3">
+                  {removedOptions.map((optionIndex) => (
+                    <div
+                      key={optionIndex}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <span className="truncate text-sm text-muted-foreground line-through">
+                        {question.options[optionIndex].label}
+                      </span>
+                      <Button
+                        label={t`Restore`}
+                        variant="ghost-secondary"
+                        size="xs"
+                        onClick={() =>
+                          updateRemovedOptions(
+                            removedOptions.filter(
+                              (removedOption) => removedOption !== optionIndex
+                            )
+                          )
+                        }
+                        disabled={isSubmitting}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
           {layout === "chips" && (
             <div className="flex flex-wrap gap-2">
@@ -576,7 +785,7 @@ export function UserAnswerRequired({
           variant="highlight"
           size="sm"
           isLoading={submission?.kind === "answer"}
-          disabled={isSubmitting || answerDraft.answerToSubmit === null}
+          disabled={isSubmitting || answerToSubmit === null}
           onClick={handleSubmit}
           aria-label={t`Send answer`}
           className="rounded-full"

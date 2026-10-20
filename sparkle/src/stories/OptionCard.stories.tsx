@@ -1,7 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import React from "react";
 
-import { OptionCard } from "../index_with_tw_base";
+import {
+  Button,
+  ChevronSelectorVertical,
+  Icon,
+  OptionCard,
+  XClose,
+} from "../index_with_tw_base";
 
 const meta = {
   title: "Product/Conversation/OptionCard",
@@ -18,6 +24,7 @@ const meta = {
 - Provide \`onClick\` to make the card interactive; without it the card is display-only.
 - Use \`counterValue\` to convey ordering or quantity, and \`selected\` to reflect the current choice (it sets \`aria-pressed\`).
 - Use \`selectionIndicator="radio"\` for single-select lists and \`selectionIndicator="checkbox"\` for multi-select lists, so the selection mode is visually unambiguous.
+- Pass \`startActions\` or \`endActions\` for controls at the start or end of a display-only card, such as a drag handle or a remove button.
 - Set \`type="input"\` for a free-text "type something else" option; OptionCard renders the field itself (pass \`value\`/\`onChange\`) and keeps the same chrome and counter.
 - Stack multiple cards in a column; for one-tap suggested prompts that send immediately, use **QuickReplyBlock** instead.`,
       },
@@ -213,6 +220,41 @@ export const MultiSelect: StoryObj = {
         counterValue={3}
         selectionIndicator="checkbox"
       />
+    </div>
+  ),
+};
+
+/**
+ * `startActions` and `endActions` add controls at the start and end of a
+ * display-only card, here a drag handle and a remove button on each item of a
+ * ranking.
+ * @summary Leading and trailing card actions.
+ */
+export const WithActions: StoryObj = {
+  render: () => (
+    <div className="flex w-full max-w-sm flex-col gap-2">
+      {["Fix the login bug", "Ship the billing page"].map((label, index) => (
+        <OptionCard
+          key={label}
+          label={label}
+          counterValue={index + 1}
+          startActions={
+            <Icon
+              visual={ChevronSelectorVertical}
+              size="sm"
+              className="text-faint"
+            />
+          }
+          endActions={
+            <Button
+              icon={XClose}
+              variant="ghost-secondary"
+              size="xs"
+              tooltip="Remove"
+            />
+          }
+        />
+      ))}
     </div>
   ),
 };

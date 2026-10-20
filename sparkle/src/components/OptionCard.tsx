@@ -36,6 +36,10 @@ interface OptionCardOptionProps extends OptionCardSharedProps {
   description?: string | null;
   /** Trailing radio or checkbox visual making the selection mode unambiguous. */
   selectionIndicator?: OptionCardSelectionIndicator;
+  /** Controls at the start of the card row, before the counter (e.g. a drag handle); meant for display-only cards, as their clicks bubble to `onClick`. */
+  startActions?: React.ReactNode;
+  /** Controls at the end of the card row (e.g. a remove button); meant for display-only cards, as their clicks bubble to `onClick`. */
+  endActions?: React.ReactNode;
   /** Called when the card is clicked or activated with Enter/Space; without it the card is display-only. */
   onClick?: () => void;
 }
@@ -85,6 +89,8 @@ export function OptionCard(props: OptionCardProps) {
   const isInput = props.type === "input";
   const onClick = isInput ? undefined : props.onClick;
   const selectionIndicator = isInput ? undefined : props.selectionIndicator;
+  const startActions = isInput ? null : (props.startActions ?? null);
+  const endActions = isInput ? null : (props.endActions ?? null);
   const isInteractive = onClick !== undefined && !disabled;
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -118,6 +124,7 @@ export function OptionCard(props: OptionCardProps) {
       }
       aria-pressed={isInteractive ? selected : undefined}
     >
+      {startActions}
       {counterValue !== undefined && (
         <Counter
           value={counterValue}
@@ -185,6 +192,7 @@ export function OptionCard(props: OptionCardProps) {
           </div>
         </div>
       )}
+      {endActions}
     </Card>
   );
 }

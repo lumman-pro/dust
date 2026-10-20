@@ -1077,6 +1077,18 @@ msgid "Enter another value"
 msgstr "Geben Sie einen anderen Wert ein"
 
 #: front/components/assistant/conversation/UserAnswerRequired.tsx
+msgid "Describe your priorities instead"
+msgstr "Beschreiben Sie stattdessen Ihre Prioritäten"
+
+#: front/components/assistant/conversation/UserAnswerRequired.tsx
+msgid "Remove"
+msgstr "Entfernen"
+
+#: front/components/assistant/conversation/UserAnswerRequired.tsx
+msgid "Restore"
+msgstr "Wiederherstellen"
+
+#: front/components/assistant/conversation/UserAnswerRequired.tsx
 msgid "Skipping question"
 msgstr "Frage wird übersprungen"
 
