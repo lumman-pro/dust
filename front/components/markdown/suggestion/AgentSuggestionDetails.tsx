@@ -275,20 +275,23 @@ function SuggestedStructuredOutput({
       </span>
       <DiffBlock variant="plain">
         <pre className="whitespace-pre-wrap text-foreground">
-          {parts.map((part, index) => (
-            <span
-              key={index}
-              className={
-                part.added
-                  ? SUGGESTION_DIFF_CLASSES.add
-                  : part.removed
-                    ? SUGGESTION_DIFF_CLASSES.remove
-                    : undefined
-              }
-            >
-              {part.value}
-            </span>
-          ))}
+          {parts.map((part, index) => {
+            const Part = part.added ? "ins" : part.removed ? "del" : "span";
+            return (
+              <Part
+                key={index}
+                className={
+                  part.added
+                    ? SUGGESTION_DIFF_CLASSES.add
+                    : part.removed
+                      ? SUGGESTION_DIFF_CLASSES.remove
+                      : undefined
+                }
+              >
+                {part.value}
+              </Part>
+            );
+          })}
         </pre>
       </DiffBlock>
     </div>

@@ -10,7 +10,7 @@ import { ContentBlockWrapper } from "./markdown/ContentBlockWrapper";
 const diffLineVariants = cva("rounded px-1", {
   variants: {
     type: {
-      add: "bg-highlight-50 text-highlight-900",
+      add: "bg-highlight-50 text-highlight-900 no-underline",
       remove: "bg-primary-100 text-muted-foreground line-through",
     },
   },
@@ -210,16 +210,16 @@ export function DiffBlock({
                 <div key={index} className="space-y-0.5">
                   {change.old && (
                     <div className="whitespace-pre-wrap">
-                      <span className={diffLineVariants({ type: "remove" })}>
+                      <del className={diffLineVariants({ type: "remove" })}>
                         {change.old}
-                      </span>
+                      </del>
                     </div>
                   )}
                   {change.new && (
                     <div className="whitespace-pre-wrap">
-                      <span className={diffLineVariants({ type: "add" })}>
+                      <ins className={diffLineVariants({ type: "add" })}>
                         {change.new}
-                      </span>
+                      </ins>
                     </div>
                   )}
                 </div>

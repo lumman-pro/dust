@@ -496,6 +496,10 @@ msgstr "Modification {editNumber} sur {editTotal}"
 msgid "Allow remaining"
 msgstr "Autoriser le reste"
 
+#: front/components/markdown/suggestion/SuggestionTargetList.tsx
+msgid "Suggested deletion: {name}"
+msgstr "Suppression suggérée : {name}"
+
 #: front/components/markdown/suggestion/SuggestionTargetSection.tsx
 msgid "Delete"
 msgstr "Supprimer"

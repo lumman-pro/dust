@@ -108,9 +108,9 @@ function ChangeRow({ label, before, after }: ChangeRowProps) {
     <div className="flex flex-col gap-0.5">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
       <div className="flex flex-wrap items-center gap-2 text-sm text-foreground">
-        <span className="text-muted-foreground line-through">{before}</span>
+        <del className="text-muted-foreground line-through">{before}</del>
         <span className="text-muted-foreground">→</span>
-        <span className="font-medium">{after}</span>
+        <ins className="font-medium no-underline">{after}</ins>
       </div>
     </div>
   );

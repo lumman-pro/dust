@@ -31,29 +31,38 @@ export function SuggestionFieldEditSection({
             {/* Everything is new on a creation, so a word diff would just color the whole text. */}
             {currentValue === ""
               ? newValue
-              : diffWords(currentValue, newValue).map((part, index) => (
-                  <span
-                    key={index}
-                    className={
-                      part.added
-                        ? SUGGESTION_DIFF_CLASSES.add
-                        : part.removed
-                          ? SUGGESTION_DIFF_CLASSES.remove
-                          : undefined
-                    }
-                  >
-                    {part.value}
-                  </span>
-                ))}
+              : diffWords(currentValue, newValue).map((part, index) => {
+                  const Part = part.added
+                    ? "ins"
+                    : part.removed
+                      ? "del"
+                      : "span";
+                  return (
+                    <Part
+                      key={index}
+                      className={
+                        part.added
+                          ? SUGGESTION_DIFF_CLASSES.add
+                          : part.removed
+                            ? SUGGESTION_DIFF_CLASSES.remove
+                            : undefined
+                      }
+                    >
+                      {part.value}
+                    </Part>
+                  );
+                })}
           </p>
         ) : (
           <div className="flex flex-col gap-1 p-3 text-sm">
             {currentValue && (
               <p className="text-muted-foreground line-through">
-                {currentValue}
+                <del>{currentValue}</del>
               </p>
             )}
-            <p className="text-foreground">{newValue}</p>
+            <p className="text-foreground">
+              <ins className="no-underline">{newValue}</ins>
+            </p>
           </div>
         )}
       </DiffBlock>

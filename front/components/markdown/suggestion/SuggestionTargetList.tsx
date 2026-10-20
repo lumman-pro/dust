@@ -8,6 +8,7 @@ import {
   useSkillSuggestionTarget,
 } from "@app/components/markdown/suggestion/useSuggestionTarget";
 import { cn, LoadingBlock, Tooltip } from "@dust-tt/sparkle";
+import { useLingui } from "@lingui/react/macro";
 import type { ReactElement } from "react";
 import { Fragment } from "react";
 
@@ -17,10 +18,13 @@ function SuggestionTargetPill({
   isDeletion,
   onOpen,
 }: SuggestionTarget) {
+  const { t } = useLingui();
+
   return (
     <button
       type="button"
       onClick={onOpen}
+      aria-label={isDeletion ? t`Suggested deletion: ${name}` : undefined}
       className="flex h-6 min-w-0 items-center gap-1 font-medium"
     >
       {visual}

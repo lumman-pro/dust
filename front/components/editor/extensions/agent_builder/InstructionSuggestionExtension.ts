@@ -57,9 +57,9 @@ const CLASSES = {
     "suggestion-deletion rounded line-through bg-warning-100 text-warning-800 cursor-default",
   removeDimmed:
     "suggestion-deletion rounded line-through bg-warning-50 text-muted-foreground cursor-default",
-  add: "suggestion-addition rounded bg-highlight-100 text-highlight-800 cursor-default",
+  add: "suggestion-addition rounded bg-highlight-100 text-highlight-800 no-underline cursor-default",
   addDimmed:
-    "suggestion-addition rounded bg-highlight-50 text-muted-foreground cursor-default",
+    "suggestion-addition rounded bg-highlight-50 text-muted-foreground no-underline cursor-default",
   blockHighlightDimmed: "suggestion-highlight rounded bg-muted cursor-default",
   hidden: "hidden",
   unchangedSeparator:
@@ -252,6 +252,7 @@ function buildBlockDecorations({
           contentStart + change.fromA,
           contentStart + change.toA,
           {
+            nodeName: "del",
             class: isHighlighted ? CLASSES.remove : CLASSES.removeDimmed,
             [SUGGESTION_ID_ATTRIBUTE]: suggestionId,
           }
@@ -270,32 +271,32 @@ function buildBlockDecorations({
         Decoration.widget(
           widgetPos,
           () => {
-            const span = document.createElement("span");
-            span.className = isHighlighted ? CLASSES.add : CLASSES.addDimmed;
-            span.setAttribute(SUGGESTION_ID_ATTRIBUTE, suggestionId);
-            span.contentEditable = "false";
+            const ins = document.createElement("ins");
+            ins.className = isHighlighted ? CLASSES.add : CLASSES.addDimmed;
+            ins.setAttribute(SUGGESTION_ID_ATTRIBUTE, suggestionId);
+            ins.contentEditable = "false";
             // ProseMirror sets `white-space: normal` on [contenteditable="false"]
             // elements, which collapses \n in code blocks. Override to inherit
             // the parent <pre>'s `white-space: pre-wrap`.
-            span.style.whiteSpace = "inherit";
+            ins.style.whiteSpace = "inherit";
 
             const serializer = DOMSerializer.fromSchema(schema);
             if (isCrossType) {
               // Serialize the full block node so the preview shows the new type
               const blockEl = serializer.serializeNode(newNode, {});
-              span.appendChild(blockEl);
+              ins.appendChild(blockEl);
             } else {
               const insertedContent = inlineContentForInsertion(
                 newNode.slice(change.fromB, change.toB)
               );
-              serializer.serializeFragment(insertedContent, {}, span);
+              serializer.serializeFragment(insertedContent, {}, ins);
             }
 
-            labelSkillReferences(span);
+            labelSkillReferences(ins);
 
             // Apply styling to all child elements to ensure visibility in nested structures (e.g., list items)
             const className = isHighlighted ? CLASSES.add : CLASSES.addDimmed;
-            span.querySelectorAll("*").forEach((el) => {
+            ins.querySelectorAll("*").forEach((el) => {
               if (el instanceof HTMLElement) {
                 el.className = el.className
                   ? `${el.className} ${className}`
@@ -303,7 +304,7 @@ function buildBlockDecorations({
               }
             });
 
-            return span;
+            return ins;
           },
           { side: -1 }
         )
@@ -325,18 +326,18 @@ function buildBlockAdditionWidget(
   return Decoration.widget(
     pos,
     () => {
-      const div = document.createElement("div");
-      div.className = className;
-      div.setAttribute(SUGGESTION_ID_ATTRIBUTE, suggestionId);
-      div.contentEditable = "false";
-      div.style.width = "fit-content";
+      const ins = document.createElement("ins");
+      ins.className = `block ${className}`;
+      ins.setAttribute(SUGGESTION_ID_ATTRIBUTE, suggestionId);
+      ins.contentEditable = "false";
+      ins.style.width = "fit-content";
 
       const serializer = DOMSerializer.fromSchema(schema);
-      serializer.serializeFragment(Fragment.from(newChild), {}, div);
+      serializer.serializeFragment(Fragment.from(newChild), {}, ins);
 
-      labelSkillReferences(div);
+      labelSkillReferences(ins);
 
-      div.querySelectorAll("*").forEach((el) => {
+      ins.querySelectorAll("*").forEach((el) => {
         if (el instanceof HTMLElement) {
           el.className = el.className
             ? `${el.className} ${className}`
@@ -344,7 +345,7 @@ function buildBlockAdditionWidget(
         }
       });
 
-      return div;
+      return ins;
     },
     { side: -1 }
   );
@@ -449,6 +450,7 @@ function buildRootDecorations({
             contentStart,
             contentStart + oldChild.content.size,
             {
+              nodeName: "del",
               class: isHighlighted ? CLASSES.remove : CLASSES.removeDimmed,
               [SUGGESTION_ID_ATTRIBUTE]: suggestionId,
             }
