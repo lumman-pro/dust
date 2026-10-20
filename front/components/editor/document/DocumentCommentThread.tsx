@@ -483,16 +483,6 @@ interface DocumentCommentThreadProps {
   renderAuthorAvatar: RenderAuthorAvatar;
 }
 
-/**
- * @cc [owner:louisjc,label:product;react] document-comment-edit-own-message
- * Edit MUST be offered only when canWrite and the message is editable
- * (`document-comment-editable-message`). While a message is edited, a comment field
- * (`document-comment-input`) holding its text MUST show in place of its body, and a Save button
- * MUST replace the message's Resolve and actions menu. Save MUST submit the field, show progress
- * while the save is pending, and be disabled while the field holds no content. Saving MUST send
- * the field's Markdown to onEdit unless it is unchanged. An accepted or unchanged save, or Escape
- * with the field's onCancel, MUST stop editing; a refused one MUST keep the field with the reason.
- */
 export const DocumentCommentThread = ({
   comment,
   quote,
