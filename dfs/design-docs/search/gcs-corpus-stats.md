@@ -22,7 +22,7 @@ read -r GCS_STATS_WORKSPACE_ID
 
 Use the real bucket name configured by `DUST_PRIVATE_UPLOADS_BUCKET` or `DUST_DATA_SOURCES_BUCKET` in the cell being measured. Local development variables may point to test buckets. Placeholder bucket names fail before creating an output directory or connecting to GCS.
 
-`--workspace-id` scans both `files/w/ID/` for canonical uploads and `w/ID/` for mounted files and workspace state. It requires `--layout private-uploads` and cannot be combined with `--prefix`. For a custom scope, `--prefix` is repeatable, literal, and must not overlap. Omitting both scope options scans the entire bucket.
+`--workspace-id` scans only `w/ID/` for mounted files and workspace state. It requires `--layout private-uploads` and cannot be combined with `--prefix`. For a custom scope, `--prefix` is repeatable, literal, and must not overlap. Omitting both scope options scans the entire bucket.
 
 For a data-source bucket, use the following command. To narrow it, add a prefix containing the core project ID and optionally the data-source internal ID. These IDs are distinct from workspace IDs.
 

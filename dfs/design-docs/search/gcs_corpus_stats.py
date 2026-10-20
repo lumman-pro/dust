@@ -288,6 +288,10 @@ def report_directory(output_dir: Path):
 
 
 def parse_args(argv=None):
+    """@cc [owner:flvndvd,label:cli] inventory-workspace-scope
+    With --workspace-id, listings MUST use only w/ID/ for that workspace.
+    The prefix MUST end in a slash to preserve the workspace boundary.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bucket", required=True, help="Bucket name without gs://")
     parser.add_argument(
@@ -300,7 +304,7 @@ def parse_args(argv=None):
     )
     scope.add_argument(
         "--workspace-id",
-        help="Scan files/w/ID/ and w/ID/ in the private-uploads layout",
+        help="Scan only w/ID/ in the private-uploads layout",
     )
     parser.add_argument(
         "--output-dir", type=Path, required=True,
@@ -323,7 +327,7 @@ def parse_args(argv=None):
             character.isspace() or character == "/" for character in args.workspace_id
         ):
             parser.error("--workspace-id must be a workspace ID without spaces or a path")
-        args.prefixes = [f"files/w/{args.workspace_id}/", f"w/{args.workspace_id}/"]
+        args.prefixes = [f"w/{args.workspace_id}/"]
     else:
         args.prefixes = sorted(args.prefix or [""])
     for previous, current in zip(args.prefixes, args.prefixes[1:]):

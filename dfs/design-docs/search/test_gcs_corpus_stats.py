@@ -198,9 +198,8 @@ class InventoryTests(unittest.TestCase):
                 if path.name != ".scan.lock"
             })
 
-    def test_workspace_scan_lists_both_exact_workspace_prefixes(self):
+    def test_workspace_scan_lists_only_the_exact_workspace_prefix(self):
         transport = ListTransport([
-            {"items": [{"name": "files/w/ws/f/original", "size": "100", "contentType": "application/pdf"}]},
             {"items": [{"name": "w/ws/pods/p/files/report.pdf", "size": "100", "contentType": "application/pdf"}]},
         ])
         client = storage.Client(project="unit-tests", credentials=AnonymousCredentials(), _http=transport)
@@ -212,9 +211,9 @@ class InventoryTests(unittest.TestCase):
                     "--workspace-id", "ws", "--output-dir", str(output_dir),
                 ])
             summary = json.loads((output_dir / "summary.json").read_text())
-        self.assertEqual(transport.prefixes, ["files/w/ws/", "w/ws/"])
+        self.assertEqual(transport.prefixes, ["w/ws/"])
         self.assertEqual(summary["prefixes"], transport.prefixes)
-        self.assertEqual(summary["totals"]["object_count"], 2)
+        self.assertEqual(summary["totals"]["object_count"], 1)
 
     def test_invalid_workspace_scopes_are_rejected(self):
         for layout, scope in [
