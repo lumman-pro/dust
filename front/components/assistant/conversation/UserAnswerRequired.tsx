@@ -2,10 +2,14 @@ import { useBlockedActionsContext } from "@app/components/assistant/conversation
 import { useAnswerUserQuestion } from "@app/hooks/useAnswerUserQuestion";
 import { useUserAnswerDraft } from "@app/hooks/useUserAnswerDraft";
 import type { AgentLoopBlockedToolExecution } from "@app/lib/actions/mcp";
-import type { UserQuestionAnswer } from "@app/lib/actions/types";
+import type { UserQuestion, UserQuestionAnswer } from "@app/lib/actions/types";
 import { canCurrentUserRespondToParentUserMessage } from "@app/lib/api/assistant/conversation/can_current_user_respond";
 import { useAuth } from "@app/lib/auth/AuthContext";
 import { isEditableTarget } from "@app/lib/utils/dom";
+import {
+  assertNever,
+  assertNeverAndIgnore,
+} from "@app/types/shared/utils/assert_never";
 import type { LightWorkspaceType, UserType } from "@app/types/user";
 import { ArrowUp, Button, cn, OptionCard, Spinner } from "@dust-tt/sparkle";
 import { Trans, useLingui } from "@lingui/react/macro";
@@ -27,12 +31,46 @@ type SubmissionState = {
   phase: "pending" | "exiting";
 } | null;
 
+type QuestionLayout = "list";
+
+/**
+ * @cc [owner:aubin-tchoi,label:product] question-layout
+ * A question MUST render with its `format`'s layout only when all of that format's constraints
+ * hold, and as the default list otherwise, including when it has no `format` at all (stored before
+ * the field existed) or one this client does not know.
+ */
+function getQuestionLayout(question: UserQuestion): QuestionLayout {
+  switch (question.format) {
+    case "list":
+      return "list";
+    default:
+      assertNeverAndIgnore(question.format);
+      return "list";
+  }
+}
+
 function isPrintableKey(e: KeyboardEvent<HTMLDivElement>) {
   return (
     e.key.length === 1 && e.key !== " " && !e.altKey && !e.ctrlKey && !e.metaKey
   );
 }
 
+function getArrowKeyDirection(key: string): 1 | -1 | null {
+  if (key === "ArrowDown") {
+    return 1;
+  }
+  if (key === "ArrowUp") {
+    return -1;
+  }
+  return null;
+}
+
+/**
+ * @cc [owner:aubin-tchoi,label:product] explicit-submit
+ * A multi-select question MUST be submitted only with the send button or Cmd/Ctrl+Enter, so that
+ * the user can pick several options first. In a single-select question, picking an option MUST
+ * submit it right away.
+ */
 export function UserAnswerRequired({
   blockedAction,
   triggeringUser,
@@ -56,6 +94,8 @@ export function UserAnswerRequired({
   const shouldReduceMotion = useReducedMotion();
 
   const { question } = blockedAction;
+  const layout = getQuestionLayout(question);
+  const requiresExplicitSubmit = question.multiSelect;
   const canCurrentUserRespond = canCurrentUserRespondToParentUserMessage({
     parentUserId: blockedAction.userId,
     currentUserId: user?.sId,
@@ -124,7 +164,7 @@ export function UserAnswerRequired({
 
     const answer = answerDraft.selectOption(index);
 
-    if (answer !== null) {
+    if (answer !== null && !requiresExplicitSubmit) {
       void submitAnswer(answer);
     }
   }
@@ -207,7 +247,11 @@ export function UserAnswerRequired({
       return;
     }
 
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && question.multiSelect) {
+    if (
+      (e.metaKey || e.ctrlKey) &&
+      e.key === "Enter" &&
+      requiresExplicitSubmit
+    ) {
       e.preventDefault();
       e.stopPropagation();
       setIsKeyboardNavigating(true);
@@ -227,21 +271,17 @@ export function UserAnswerRequired({
       return;
     }
 
+    const arrowKeyDirection = getArrowKeyDirection(e.key);
+    if (arrowKeyDirection !== null) {
+      e.preventDefault();
+      setIsKeyboardNavigating(true);
+      setIsCustomResponseFocused(false);
+      moveActiveOption(arrowKeyDirection);
+      containerRef.current?.focus();
+      return;
+    }
+
     switch (e.key) {
-      case "ArrowDown":
-        e.preventDefault();
-        setIsKeyboardNavigating(true);
-        setIsCustomResponseFocused(false);
-        moveActiveOption(1);
-        containerRef.current?.focus();
-        break;
-      case "ArrowUp":
-        e.preventDefault();
-        setIsKeyboardNavigating(true);
-        setIsCustomResponseFocused(false);
-        moveActiveOption(-1);
-        containerRef.current?.focus();
-        break;
       case "Enter":
       case " ":
         if (e.currentTarget === e.target) {
@@ -272,6 +312,16 @@ export function UserAnswerRequired({
         )}
       </div>
     );
+  }
+
+  // Declared after the early return so that its strings keep their place in the extracted catalogs.
+  function getCustomResponsePlaceholder() {
+    switch (layout) {
+      case "list":
+        return t`Tell the agent what to do differently`;
+      default:
+        return assertNever(layout);
+    }
   }
 
   return (
@@ -311,28 +361,29 @@ export function UserAnswerRequired({
               : "opacity-100 duration-enter"
           )}
         >
-          {question.options.map((option, index) => (
-            <OptionCard
-              key={index}
-              label={option.label}
-              description={option.description}
-              counterValue={index + 1}
-              selected={answerDraft.selectedOptions.includes(index)}
-              disableHover={isKeyboardNavigating}
-              selectionIndicator={question.multiSelect ? "checkbox" : "radio"}
-              onFocusCapture={() => activateOption(index)}
-              onMouseEnter={() => activateOption(index)}
-              className={cn(
-                activeOptionIndex === index &&
-                  !isCustomResponseActive &&
-                  !answerDraft.selectedOptions.includes(index) &&
-                  "bg-primary-100",
-                isKeyboardNavigating && "cursor-none"
-              )}
-              onClick={() => handleOptionClick(index)}
-              disabled={isSubmitting}
-            />
-          ))}
+          {layout === "list" &&
+            question.options.map((option, index) => (
+              <OptionCard
+                key={index}
+                label={option.label}
+                description={option.description}
+                counterValue={index + 1}
+                selected={answerDraft.selectedOptions.includes(index)}
+                disableHover={isKeyboardNavigating}
+                selectionIndicator={question.multiSelect ? "checkbox" : "radio"}
+                onFocusCapture={() => activateOption(index)}
+                onMouseEnter={() => activateOption(index)}
+                className={cn(
+                  activeOptionIndex === index &&
+                    !isCustomResponseActive &&
+                    !answerDraft.selectedOptions.includes(index) &&
+                    "bg-primary-100",
+                  isKeyboardNavigating && "cursor-none"
+                )}
+                onClick={() => handleOptionClick(index)}
+                disabled={isSubmitting}
+              />
+            ))}
           <OptionCard
             type="input"
             selected={isCustomResponseActive}
@@ -341,7 +392,7 @@ export function UserAnswerRequired({
             inputRef={customResponseInputRef}
             id={`custom-response-${blockedAction.actionId}`}
             name="custom-response"
-            placeholder={t`Tell the agent what to do differently`}
+            placeholder={getCustomResponsePlaceholder()}
             value={answerDraft.customResponse}
             disabled={isSubmitting}
             onFocus={() => {

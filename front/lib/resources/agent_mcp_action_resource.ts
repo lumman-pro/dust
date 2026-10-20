@@ -22,7 +22,7 @@ import type {
 import {
   isFileAuthorizationInfo,
   isSandboxChildActionInfo,
-  isUserQuestionResumeState,
+  parseUserQuestionResumeState,
 } from "@app/lib/actions/types";
 import { isLightServerSideMCPToolConfiguration } from "@app/lib/actions/types/guards";
 import { AGENT_DELEGATION_SERVER_NAME } from "@app/lib/api/actions/servers/agent_delegation/metadata";
@@ -584,8 +584,10 @@ export class AgentMCPActionResource extends BaseResource<AgentMCPActionModel> {
           },
         });
       } else if (action.status === "blocked_user_answer_required") {
-        const { resumeState } = action.stepContext;
-        if (!isUserQuestionResumeState(resumeState)) {
+        const resumeState = parseUserQuestionResumeState(
+          action.stepContext.resumeState
+        );
+        if (!resumeState) {
           logger.warn(
             {
               actionId: action.id,

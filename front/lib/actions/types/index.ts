@@ -69,6 +69,14 @@ const UserQuestionOptionSchema = z.object({
     ),
 });
 
+const USER_QUESTION_FORMATS = ["list"] as const;
+
+/**
+ * @cc [owner:aubin-tchoi,label:product] fields-added-with-defaults
+ * Fields added to `UserQuestionSchema` or its options after release MUST parse when absent (e.g.
+ * `format` defaults to `"list"`): questions stored in blocked actions and resume states before a
+ * field existed MUST still parse, otherwise answered questions are asked again.
+ */
 export const UserQuestionSchema = z.object({
   question: z
     .string()
@@ -86,9 +94,25 @@ export const UserQuestionSchema = z.object({
     .describe(
       "Whether the user can select multiple options for this question."
     ),
+  format: z
+    .enum(USER_QUESTION_FORMATS)
+    .default("list")
+    .describe(
+      "How the question is displayed. 'list' (default) fits most questions."
+    ),
 });
 
 export type UserQuestion = z.infer<typeof UserQuestionSchema>;
+
+/**
+ * @cc [owner:aubin-tchoi,label:product] stored-question-parsing
+ * A question read back from storage (resume states, tool params) MUST parse whatever its `format`:
+ * a missing one (stored before the field existed) or one this version does not know (stored by a
+ * newer version before a rollback) MUST parse as `"list"`, so the question still renders.
+ */
+export const StoredUserQuestionSchema = UserQuestionSchema.extend({
+  format: z.enum(USER_QUESTION_FORMATS).catch("list"),
+});
 
 export const UserQuestionAnswerSchema = z.object({
   selectedOptions: z.array(z.number()),
@@ -99,16 +123,19 @@ export type UserQuestionAnswer = z.infer<typeof UserQuestionAnswerSchema>;
 
 const UserQuestionResumeStateSchema = z.object({
   type: z.literal("user_question"),
-  question: UserQuestionSchema,
+  question: StoredUserQuestionSchema,
   answer: UserQuestionAnswerSchema.optional(),
 });
 
 type UserQuestionResumeState = z.infer<typeof UserQuestionResumeStateSchema>;
 
-export function isUserQuestionResumeState(
+// Returns the parsed state rather than narrowing the raw value, so that defaults apply and the
+// question always has a `format`.
+export function parseUserQuestionResumeState(
   value: unknown
-): value is UserQuestionResumeState {
-  return UserQuestionResumeStateSchema.safeParse(value).success;
+): UserQuestionResumeState | null {
+  const result = UserQuestionResumeStateSchema.safeParse(value);
+  return result.success ? result.data : null;
 }
 
 const SandboxResumeStateSchema = z.object({
