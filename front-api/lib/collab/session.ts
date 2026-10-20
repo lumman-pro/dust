@@ -259,7 +259,7 @@ export async function writeSessionSource(
 }
 
 /**
- * @cc [owner:tdraier,label:product;concurrency;security] collab-session-source-edit
+ * @cc [owner:PopDaph,label:product;concurrency;security] collab-session-source-edit
  * An edit MUST be applied as a write is (`collab-session-source-write`), with the same turn,
  * `closed`, `busy` and `unsaved` answers and announcements, but MUST NOT compare with a `base`:
  * at its turn, the source `readSessionSource` would return MUST be changed with

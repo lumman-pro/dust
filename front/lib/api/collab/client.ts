@@ -194,7 +194,7 @@ export async function writeCollabSource(
 }
 
 /**
- * @cc [owner:tdraier,label:product;concurrency;security] collab-client-edit
+ * @cc [owner:PopDaph,label:product;concurrency;security] collab-client-edit
  * The edit MUST be sent as `auth`'s user, for the session to apply to its source at its turn, and
  * MUST be refused without asking the collab server when `auth` has no user. Nothing listening at
  * the collab server's address MUST count as `closed`, and a refusal and any other failure MUST be

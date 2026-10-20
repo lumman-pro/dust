@@ -242,7 +242,7 @@ export async function readCurrentDocumentSource(
 }
 
 /**
- * @cc [owner:tdraier,label:concurrency] document-live-edit
+ * @cc [owner:PopDaph,label:concurrency] document-live-edit
  * While a live session holds the document, `edit` MUST be applied by the session at its turn,
  * through `editThroughCollabSession` with `agent` (`collab-session-edit`), after the name check of
  * `readStoredDocument` and once the file is found to exist; the file MUST NOT be read or written.
