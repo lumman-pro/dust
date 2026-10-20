@@ -272,6 +272,21 @@ const withoutTrailingParagraphs = (document: JSONContent): JSONContent => {
   return { ...document, content: content.slice(0, end) };
 };
 
+// Markdown reads a break only before more text in its block, so breaks ending one are dropped.
+const withoutClosingHardBreaks = (node: JSONContent): JSONContent => {
+  if (!node.content) {
+    return node;
+  }
+  if (!documentSchema.nodes[node.type ?? ""]?.isTextblock) {
+    return { ...node, content: node.content.map(withoutClosingHardBreaks) };
+  }
+  let end = node.content.length;
+  while (end > 0 && node.content[end - 1].type === "hardBreak") {
+    end -= 1;
+  }
+  return { ...node, content: node.content.slice(0, end) };
+};
+
 /** Markdown for an editor document, comment marks written as anchor directives. */
 const serializeWithAnchors = (
   document: JSONContent,
@@ -597,10 +612,11 @@ const serializeReadingBack = (
 /**
  * @cc [owner:flvndvd,label:product] document-markdown-save
  * Markdown output MUST reopen with the same content and formatting, ignoring empty trailing
- * paragraphs, spaces at the edges of a table cell, which GFM trims, a cell's alignment where
- * it differs from its column's, which GFM holds per column, and the task of an item with no
- * text on its first line, which GFM reads as a plain item. A failed conversion MUST NOT reach
- * persistence or acknowledge the draft.
+ * paragraphs, hard breaks ending a paragraph or heading, which Markdown cannot write, spaces at
+ * the edges of a table cell, which GFM trims, a cell's alignment where it differs from its
+ * column's, which GFM holds per column, and the task of an item with no text on its first line,
+ * which GFM reads as a plain item. A failed conversion MUST NOT reach persistence or acknowledge
+ * the draft.
  */
 /**
  * @cc [owner:tdraier,label:product] document-anchors-in-formatting
@@ -612,7 +628,7 @@ export const serializeDocumentMarkdown = (
   document: JSONContent,
   anchorOrder: string[] = []
 ): Result<string, string> => {
-  const content = withoutTrailingParagraphs(document);
+  const content = withoutTrailingParagraphs(withoutClosingHardBreaks(document));
   const commented = serializeReadingBack(content, anchorOrder, "commented");
   return commented.isOk()
     ? commented

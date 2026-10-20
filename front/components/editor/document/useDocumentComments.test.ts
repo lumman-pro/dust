@@ -325,7 +325,7 @@ describe("useDocumentComments", () => {
     if (parsed.isOk()) {
       const [comment] = parsed.value.comments;
       expect(parsed.value.body).toBe(
-        `Hello :comment-start{id=${comment.id}}brave  \nnew:comment-end{id=${comment.id}} world.`
+        `Hello :comment-start{id=${comment.id}}brave\\\nnew:comment-end{id=${comment.id}} world.`
       );
     }
   });

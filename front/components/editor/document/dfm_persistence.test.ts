@@ -1417,3 +1417,71 @@ describe("numbered sub-lists after an empty paragraph", () => {
     ).toEqual(documentSchema.nodeFromJSON(document(start)).toJSON());
   });
 });
+
+describe("hard breaks", () => {
+  const envelope = { frontMatter: null, anchorOrder: [] };
+  const text = (value: string): JSONContent => ({ type: "text", text: value });
+  const hardBreak: JSONContent = { type: "hardBreak" };
+  const paragraph = (...content: JSONContent[]): JSONContent => ({
+    type: "paragraph",
+    content,
+  });
+
+  it.each([
+    ["between texts", [paragraph(text("a"), hardBreak, text("b"))], "a\\\nb\n"],
+    [
+      "following each other",
+      [paragraph(text("a"), hardBreak, hardBreak, text("b"))],
+      "a\\\n\\\nb\n",
+    ],
+    ["opening a paragraph", [paragraph(hardBreak, text("a"))], "\\\na\n"],
+  ])("saves breaks %s so they read back", (_, content, expected) => {
+    const document = { type: "doc", content };
+    expect(saveDfm(envelope, document)).toEqual(new Ok(expected));
+    expect(
+      documentSchema.nodeFromJSON(load(expected).content).toJSON()
+    ).toEqual(documentSchema.nodeFromJSON(document).toJSON());
+  });
+
+  it.each([
+    ["a paragraph", [paragraph(text("Hello"), hardBreak)], "Hello\n"],
+    [
+      "a paragraph before another",
+      [paragraph(text("a"), hardBreak, hardBreak), paragraph(text("b"))],
+      "a\n\nb\n",
+    ],
+    [
+      "a heading",
+      [
+        {
+          type: "heading",
+          attrs: { level: 1 },
+          content: [text("H"), hardBreak],
+        },
+      ],
+      "# H\n",
+    ],
+    [
+      "a list item",
+      [
+        {
+          type: "bulletList",
+          content: [
+            { type: "listItem", content: [paragraph(text("a"), hardBreak)] },
+          ],
+        },
+      ],
+      "- a\n",
+    ],
+  ])("saves without the breaks ending %s", (_, content, expected) => {
+    expect(saveDfm(envelope, { type: "doc", content })).toEqual(
+      new Ok(expected)
+    );
+  });
+
+  it("opens breaks written with two spaces", () => {
+    expect(load("a  \nb\n").content.content).toEqual([
+      paragraph(text("a"), hardBreak, text("b")),
+    ]);
+  });
+});

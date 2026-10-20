@@ -25,6 +25,7 @@ import { cn } from "@dust-tt/sparkle";
 import type { AnyExtension } from "@tiptap/core";
 import { Code } from "@tiptap/extension-code";
 import { CodeBlock } from "@tiptap/extension-code-block";
+import { HardBreak } from "@tiptap/extension-hard-break";
 import { Heading } from "@tiptap/extension-heading";
 import { Markdown } from "@tiptap/markdown";
 import { Plugin } from "@tiptap/pm/state";
@@ -51,6 +52,7 @@ const starterKitOptions: Partial<StarterKitOptions> = {
   },
   codeBlock: false,
   code: false,
+  hardBreak: false,
   link: {
     openOnClick: false,
     HTMLAttributes: {
@@ -83,6 +85,12 @@ const DocumentHeading = Heading.extend({
     }
     return "#".repeat(isNumber(node.attrs?.level) ? node.attrs.level : 1);
   },
+});
+
+// Two spaces ending a line, TipTap's break, read back as a blank line after another break and as
+// nothing opening a paragraph; a backslash reads back as a break in both.
+const DocumentHardBreak = HardBreak.extend({
+  renderMarkdown: () => "\\\n",
 });
 
 /**
@@ -163,6 +171,7 @@ export const buildSchemaExtensions = ({
     live ? { ...starterKitOptions, undoRedo: false } : starterKitOptions
   ),
   DocumentParagraph.configure({ HTMLAttributes: { class: "my-2.5" } }),
+  DocumentHardBreak,
   DocumentHeading.configure({
     HTMLAttributes: {
       class: cn(
