@@ -17,14 +17,12 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  vi.restoreAllMocks();
   vi.unstubAllGlobals();
-  window.history.replaceState(null, "", "/");
 });
 
 function renderSlideshow(props: {
-  initialPageFromUrl?: boolean;
-  syncPageToUrl?: boolean;
+  initialPage?: number | string;
+  onPageChange?: (page: number) => void;
 }) {
   render(
     <Slideshow {...props}>
@@ -41,62 +39,33 @@ function pressKey(key: string) {
   });
 }
 
-function getCurrentPageParam() {
-  return new URL(window.location.href).searchParams.get("currentPage");
-}
-
-describe("Slideshow current page URL", () => {
+describe("Slideshow page", () => {
   it.each([
+    [undefined, "First"],
+    [2, "Second"],
     ["2", "Second"],
     ["99", "Third"],
     ["0", "First"],
     ["1.5", "First"],
     ["abc", "First"],
-  ])(
-    "starts on the slide of currentPage=%s with initialPageFromUrl",
-    (page, expectedSlide) => {
-      window.history.replaceState(null, "", `/?currentPage=${page}`);
+  ])("starts on the slide of initialPage=%s", (initialPage, expectedSlide) => {
+    renderSlideshow({ initialPage });
 
-      renderSlideshow({ initialPageFromUrl: true });
+    expect(screen.getByText(expectedSlide)).toBeDefined();
+  });
 
-      expect(screen.getByText(expectedSlide)).toBeDefined();
-    }
-  );
+  it("reports each page change, but not the initial page or no-op navigation", () => {
+    const onPageChange = vi.fn();
+    renderSlideshow({ initialPage: "2", onPageChange });
+    expect(onPageChange).not.toHaveBeenCalled();
 
-  it("ignores and keeps the URL without the options", () => {
-    window.history.replaceState(null, "", "/?currentPage=2&other=x");
+    pressKey("ArrowRight");
+    pressKey("ArrowRight");
+    pressKey("ArrowLeft");
+    pressKey("ArrowLeft");
+    pressKey("ArrowLeft");
 
-    renderSlideshow({});
     expect(screen.getByText("First")).toBeDefined();
-
-    pressKey("ArrowRight");
-    expect(screen.getByText("Second")).toBeDefined();
-    expect(window.location.search).toBe("?currentPage=2&other=x");
-  });
-
-  it("writes the active slide to the URL with syncPageToUrl, keeping other params and history", () => {
-    window.history.replaceState(null, "", "/?other=x");
-    const historyLength = window.history.length;
-
-    renderSlideshow({ syncPageToUrl: true });
-    expect(getCurrentPageParam()).toBe("1");
-
-    pressKey("ArrowRight");
-    pressKey("ArrowRight");
-    expect(screen.getByText("Third")).toBeDefined();
-    expect(getCurrentPageParam()).toBe("3");
-    expect(new URL(window.location.href).searchParams.get("other")).toBe("x");
-    expect(window.history.length).toBe(historyLength);
-  });
-
-  it("keeps navigating when the browser refuses to rewrite the URL", () => {
-    vi.spyOn(window.history, "replaceState").mockImplementation(() => {
-      throw new DOMException("Refused", "SecurityError");
-    });
-
-    renderSlideshow({ syncPageToUrl: true });
-    pressKey("ArrowRight");
-
-    expect(screen.getByText("Second")).toBeDefined();
+    expect(onPageChange.mock.calls).toEqual([[3], [2], [1]]);
   });
 });

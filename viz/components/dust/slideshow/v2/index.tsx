@@ -125,16 +125,15 @@ interface SlideshowProps {
   children: React.ReactNode;
   className?: string;
   theme?: FrameTheme;
-  initialPageFromUrl?: boolean;
-  syncPageToUrl?: boolean;
+  initialPage?: number | string;
+  onPageChange?: (page: number) => void;
 }
 
-const CURRENT_PAGE_URL_PARAM = "currentPage";
-
-function getInitialSlideIndexFromUrl(total: number): number {
-  const page = Number(
-    new URL(window.location.href).searchParams.get(CURRENT_PAGE_URL_PARAM)
-  );
+function getInitialSlideIndex(
+  initialPage: number | string | undefined,
+  total: number
+): number {
+  const page = Number(initialPage);
   return Number.isInteger(page) && page >= 1 && total > 0
     ? Math.min(page, total) - 1
     : 0;
@@ -147,18 +146,17 @@ function getInitialSlideIndexFromUrl(total: number): number {
  * Omitting the theme MUST preserve the existing appearance.
  */
 /**
- * @cc [owner:tdraier,label:product] slideshow-current-page-url
- * With `initialPageFromUrl`, the 1-based `currentPage` search param of the Frame's URL MUST select
- * the initial slide, clamped to the last slide; a missing or invalid value MUST select the first.
- * With `syncPageToUrl`, the active slide MUST be written back to `currentPage` without adding a
- * history entry. Without either, the URL MUST be neither read nor written.
+ * @cc [owner:tdraier,label:product] slideshow-initial-page
+ * `initialPage`, a 1-based page number or its string, MUST select the initial slide, clamped to the
+ * last slide; a missing or invalid value MUST select the first. `onPageChange` MUST be called with
+ * the new 1-based page each time navigation changes the active slide, and never otherwise.
  */
 export function Slideshow({
   children,
   className,
   theme,
-  initialPageFromUrl = false,
-  syncPageToUrl = false,
+  initialPage,
+  onPageChange,
 }: SlideshowProps) {
   const { isPdfMode } = useVizContext();
   const slides = React.Children.toArray(children);
@@ -175,8 +173,8 @@ export function Slideshow({
     <InteractiveSlideshow
       className={className}
       theme={theme}
-      initialPageFromUrl={initialPageFromUrl}
-      syncPageToUrl={syncPageToUrl}
+      initialPage={initialPage}
+      onPageChange={onPageChange}
     >
       {slides}
     </InteractiveSlideshow>
@@ -218,35 +216,36 @@ function InteractiveSlideshow({
   children,
   className,
   theme,
-  initialPageFromUrl,
-  syncPageToUrl,
+  initialPage,
+  onPageChange,
 }: SlideshowContentProps) {
   const { t } = useLingui();
   const [activeIndex, setActiveIndex] = useState(() =>
-    initialPageFromUrl ? getInitialSlideIndexFromUrl(children.length) : 0
+    getInitialSlideIndex(initialPage, children.length)
   );
   const slideshowRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!syncPageToUrl) {
-      return;
-    }
-    const url = new URL(window.location.href);
-    url.searchParams.set(CURRENT_PAGE_URL_PARAM, String(activeIndex + 1));
-    // Browsers may refuse to rewrite the URL of the sandboxed (opaque-origin) Frame iframe; the
-    // slideshow must keep working regardless.
-    try {
-      window.history.replaceState(window.history.state, "", url);
-    } catch {}
-  }, [activeIndex, syncPageToUrl]);
+  const goToSlide = useCallback(
+    (index: number) => {
+      const nextIndex = Math.min(Math.max(index, 0), children.length - 1);
+      if (nextIndex === activeIndex) {
+        return;
+      }
+      setActiveIndex(nextIndex);
+      onPageChange?.(nextIndex + 1);
+    },
+    [activeIndex, children.length, onPageChange]
+  );
 
-  const onPrev = useCallback(() => {
-    setActiveIndex((i) => Math.max(i - 1, 0));
-  }, []);
+  const onPrev = useCallback(
+    () => goToSlide(activeIndex - 1),
+    [activeIndex, goToSlide]
+  );
 
-  const onNext = useCallback(() => {
-    setActiveIndex((i) => Math.min(i + 1, children.length - 1));
-  }, [children.length]);
+  const onNext = useCallback(
+    () => goToSlide(activeIndex + 1),
+    [activeIndex, goToSlide]
+  );
 
   if (children.length === 0) {
     return null;
@@ -267,7 +266,7 @@ function InteractiveSlideshow({
       <SlideshowGrid
         slides={children}
         activeIndex={activeIndex}
-        onSlideSelect={setActiveIndex}
+        onSlideSelect={goToSlide}
         slideshowRef={slideshowRef}
       />
       <Navigation
