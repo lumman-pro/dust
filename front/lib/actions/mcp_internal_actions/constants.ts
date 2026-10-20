@@ -1349,6 +1349,37 @@ export type InternalMCPToolNameType<N extends InternalMCPServerNameType> =
     ? StaticInternalMCPToolNameType<N> | DynamicInternalMCPToolNameOverrides[N]
     : StaticInternalMCPToolNameType<N>;
 
+export type InternalMCPToolInputType<
+  S extends InternalMCPServerNameType,
+  T extends InternalMCPToolNameType<S>,
+> = z.infer<
+  z.ZodObject<
+    Extract<
+      (typeof INTERNAL_MCP_SERVERS)[S]["metadata"]["tools"][number],
+      { name: T }
+    >["schema"]
+  >
+>;
+
+export function validateToolInputs<
+  S extends InternalMCPServerNameType,
+  T extends InternalMCPToolNameType<S>,
+>(
+  serverName: S,
+  toolName: T,
+  inputs: Record<string, unknown>
+): inputs is InternalMCPToolInputType<S, T> {
+  const toolMetadata = INTERNAL_MCP_SERVERS[serverName].metadata.tools.find(
+    (tool) => tool.name === toolName
+  );
+  // The type enforces that this exists, but we return false out of retro-compatibility over tool/server name changes.
+  if (!toolMetadata) {
+    return false;
+  }
+
+  return z.object(toolMetadata.schema).safeParse(inputs).success;
+}
+
 type AutoServerKeys<T> = {
   [K in keyof T]: T[K] extends { availability: "auto" | "auto_hidden_builder" }
     ? K

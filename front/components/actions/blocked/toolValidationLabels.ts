@@ -1,4 +1,5 @@
 import type { BlockedToolExecution } from "@app/lib/actions/mcp";
+import { validateToolInputs } from "@app/lib/actions/mcp_internal_actions/constants";
 import {
   EDIT_INFORMATION_TOOL_NAME,
   POD_MANAGER_SERVER_NAME,
@@ -6,19 +7,10 @@ import {
   UPDATE_MEMBERS_TOOL_NAME,
 } from "@app/lib/api/actions/servers/pod_manager/metadata";
 import {
-  isPodManagerDefaultAgentInput,
-  isPodManagerEditInformationInput,
-  isPodManagerUpdateMembersInput,
-} from "@app/lib/api/actions/servers/pod_manager/types";
-import {
   CREATE_TASKS_TOOL_NAME,
   POD_TASKS_SERVER_NAME,
   UPDATE_TASKS_TOOL_NAME,
 } from "@app/lib/api/actions/servers/pod_tasks/metadata";
-import {
-  isPodTasksCreateTasksInput,
-  isPodTasksUpdateTasksInput,
-} from "@app/lib/api/actions/servers/pod_tasks/types";
 import { WAKEUPS_SERVER_NAME } from "@app/lib/api/actions/servers/wakeups/metadata";
 import { getActiveLocale } from "@app/lib/i18n/active_locale";
 import { formatList } from "@app/lib/i18n/format";
@@ -77,7 +69,13 @@ const MCP_TOOL_OVERRIDES: Partial<
   [POD_TASKS_SERVER_NAME]: {
     [CREATE_TASKS_TOOL_NAME]: {
       title: (inputs, t) => {
-        if (!isPodTasksCreateTasksInput(inputs)) {
+        if (
+          !validateToolInputs(
+            POD_TASKS_SERVER_NAME,
+            CREATE_TASKS_TOOL_NAME,
+            inputs
+          )
+        ) {
           return t(msg`Allow agent to create tasks?`);
         }
         const count = inputs.tasks.length;
@@ -92,7 +90,13 @@ const MCP_TOOL_OVERRIDES: Partial<
     },
     [UPDATE_TASKS_TOOL_NAME]: {
       title: (inputs, t) => {
-        if (!isPodTasksUpdateTasksInput(inputs)) {
+        if (
+          !validateToolInputs(
+            POD_TASKS_SERVER_NAME,
+            UPDATE_TASKS_TOOL_NAME,
+            inputs
+          )
+        ) {
           return t(msg`Allow agent to update tasks?`);
         }
         const count = inputs.tasks.length;
@@ -128,7 +132,13 @@ const MCP_TOOL_OVERRIDES: Partial<
   [POD_MANAGER_SERVER_NAME]: {
     [EDIT_INFORMATION_TOOL_NAME]: {
       title: (inputs, t) => {
-        if (!isPodManagerEditInformationInput(inputs)) {
+        if (
+          !validateToolInputs(
+            POD_MANAGER_SERVER_NAME,
+            EDIT_INFORMATION_TOOL_NAME,
+            inputs
+          )
+        ) {
           return t(msg`Allow agent to edit Pod information?`);
         }
         const fields: string[] = [];
@@ -155,7 +165,13 @@ const MCP_TOOL_OVERRIDES: Partial<
     },
     [UPDATE_MEMBERS_TOOL_NAME]: {
       title: (inputs, t) => {
-        if (!isPodManagerUpdateMembersInput(inputs)) {
+        if (
+          !validateToolInputs(
+            POD_MANAGER_SERVER_NAME,
+            UPDATE_MEMBERS_TOOL_NAME,
+            inputs
+          )
+        ) {
           return t(msg`Allow agent to update Pod members?`);
         }
         const addCount = Object.keys(inputs.membersToAdd ?? {}).length;
@@ -193,7 +209,13 @@ const MCP_TOOL_OVERRIDES: Partial<
     },
     [SET_DEFAULT_AGENT_TOOL_NAME]: {
       title: (inputs, t) => {
-        if (!isPodManagerDefaultAgentInput(inputs)) {
+        if (
+          !validateToolInputs(
+            POD_MANAGER_SERVER_NAME,
+            SET_DEFAULT_AGENT_TOOL_NAME,
+            inputs
+          )
+        ) {
           return t(msg`Allow agent to set the Pod default agent?`);
         }
         const { agentName } = inputs;

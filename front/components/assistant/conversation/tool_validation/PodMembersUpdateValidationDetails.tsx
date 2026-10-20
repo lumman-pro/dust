@@ -1,5 +1,9 @@
 import { usePodLabel } from "@app/components/assistant/conversation/tool_validation/usePodLabel";
-import type { PodManagerUpdateMembersInput } from "@app/lib/api/actions/servers/pod_manager/types";
+import type { InternalMCPToolInputType } from "@app/lib/actions/mcp_internal_actions/constants";
+import type {
+  POD_MANAGER_SERVER_NAME,
+  UPDATE_MEMBERS_TOOL_NAME,
+} from "@app/lib/api/actions/servers/pod_manager/metadata";
 import type { MemberDisplayInfo } from "@app/lib/swr/assistants";
 import { useMemberDetails } from "@app/lib/swr/assistants";
 import type { LightWorkspaceType, UserType } from "@app/types/user";
@@ -10,7 +14,10 @@ import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { useMemo } from "react";
 
 interface PodMembersUpdateValidationDetailsProps {
-  input: PodManagerUpdateMembersInput;
+  input: InternalMCPToolInputType<
+    typeof POD_MANAGER_SERVER_NAME,
+    typeof UPDATE_MEMBERS_TOOL_NAME
+  >;
   owner: LightWorkspaceType;
   user: UserType;
   conversationId?: string | null;

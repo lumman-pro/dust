@@ -20,6 +20,7 @@ import {
   getPodMemberAndEditorIds,
   getWritablePodContext,
   makeSuccessResponse,
+  partitionMembersToAdd,
   partitionMembersToRemove,
   resolvePodUserRolesById,
   withErrorHandling,
@@ -35,7 +36,6 @@ import {
   SET_PINNED_FRAME_TOOL_NAME,
   UPDATE_MEMBERS_TOOL_NAME,
 } from "@app/lib/api/actions/servers/pod_manager/metadata";
-import { partitionMembersToAdd } from "@app/lib/api/actions/servers/pod_manager/types";
 import { searchFunction } from "@app/lib/api/actions/servers/search/tools";
 import { resolveAgentIdByName } from "@app/lib/api/agents/search";
 import {
