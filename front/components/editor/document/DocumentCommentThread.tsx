@@ -34,7 +34,7 @@ import {
 } from "@dust-tt/sparkle";
 import { plural } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { Editor, Extensions } from "@tiptap/core";
+import type { Extensions } from "@tiptap/core";
 import { useEditor } from "@tiptap/react";
 import type { ReactNode } from "react";
 import {
@@ -289,6 +289,8 @@ interface MessageEdit {
   /** The index of the message in its thread. */
   index: number;
   pending: boolean;
+  /** The field's trimmed Markdown. */
+  body: string;
   /** Whether the field holds content that would save. */
   filled: boolean;
   /** The reason the last save was refused. */
@@ -300,10 +302,11 @@ interface MessageEditFieldProps {
   pending: boolean;
   /** The reason the last save was refused. */
   error: string | null;
-  /** Receives the field's editor once it exists, and null when it unmounts. */
-  onEditor: (editor: Editor | null) => void;
-  /** Told whether the field holds content that would save, each time its content changes. */
-  onChange: (filled: boolean) => void;
+  /**
+   * Told the field's trimmed Markdown, and whether it holds content that would save, each time
+   * its content changes.
+   */
+  onChange: (body: string, filled: boolean) => void;
   onSave: () => void;
   onCancel: () => void;
   extensions?: Extensions;
@@ -316,7 +319,6 @@ const MessageEditField = ({
   body,
   pending,
   error,
-  onEditor,
   onChange,
   onSave,
   onCancel,
@@ -352,14 +354,13 @@ const MessageEditField = ({
   const editor = useEditor({
     ...options,
     immediatelyRender: false,
-    onUpdate: ({ editor }) => onChange(hasContent(editor)),
+    onUpdate: ({ editor }) =>
+      onChange(commentMarkdown(editor), hasContent(editor)),
   });
 
   useEffect(() => {
-    onEditor(editor);
     editor?.commands.focus("end");
-    return () => onEditor(null);
-  }, [editor, onEditor]);
+  }, [editor]);
 
   useLayoutEffect(() => {
     if (editor && !editor.isDestroyed) {
@@ -659,18 +660,16 @@ export const DocumentCommentThread = ({
   const folded = variant === "list" && !active;
   /** The index of the message being edited, if any. */
   const [editing, setEditing] = useState<MessageEdit | null>(null);
-  const [editField, setEditField] = useState<Editor | null>(null);
   const saveEdit = async () => {
-    if (!editing || editing.pending || !hasContent(editField)) {
+    if (!editing || editing.pending || !editing.filled) {
       return;
     }
-    const body = editField ? commentMarkdown(editField) : "";
-    if (body === comment.messages[editing.index]?.body) {
+    if (editing.body === comment.messages[editing.index]?.body) {
       setEditing(null);
       return;
     }
     setEditing({ ...editing, pending: true, error: null });
-    const done = await onEdit(body);
+    const done = await onEdit(editing.body);
     setEditing((current) =>
       done.isOk() || !current
         ? null
@@ -683,10 +682,9 @@ export const DocumentCommentThread = ({
         body={message.body}
         pending={editing.pending}
         error={editing.error}
-        onEditor={setEditField}
-        onChange={(filled) =>
+        onChange={(body, filled) =>
           setEditing(
-            (current) => current && { ...current, filled, error: null }
+            (current) => current && { ...current, body, filled, error: null }
           )
         }
         onSave={() => void saveEdit()}
@@ -735,7 +733,13 @@ export const DocumentCommentThread = ({
         onEdit={
           editable
             ? () =>
-                setEditing({ index, pending: false, filled: true, error: null })
+                setEditing({
+                  index,
+                  body: comment.messages[index].body,
+                  pending: false,
+                  filled: true,
+                  error: null,
+                })
             : undefined
         }
         onDelete={onDelete}
