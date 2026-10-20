@@ -64,7 +64,7 @@ that we will need to bite the bullet at some point so there is no need for a tem
         conv-C/                       no local grant: only U
         conv-S/                       ALLOW u:V r, ALLOW u:W rw        (shared with V and W)
           .conversations/
-            conv-D/                   sub-conversation of S, inherits
+            conv-D/                   sub-conversation of S, if nested (TBD)
       pods/
         P/                            DENY rw, pod read and write grants
           .conversations/             ALLOW g:<pod member groups> rw
@@ -80,8 +80,10 @@ member groups (part of pod folder provisioning, the TODO in `getOrCreatePodFolde
 grants on pod conversations: the popover shows the pod members, and a request goes to pod editors
 and adds the requester to the pod, like `pending_project_membership` mentions today.
 
-**Sub-conversations** (`run_agent`, `depth > 0`) have no participants and no stored parent. We
-nest their folder under the parent's so they inherit. This needs the parent stored at creation.
+**Sub-conversations** (`run_agent`, `depth > 0`) have no participants. TBD whether we nest their
+folder under the parent's so they inherit its grants (the parent is reachable through the sub's
+first message, `agenticOriginMessageId`), or handle them in the backfill by tracing back the user
+and adding grants.
 
 ## Data ceiling
 
@@ -234,7 +236,7 @@ enlarge. Keeping link access would mean making everything readable, so searchabl
 5. **Frames.** Rec: after conversations.
 6. **Denied requests.** Rec: silent. Alt: notify, or a cooldown per conversation.
 7. **API-created conversations.** Which folder and owner without a user?
-8. **Sub-conversations.** Rec: store the parent and nest the folder. Alt: own folder, parent's
-   owner.
+8. **Sub-conversations.** TBD: nest the folder under the parent's, or handle them in the backfill
+   by tracing back the user and adding grants.
 9. **Session cache.** Memory or Redis? Session keys are bearer credentials.
 10. **Ownership transfer.** Move the folder under another user?
