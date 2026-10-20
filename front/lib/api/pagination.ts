@@ -89,9 +89,8 @@ export function getPaginationParams(
 // `z.number()` rejects).
 /**
  * @cc [owner:avervaet,label:api] parse-like-parse-int
- * A non-empty string MUST be parsed like `parseInt(v, 10)`, an empty string MUST become
- * `undefined` so an empty query param reads as omitted, and any other value MUST be returned
- * unchanged.
+ * Parses like `parseInt(v, 10)`, maps `""` to `undefined`, returns non-strings unchanged.
+ * Legacy endpoints only: new ones MUST coerce in their schema and reject non-integers with a 400.
  */
 export function parseIntParam(v: unknown): unknown {
   if (v === "") {
