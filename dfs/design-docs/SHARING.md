@@ -2,8 +2,8 @@
 
 TL;DR: we want the dfs grants to decide who can access a conversation. As a result conversations
 need to become private to their creator by default, with a "Share" button in the conversation
-header that reads and updates the grants, and users who hit a conversation they can't access
-can request access.
+header that reads and updates the grants, and users who hit a conversation they can't access get
+a clear message telling them to ask for it.
 
 Builds on top of [API.md](API.md), [URI.md](URI.md) and [DOUBLE_WRITE.md](DOUBLE_WRITE.md). Open
 decisions are at the end; the doc assumes we take the recommended option for each of them.
@@ -26,9 +26,9 @@ that we will need to bite the bullet at some point so there is no need for a tem
 
 ## Scope
 
-- In: standalone conversations, the share popover. Access requests are still a proposal, TBD.
+- In: standalone conversations, the share popover.
 - Out for v1: Frames (they keep their tables), sharing outside the workspace, per-conversation
-  grants in pods (pod conversations follow pod membership).
+  grants in pods (pod conversations follow pod membership), access requests (see [Later](#later)).
 
 ## Model
 
@@ -46,7 +46,7 @@ that we will need to bite the bullet at some point so there is no need for a tem
 | ----------- | ----------------------------------------------- | ---------------------------------------------- |
 | View        | `r`                                             | Read messages and files.                       |
 | Participate | `rw`                                            | Post, react, mention, run agents, write files. |
-| Manage      | `rw` as owner or through an explicit `u:` grant | Change sharing, resolve requests.              |
+| Manage      | `rw` as owner or through an explicit `u:` grant | Change sharing.                                |
 
 - The owner is the creator (`isConversationCreator`). The folder lives under their user folder, so
   their access is inherited and the popover, which only edits local grants, can't remove it.
@@ -77,8 +77,8 @@ that we will need to bite the bullet at some point so there is no need for a tem
 **Pod conversations** inherit the pod folder. All pod members participate in conversations while
 pod files split read and write, so the pod's `.conversations/` folder gets ALLOW `rw` for the pod
 member groups (part of pod folder provisioning, the TODO in `getOrCreatePodFolder`). No local
-grants on pod conversations: the popover shows the pod members, and a request goes to pod editors
-and adds the requester to the pod, like `pending_project_membership` mentions today.
+grants on pod conversations: the popover shows the pod members, and getting access means being
+added to the pod, like `pending_project_membership` mentions today.
 
 **Sub-conversations** (`run_agent`, `depth > 0`) have no participants. TBD whether we nest their
 folder under the parent's so they inherit its grants (the parent is reachable through the sub's
@@ -111,11 +111,15 @@ Pod conversations keep their ceiling: read on the pod.
 
 `canAccess` results:
 
-| Result                            | When                          | UI                                   |
-| --------------------------------- | ----------------------------- | ------------------------------------ |
-| `conversation_not_found`          | No such conversation.         | "Conversation not found".            |
-| `conversation_access_restricted`  | Fails the ceiling.            | Today's restricted page, no request. |
-| `conversation_access_requestable` | Passes the ceiling, no grant. | "You need access", with request.     |
+| Result                           | When                          | UI                                |
+| -------------------------------- | ----------------------------- | --------------------------------- |
+| `conversation_not_found`         | No such conversation.         | "Conversation not found".         |
+| `conversation_access_restricted` | Fails the ceiling.            | Today's restricted page.          |
+| `conversation_not_shared`        | Passes the ceiling, no grant. | No-access message (below).        |
+
+The no-access message is something like "You don't have access to this conversation. Ask the
+person who shared the link to add you." Only workspace members reach it, and it shows no title,
+owner or participants.
 
 | Actor                             | Dfs session                                                           |
 | --------------------------------- | --------------------------------------------------------------------- |
@@ -133,7 +137,6 @@ A "Share" button in `ConversationTitle`, built like `ShareFramePopover`:
 - People with access: the owner, user grants, and pod members for pod conversations.
 - Add people: workspace members, as View or Participate. Those failing the ceiling show as
   unavailable.
-- Pending requests, for managers: Approve as View or Participate, or Deny.
 - Copy link.
 
 Read-only for non-managers.
@@ -144,7 +147,6 @@ GET /api/w/:wId/assistant/conversations/:cId/sharing
      canManage: boolean
      owner: User
      members: { user: User, permission: "read" | "write" }[]
-     pendingRequests?: AccessRequest[]           // Managers only.
    }
 
 PATCH /api/w/:wId/assistant/conversations/:cId/sharing
@@ -158,19 +160,54 @@ PATCH /api/w/:wId/assistant/conversations/:cId/sharing
 
 `GET` is `ListGrants` plus the owner and pod from front. `PATCH` checks the caller manages the
 conversation, validates subjects (active member, ceiling) and sends one `UpdateGrants`. Adding
-someone upserts their participant row (`subscribed`), notifies them and approves their pending
-request. Removing someone deletes the row.
+someone upserts their participant row (`subscribed`) and notifies them. Removing someone deletes
+the row. Audit event: `conversation.sharing_updated`.
 
 This removes `metadata.urlAccessMode`, the "Restrict URL access" menu item,
 `privateConversationUrlsByDefault` and its toggle. Approving a mention invite becomes one more way
 to grant `u:<userId> rw`.
 
-## Access requests
+## Migration
 
-Proposal, TBD.
+1. Provision folders for every conversation (owned by its creator) and the pod folder grants.
+2. Backfill `u:<userId> rw` for participants.
+3. New conversations get a folder at creation, and approved mention invites write grants.
+4. Shadow mode.
+5. Enforce per workspace, shipping the popover at the same time.
+6. Remove `urlAccessMode`, `privateConversationUrlsByDefault` and their UI.
 
-Stored in front's Postgres. Dfs has no notion of workflow state, the requester has no rights on
-the object, and xattrs are readable and writable by whoever has access.
+Step 2 narrows access: non-participants who used the link lose access and get the no-access
+message.
+This matches [DOUBLE_WRITE.md](DOUBLE_WRITE.md#authorization-contract): preserve or narrow, never
+enlarge. Keeping link access would mean making everything readable, so searchable, by everyone
+(see [Motivation](#motivation)).
+
+## Open decisions
+
+1. **Who manages.** Rec: owner and explicit `u:` rw. Alt: any `rw` (including through pod groups),
+   or owner only.
+2. **Pod conversations.** Rec: pod membership only. Alt: local grants for outsiders, which needs a
+   ceiling for pod data.
+3. **Data ceiling.** Rec: refuse grants above it, reconcile async. Alt: grant anyway and gate in
+   front only, leaving restricted files readable through dfs.
+4. **Migration.** Rec: narrow link access to participants. Alt: a temporary patch keeping link
+   access (see [Motivation](#motivation)).
+5. **Frames.** Rec: after conversations.
+6. **API-created conversations.** Which folder and owner without a user?
+7. **Sub-conversations.** TBD: nest the folder under the parent's, or handle them in the backfill
+   by tracing back the user and adding grants.
+8. **Session cache.** Memory or Redis? Session keys are bearer credentials.
+9. **Ownership transfer.** Move the folder under another user?
+
+## Later
+
+### Access requests
+
+For v1, users without access get the no-access message and sort it out with whoever shared the
+link. If that's not enough, we add requests.
+
+They'd live in front's Postgres. Dfs has no notion of workflow state, the requester has no rights
+on the object, and xattrs are readable and writable by whoever has access.
 
 `access_requests`, following `membership_upgrade_requests`:
 
@@ -193,50 +230,19 @@ Indexes: partial unique `(workspaceId, conversationId, requesterUserId) WHERE st
 (same for `fileId`), `(workspaceId, conversationId, status)`, `(workspaceId, requesterUserId,
 status)`. Requests are deleted with their conversation or file.
 
-- **Request:** "You need access" with a "Request access" button, an optional message and a level.
-  Idempotent, and shares the existing per-user limit (30 per day). Shows "pending" on revisit,
-  with cancel. Only workspace members reach this page, and it shows no title, owner or
-  participants.
+- **Request:** the no-access page gets a "Request access" button, with an optional message and a
+  level. Idempotent, and shares the existing per-user limit (30 per day). Shows "pending" on
+  revisit, with cancel.
 - **Notify:** the managers, through a new Novu workflow (in-app and email, `transactionId` per
   request and manager). The link opens the popover on its pending requests.
+- **Resolve:** managers get a pending requests section in the popover (Approve as View or
+  Participate, or Deny), and `GET .../sharing` returns them.
 - **Approve:** check the approver manages the conversation and the requester passes the ceiling,
   call `UpdateGrants`, then `pending → approved` (first resolver wins), upsert the participant and
   notify the requester. The grant goes first and re-attaching it is a no-op, so retries are safe.
-  A pending request whose requester already has access is closed on read.
+  A pending request whose requester already has access is closed on read. Sharing directly with
+  a requester approves their request.
 - **Deny:** silent. They can ask again within the rate limit.
 - **Pod conversations:** pod editors resolve, and approving adds the requester to the pod.
 
-Audit events: `conversation.access_requested`, `conversation.access_request_resolved`,
-`conversation.sharing_updated`.
-
-## Migration
-
-1. Provision folders for every conversation (owned by its creator) and the pod folder grants.
-2. Backfill `u:<userId> rw` for participants.
-3. New conversations get a folder at creation, and approved mention invites write grants.
-4. Shadow mode.
-5. Enforce per workspace, shipping the popover and requests together.
-6. Remove `urlAccessMode`, `privateConversationUrlsByDefault` and their UI.
-
-Step 2 narrows access: non-participants who used the link lose access and go through requests.
-This matches [DOUBLE_WRITE.md](DOUBLE_WRITE.md#authorization-contract): preserve or narrow, never
-enlarge. Keeping link access would mean making everything readable, so searchable, by everyone
-(see [Motivation](#motivation)).
-
-## Open decisions
-
-1. **Who manages.** Rec: owner and explicit `u:` rw. Alt: any `rw` (including through pod groups),
-   or owner only.
-2. **Pod conversations.** Rec: pod membership only. Alt: local grants for outsiders, which needs a
-   ceiling for pod data.
-3. **Data ceiling.** Rec: refuse grants above it, reconcile async. Alt: grant anyway and gate in
-   front only, leaving restricted files readable through dfs.
-4. **Migration.** Rec: narrow link access to participants. Alt: a temporary patch keeping link
-   access (see [Motivation](#motivation)).
-5. **Frames.** Rec: after conversations.
-6. **Denied requests.** Rec: silent. Alt: notify, or a cooldown per conversation.
-7. **API-created conversations.** Which folder and owner without a user?
-8. **Sub-conversations.** TBD: nest the folder under the parent's, or handle them in the backfill
-   by tracing back the user and adding grants.
-9. **Session cache.** Memory or Redis? Session keys are bearer credentials.
-10. **Ownership transfer.** Move the folder under another user?
+Audit events: `conversation.access_requested`, `conversation.access_request_resolved`.
