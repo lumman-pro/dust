@@ -3,7 +3,7 @@ import {
   emitAuditLogEvent,
   getAuditLogContext,
 } from "@app/lib/api/audit/workos_audit";
-import { reflectPodOnDfs } from "@app/lib/api/dfs/pods";
+import { updateSpacePermissions } from "@app/lib/api/spaces";
 import {
   PatchSpaceMembersRequestBodySchema,
   PostSpaceMembersRequestBodySchema,
@@ -239,11 +239,10 @@ app.patch(
       currentMemberIds = new Set(currentMembers.map((m) => m.sId));
     }
 
-    const updateRes = await space.updatePermissions(auth, body);
+    const updateRes = await updateSpacePermissions(auth, space, body);
     if (updateRes.isErr()) {
       return membersMutationError(ctx, updateRes.error.code);
     }
-    await reflectPodOnDfs(auth, space);
 
     // Only the dimensions the request carried are reported: the others were left untouched.
     emitSpacePermissionsUpdatedAuditLogs(auth, space, {

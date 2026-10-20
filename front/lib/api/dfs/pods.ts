@@ -1,3 +1,4 @@
+import { getDfsTenantClient } from "@app/lib/api/dfs/clients";
 import { withDfsFolderContext } from "@app/lib/api/dfs/folder_context";
 import {
   getOrCreatePodFolder,
@@ -7,40 +8,15 @@ import type { Authenticator } from "@app/lib/auth";
 import { hasFeatureFlag } from "@app/lib/auth";
 import type { DfsClient } from "@app/lib/dfs/client";
 import type { SpaceResource } from "@app/lib/resources/space_resource";
-import type { UserResource } from "@app/lib/resources/user_resource";
 import logger from "@app/logger/logger";
 import type { DfsGrant, DfsGrantUpdate, DfsObjectId } from "@app/types/dfs";
 import type { Result } from "@app/types/shared/result";
 import { Ok } from "@app/types/shared/result";
 
-// See `ListGrants` in `dfs/design-docs/API.md`.
-const LIST_GRANTS_LIMIT = 512;
-
 function grantKey(grant: DfsGrant): string {
   return grant.type === "allow"
     ? `allow:${grant.subject}:${grant.mode}`
     : `deny:${grant.mode}`;
-}
-
-async function listAllGrants(
-  tenantClient: DfsClient,
-  objectId: DfsObjectId
-): Promise<Result<DfsGrant[], Error>> {
-  const grants: DfsGrant[] = [];
-  let after: string | undefined;
-  do {
-    const page = await tenantClient.listGrants({
-      objectId,
-      after,
-      limit: LIST_GRANTS_LIMIT,
-    });
-    if (page.isErr()) {
-      return page;
-    }
-    grants.push(...page.value.grants);
-    after = page.value.nextAfter;
-  } while (after !== undefined);
-  return new Ok(grants);
 }
 
 /**
@@ -59,7 +35,7 @@ export async function syncPodFolderGrants(
   space: SpaceResource
 ): Promise<Result<void, Error>> {
   const [current, desired] = await Promise.all([
-    listAllGrants(tenantClient, folderId),
+    tenantClient.listAllGrants({ objectId: folderId }),
     getPodFolderGrants(space),
   ]);
   if (current.isErr()) {
@@ -81,63 +57,81 @@ export async function syncPodFolderGrants(
   return tenantClient.updateGrants({ objectId: folderId, changes });
 }
 
-/**
- * Creates the dfs folder of the pod `space` if missing, under the folder of `user` (see
- * `getOrCreatePodFolder`), and makes its grants match the pod's current access (see
- * `syncPodFolderGrants`). Spaces that are not pods are left alone.
- */
-export async function syncDfsPodFolder(
+async function logFailures(
   auth: Authenticator,
   space: SpaceResource,
-  { user }: { user?: UserResource } = {}
-): Promise<Result<void, Error>> {
-  if (!space.isProject()) {
-    return new Ok(undefined);
-  }
-  return withDfsFolderContext(auth, async (context) => {
-    const folderId = await getOrCreatePodFolder(auth, context, space, {
-      user,
-    });
-    if (folderId.isErr()) {
-      return folderId;
+  message: string,
+  run: () => Promise<Result<void, Error>>
+): Promise<void> {
+  const context = {
+    workspaceId: auth.getNonNullableWorkspace().sId,
+    spaceId: space.sId,
+  };
+  try {
+    const res = await run();
+    if (res.isErr()) {
+      logger.error({ ...context, err: res.error }, message);
     }
-    return syncPodFolderGrants(context.tenantClient, folderId.value, space);
-  });
+  } catch (err) {
+    logger.error({ ...context, err }, message);
+  }
+}
+
+async function isReflectedOnDfs(
+  auth: Authenticator,
+  space: SpaceResource
+): Promise<boolean> {
+  return space.isProject() && (await hasFeatureFlag(auth, "dust_file_system"));
 }
 
 /**
- * Reflects the pod `space` on dfs when the workspace has the `dust_file_system` feature flag (see
- * `syncDfsPodFolder`). Called after a pod is created or its access changes; a failure is logged and
- * never fails the caller.
+ * Creates the dfs folder of the pod `space` just created by the authenticated user, under that
+ * user's folder and with that user's session, when the workspace has the `dust_file_system` feature
+ * flag. Without a user (e.g. a pod provisioned by the system), nothing is created. A failure is
+ * logged and never fails the caller.
  */
-export async function reflectPodOnDfs(
+export async function reflectPodCreationOnDfs(
   auth: Authenticator,
-  space: SpaceResource,
-  { user }: { user?: UserResource } = {}
+  space: SpaceResource
 ): Promise<void> {
-  if (!space.isProject() || !(await hasFeatureFlag(auth, "dust_file_system"))) {
+  const user = auth.user();
+  if (!user || !(await isReflectedOnDfs(auth, space))) {
     return;
   }
-  try {
-    const synced = await syncDfsPodFolder(auth, space, { user });
-    if (synced.isErr()) {
-      logger.error(
-        {
-          workspaceId: auth.getNonNullableWorkspace().sId,
-          spaceId: space.sId,
-          err: synced.error,
-        },
-        "Failed to reflect a pod on dfs."
-      );
-    }
-  } catch (err) {
-    logger.error(
-      {
-        workspaceId: auth.getNonNullableWorkspace().sId,
-        spaceId: space.sId,
-        err,
-      },
-      "Failed to reflect a pod on dfs."
-    );
+  await logFailures(auth, space, "Failed to create a pod folder on dfs.", () =>
+    withDfsFolderContext(auth, async (context) => {
+      const folderId = await getOrCreatePodFolder(auth, context, space, {
+        user,
+      });
+      return folderId.isErr() ? folderId : new Ok(undefined);
+    })
+  );
+}
+
+/**
+ * Makes the grants of the pod folder of `space` match the pod's current access, with the tenant
+ * key, when the workspace has the `dust_file_system` feature flag (see `syncPodFolderGrants`). A
+ * pod without a folder is left alone: no folder is created. A failure is logged and never fails
+ * the caller.
+ */
+export async function reflectPodPermissionsOnDfs(
+  auth: Authenticator,
+  space: SpaceResource
+): Promise<void> {
+  const folderId = space.dfsObjectId;
+  if (!folderId || !(await isReflectedOnDfs(auth, space))) {
+    return;
   }
+  await logFailures(
+    auth,
+    space,
+    "Failed to sync pod folder grants on dfs.",
+    async () => {
+      const tenantClient = await getDfsTenantClient(auth);
+      if (tenantClient.isErr()) {
+        return tenantClient;
+      }
+      return syncPodFolderGrants(tenantClient.value, folderId, space);
+    }
+  );
 }

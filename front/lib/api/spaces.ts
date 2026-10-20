@@ -7,7 +7,10 @@ import {
 } from "@app/lib/api/agent_data_sources";
 import { getWebhookSourcesUsage } from "@app/lib/api/agent_triggers";
 import { hardDeleteApp } from "@app/lib/api/apps";
-import { reflectPodOnDfs } from "@app/lib/api/dfs/pods";
+import {
+  reflectPodCreationOnDfs,
+  reflectPodPermissionsOnDfs,
+} from "@app/lib/api/dfs/pods";
 import { createDataSourceAndConnectorForProject } from "@app/lib/api/projects/connector";
 import { deleteOwnerPolicy } from "@app/lib/api/sandbox/egress_policy";
 import { getWorkspaceAdministrationVersionLock } from "@app/lib/api/workspace";
@@ -575,6 +578,22 @@ export async function hardDeleteSpace(
   return new Ok(undefined);
 }
 
+/**
+ * Updates the permissions of `space` (see `SpaceResource.updatePermissions`) and, for a pod,
+ * reflects them on its dfs folder (see `reflectPodPermissionsOnDfs`).
+ */
+export async function updateSpacePermissions(
+  auth: Authenticator,
+  space: SpaceResource,
+  params: Parameters<SpaceResource["updatePermissions"]>[1]
+): ReturnType<SpaceResource["updatePermissions"]> {
+  const updated = await space.updatePermissions(auth, params);
+  if (updated.isOk()) {
+    await reflectPodPermissionsOnDfs(auth, space);
+  }
+  return updated;
+}
+
 export async function createSpaceAndGroup(
   auth: Authenticator,
   params: {
@@ -818,7 +837,7 @@ export async function createSpaceAndGroup(
 
     const space = result.value;
     // The creator becomes the pod folder's owner.
-    await reflectPodOnDfs(auth, space, { user: auth.user() ?? undefined });
+    await reflectPodCreationOnDfs(auth, space);
     if (space.kind === "project") {
       // If this is a project space, create the dust_project connector
       // Create connector outside transaction to avoid long-running transaction

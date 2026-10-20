@@ -33,8 +33,12 @@ export const DFS_CONVERSATION_FOLDER_MIME_TYPE =
   "application/vnd.dust.conversation";
 
 export interface DfsFolderContext {
-  // The file system the folders are created with.
+  // A session of the user the pod and conversation folders are created for (see
+  // `createDfsSession`): they are created under that user's folder, which only that user can write.
   fs: DfsFileSystem;
+  // A superuser session, only to create user folders, which no grant lets a user create (see
+  // `superuser-session-uses`).
+  getSuperuserFs: () => Promise<Result<DfsFileSystem, DfsError>>;
   // Authenticated with the tenant key of the authenticated workspace, to set grants.
   tenantClient: Pick<DfsClient, "updateGrants">;
   // The tenant root (`DfsTenantResource.rootId`).
@@ -97,8 +101,12 @@ export async function getOrCreateUserFolder(
   if (stored) {
     return new Ok(stored.dfsObjectId);
   }
+  const superuserFs = await context.getSuperuserFs();
+  if (superuserFs.isErr()) {
+    return superuserFs;
+  }
   const folder = await ensureFolder(
-    context.fs,
+    superuserFs.value,
     userFolderUri(context.rootId, user.sId)
   );
   if (folder.isErr()) {
@@ -132,7 +140,7 @@ export async function getOrCreateUserFolder(
 
 /**
  * The folder of the pod `space`, under the folder of `user`, or of its first editor when no user is
- * given (backfill).
+ * given (backfill). `context.fs` MUST be a session of that user.
  */
 /**
  * @cc [owner:fabiencelier,label:security] pod-folder-grants
@@ -217,7 +225,8 @@ async function getFirstEditor(
 
 /**
  * The folder of `conversation`: under its pod's folder for a conversation in a pod, else under the
- * folder of `user`, or of its first participant when no user is given (backfill).
+ * folder of `user`, or of its first participant when no user is given (backfill). `context.fs` MUST
+ * be a session that can write the parent folder.
  */
 export async function getOrCreateConversationFolder(
   auth: Authenticator,

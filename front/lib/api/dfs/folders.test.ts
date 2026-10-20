@@ -11,6 +11,7 @@ import {
 import { Authenticator } from "@app/lib/auth";
 import { DfsClient } from "@app/lib/dfs/client";
 import { DfsFileSystem } from "@app/lib/dfs/file_system";
+import { userFolderUri } from "@app/lib/dfs/folders";
 import { formatDfsUri } from "@app/lib/dfs/uri";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { DfsUserFolderResource } from "@app/lib/resources/dfs_user_folder_resource";
@@ -24,13 +25,15 @@ import { SpaceFactory } from "@app/tests/utils/SpaceFactory";
 import { UserFactory } from "@app/tests/utils/UserFactory";
 import type { DfsObjectId } from "@app/types/dfs";
 import { Ok } from "@app/types/shared/result";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 function setup() {
   const dfs = new InMemoryDfs();
+  const fs = new DfsFileSystem(dfs);
   const transport = new FakeDfsTransport({ UpdateGrants: new Ok({}) });
   const context: DfsFolderContext = {
-    fs: new DfsFileSystem(dfs),
+    fs,
+    getSuperuserFs: async () => new Ok(fs),
     tenantClient: new DfsClient(transport, "t".repeat(64)),
     rootId: dfs.rootId,
   };
@@ -194,6 +197,34 @@ describe("getOrCreatePodFolder", () => {
       grant: { allow: { subject: `g:${globalGroup.sId}`, mode: 4 } },
       remove: false,
     });
+  });
+
+  it("creates the user folder with the superuser file system and the pod folder with the user's", async () => {
+    const { authenticator, workspace, user } = await createResourceTest({});
+    const { dfs, context } = setup();
+    const userFs = new DfsFileSystem(dfs);
+    const superuserFs = new DfsFileSystem(dfs);
+    const userMkdir = vi.spyOn(userFs, "mkdir");
+    const superuserMkdir = vi.spyOn(superuserFs, "mkdir");
+    const pod = await SpaceFactory.project(workspace);
+
+    const res = await getOrCreatePodFolder(
+      authenticator,
+      {
+        ...context,
+        fs: userFs,
+        getSuperuserFs: async () => new Ok(superuserFs),
+      },
+      pod,
+      { user }
+    );
+
+    expect(res.isOk()).toBe(true);
+    expect(superuserMkdir.mock.calls.map(([uri]) => uri)).toEqual([
+      userFolderUri(dfs.rootId, user.sId),
+    ]);
+    expect(userMkdir).toHaveBeenCalledTimes(1);
+    expect(userMkdir.mock.calls[0]?.[0]).toContain("/pods/");
   });
 
   it("uses the first editor of the pod when no user is given", async () => {
