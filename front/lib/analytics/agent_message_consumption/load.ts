@@ -204,13 +204,7 @@ async function loadAnalyticsUser({
  */
 export async function loadAgentMessageConsumptionAnalyticsInput(
   auth: Authenticator,
-  {
-    agentMessageId,
-    preloadedActions,
-  }: {
-    agentMessageId: string;
-    preloadedActions?: AgentMCPActionResource[];
-  }
+  { agentMessageId }: { agentMessageId: string }
 ): Promise<AgentMessageConsumptionAnalyticsInput | null> {
   const workspace = auth.getNonNullableWorkspace();
   const context =
@@ -283,11 +277,9 @@ export async function loadAgentMessageConsumptionAnalyticsInput(
       agentMessageModelIds: [agentMessage.agentMessageModelId],
       maxAttributionVersion: AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION,
     });
-  const actions =
-    preloadedActions ??
-    (await AgentMCPActionResource.listByAgentMessageIds(auth, [
-      agentMessage.agentMessageModelId,
-    ]));
+  const actions = await AgentMCPActionResource.listByAgentMessageIds(auth, [
+    agentMessage.agentMessageModelId,
+  ]);
   // Outputs are only read to find enabled skills. Loading them all would not scale: a message can
   // make thousands of tool calls from a sandbox.
   const actionsWithOutputs =
