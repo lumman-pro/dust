@@ -1016,10 +1016,12 @@ impl DataSource {
             _ => 128,
         };
 
-        let chunked_splits = splits_to_embbed
-            .chunks(chunk_size)
-            .map(|chunk| chunk.to_vec())
-            .collect::<Vec<_>>();
+        let chunked_splits = batch_by_count_and_bytes(
+            splits_to_embbed.iter().copied(),
+            chunk_size,
+            MAX_EMBEDDING_BATCH_BYTES,
+            |ci| ci.text.len(),
+        );
 
         let mut extras = self.config.extras.clone().unwrap_or(json!({}));
         extras["enforce_rate_limit_margin"] = json!(true);
@@ -2396,6 +2398,39 @@ fn build_qdrant_filter(
     }
 }
 
+// OpenAI appears to enforce its per-request token limit (300k for embeddings) on an estimate from
+// the text length (~4 chars per token) rather than on actual tokens. Whitespace or separator heavy
+// chunks tokenize at up to ~50 chars per token, so a batch well under the limit in real tokens can
+// be rejected. Capping the batch size in bytes keeps the estimate under the limit.
+const MAX_EMBEDDING_BATCH_BYTES: usize = 1_000_000;
+
+fn batch_by_count_and_bytes<T>(
+    items: impl IntoIterator<Item = T>,
+    max_count: usize,
+    max_bytes: usize,
+    item_bytes: impl Fn(&T) -> usize,
+) -> Vec<Vec<T>> {
+    let mut batches: Vec<Vec<T>> = vec![];
+    let mut current: Vec<T> = vec![];
+    let mut current_bytes: usize = 0;
+
+    for item in items {
+        let bytes = item_bytes(&item);
+        if !current.is_empty() && (current.len() >= max_count || current_bytes + bytes > max_bytes)
+        {
+            batches.push(std::mem::take(&mut current));
+            current_bytes = 0;
+        }
+        current_bytes += bytes;
+        current.push(item);
+    }
+    if !current.is_empty() {
+        batches.push(current);
+    }
+
+    batches
+}
+
 enum QdrantPoint {
     Retrieved(RetrievedPoint),
     Scored(ScoredPoint),
@@ -2478,6 +2513,28 @@ fn parse_points_into_chunks(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_batch_by_count_and_bytes() {
+        let batch = |items: Vec<usize>, max_count, max_bytes| {
+            batch_by_count_and_bytes(items, max_count, max_bytes, |b| *b)
+        };
+
+        assert_eq!(batch(vec![], 2, 10), Vec::<Vec<usize>>::new());
+        assert_eq!(
+            batch(vec![1, 1, 1, 1, 1], 2, 100),
+            vec![vec![1, 1], vec![1, 1], vec![1]]
+        );
+        assert_eq!(
+            batch(vec![4, 4, 4, 2, 6], 10, 10),
+            vec![vec![4, 4], vec![4, 2], vec![6]]
+        );
+        // An item larger than the byte budget still goes in its own batch.
+        assert_eq!(
+            batch(vec![3, 20, 3], 10, 10),
+            vec![vec![3], vec![20], vec![3]]
+        );
+    }
 
     #[test]
     fn test_c() {
