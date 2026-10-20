@@ -32,7 +32,6 @@ import type {
   BatchResultWithRunIds,
   BatchStatus,
 } from "@app/lib/api/llm/types/batch";
-import type { LLMErrorInfo } from "@app/lib/api/llm/types/errors";
 import type { LLMEvent } from "@app/lib/api/llm/types/events";
 import { EventError } from "@app/lib/api/llm/types/events";
 import type {
@@ -74,12 +73,6 @@ import { startObservation } from "@langfuse/tracing";
 import { randomUUID } from "crypto";
 import pickBy from "lodash/pickBy";
 import startCase from "lodash/startCase";
-
-// Flat refusal category for Datadog facets and trace tags. A refusal without a
-// category reports "none" so it stays filterable.
-function getRefusalCategory({ refusal }: LLMErrorInfo): string | null {
-  return refusal ? (refusal.category ?? "none") : null;
-}
 
 export abstract class LLM<
   TEndpoint extends
@@ -432,7 +425,10 @@ export abstract class LLM<
             ? "flex_unavailable"
             : currentEvent.content.type;
           const errorSource = currentEvent.content.errorSource;
-          const refusalCategory = getRefusalCategory(currentEvent.content);
+          // A refusal without a category reports "none" so it stays filterable.
+          const refusalCategory = currentEvent.content.refusal
+            ? (currentEvent.content.refusal.category ?? "none")
+            : null;
 
           this.emitStreamAttemptTelemetry({
             outcome: "error",
@@ -833,7 +829,9 @@ export abstract class LLM<
           hasError = true;
           const errorType = event.content.type;
           const errorSource = event.content.errorSource;
-          const refusalCategory = getRefusalCategory(event.content);
+          const refusalCategory = event.content.refusal
+            ? (event.content.refusal.category ?? "none")
+            : null;
           statsDMetrics.increment("llm_error.count", 1, [
             ...metricTags,
             `error_type:${errorType}`,
