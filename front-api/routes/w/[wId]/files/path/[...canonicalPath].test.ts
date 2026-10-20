@@ -1604,6 +1604,7 @@ describe("document history through Files paths", () => {
     );
 
     expect(response.status).toBe(403);
+    expect((await response.json()).error.type).toBe("feature_not_enabled");
   });
 
   it("copies the doc into its history folder", async () => {

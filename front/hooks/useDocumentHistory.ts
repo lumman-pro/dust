@@ -2,6 +2,7 @@ import {
   useSendApiErrorNotification,
   useSendNotification,
 } from "@app/hooks/useNotification";
+import { useSubmitFunction } from "@app/lib/client/utils";
 import { clientFetch } from "@app/lib/egress/client";
 import {
   getFilePathContentApiPath,
@@ -45,53 +46,57 @@ export function useDocumentHistory({
     { disabled }
   );
 
-  const takeSnapshot = async () => {
-    const response = await clientFetch(`${docUrl}?action=snapshot`, {
-      method: "POST",
-    });
-    if (!response.ok) {
-      sendApiErrorNotification({
-        title: t`Failed to take a snapshot`,
-        error: await getErrorFromResponse(response),
+  const { submit: takeSnapshot, isSubmitting: isTakingSnapshot } =
+    useSubmitFunction(async () => {
+      const response = await clientFetch(`${docUrl}?action=snapshot`, {
+        method: "POST",
       });
-      return;
-    }
-    const { snapshot }: PostDocumentSnapshotResponseBody =
-      await response.json();
-    sendNotification({ type: "success", title: t`Snapshot taken` });
-    await mutate(
-      (current) => ({
-        snapshots: [snapshot, ...(current?.snapshots ?? [])],
-      }),
-      { revalidate: false }
-    );
-  };
+      if (!response.ok) {
+        sendApiErrorNotification({
+          title: t`Failed to take a snapshot`,
+          error: await getErrorFromResponse(response),
+        });
+        return;
+      }
+      const { snapshot }: PostDocumentSnapshotResponseBody =
+        await response.json();
+      sendNotification({ type: "success", title: t`Snapshot taken` });
+      await mutate(
+        (current) => ({
+          snapshots: [snapshot, ...(current?.snapshots ?? [])],
+        }),
+        { revalidate: false }
+      );
+    });
 
-  const restoreSnapshot = async (snapshotPath: string) => {
-    const response = await clientFetch(
-      getFilePathContentApiPath(owner, snapshotPath)
-    );
-    if (!response.ok) {
-      sendApiErrorNotification({
-        title: t`Failed to read the snapshot`,
-        error: await getErrorFromResponse(response),
+  const { submit: restoreSnapshot, isSubmitting: isRestoring } =
+    useSubmitFunction(async (snapshotPath: string) => {
+      const response = await clientFetch(
+        getFilePathContentApiPath(owner, snapshotPath)
+      );
+      if (!response.ok) {
+        sendApiErrorNotification({
+          title: t`Failed to read the snapshot`,
+          error: await getErrorFromResponse(response),
+        });
+        return;
+      }
+      const restored = await writeFileContent({
+        canonicalPath,
+        content: await response.text(),
+        contentType: "text/markdown",
       });
-      return;
-    }
-    const restored = await writeFileContent({
-      canonicalPath,
-      content: await response.text(),
-      contentType: "text/markdown",
+      if (restored.isOk()) {
+        sendNotification({ type: "success", title: t`Snapshot restored` });
+      }
     });
-    if (restored.isOk()) {
-      sendNotification({ type: "success", title: t`Snapshot restored` });
-    }
-  };
 
   return {
     snapshots: data?.snapshots ?? emptyArray<string>(),
     isSnapshotsLoading: !error && !data && !disabled,
     takeSnapshot,
+    isTakingSnapshot,
     restoreSnapshot,
+    isRestoring,
   };
 }

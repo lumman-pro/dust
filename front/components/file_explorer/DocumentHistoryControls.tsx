@@ -17,8 +17,15 @@ export function DocumentHistoryControls({
 }: DocumentHistoryControlsProps) {
   const { t } = useLingui();
   const [isListOpen, setIsListOpen] = useState(false);
-  const { snapshots, isSnapshotsLoading, takeSnapshot, restoreSnapshot } =
-    useDocumentHistory({ owner, canonicalPath, disabled: !isListOpen });
+  const {
+    snapshots,
+    isSnapshotsLoading,
+    takeSnapshot,
+    isTakingSnapshot,
+    restoreSnapshot,
+    isRestoring,
+  } = useDocumentHistory({ owner, canonicalPath, disabled: !isListOpen });
+  const isBusy = isTakingSnapshot || isRestoring;
 
   return (
     <div className="flex flex-col gap-2 px-2 py-1">
@@ -28,6 +35,8 @@ export function DocumentHistoryControls({
           size="xs"
           label={t`Take snapshot`}
           onClick={takeSnapshot}
+          isLoading={isTakingSnapshot}
+          disabled={isBusy}
         />
         <Button
           variant="outline"
@@ -56,6 +65,8 @@ export function DocumentHistoryControls({
                 size="xs"
                 label={t`Restore`}
                 onClick={() => restoreSnapshot(snapshot)}
+                isLoading={isRestoring}
+                disabled={isBusy}
               />
             </li>
           ))}

@@ -135,19 +135,19 @@ msgstr "Le retour a été marqué comme non vu."
 
 #: front/hooks/useDocumentHistory.ts
 msgid "Failed to take a snapshot"
-msgstr "Impossible de prendre un instantané"
+msgstr "Impossible de prendre un instantané."
 
 #: front/hooks/useDocumentHistory.ts
 msgid "Snapshot taken"
-msgstr "Instantané pris"
+msgstr "L’instantané a été pris."
 
 #: front/hooks/useDocumentHistory.ts
 msgid "Failed to read the snapshot"
-msgstr "Impossible de lire l’instantané"
+msgstr "Impossible de lire l’instantané."
 
 #: front/hooks/useDocumentHistory.ts
 msgid "Snapshot restored"
-msgstr "Instantané restauré"
+msgstr "L’instantané a été restauré."
 
 #: front/hooks/useDustMcpServerSettings.ts
 msgid "Failed to update the Dust MCP server settings"

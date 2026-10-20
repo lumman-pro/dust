@@ -148,7 +148,7 @@ async function coEditionDisabledError(ctx: Context<WorkspaceAwareCtx>) {
   return apiError(ctx, {
     status_code: 403,
     api_error: {
-      type: "workspace_auth_error",
+      type: "feature_not_enabled",
       message: "The co_edition feature is not enabled.",
     },
   });
