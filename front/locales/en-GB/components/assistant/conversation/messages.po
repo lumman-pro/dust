@@ -1066,15 +1066,19 @@ msgid "Skill"
 msgstr ""
 
 #: front/components/assistant/conversation/UserAnswerRequired.tsx
+msgid "Tell the agent what to do differently"
+msgstr ""
+
+#: front/components/assistant/conversation/UserAnswerRequired.tsx
+msgid "Describe another approach"
+msgstr ""
+
+#: front/components/assistant/conversation/UserAnswerRequired.tsx
 msgid "Waiting for <0>{triggeringUserName}</0>  to answer."
 msgstr ""
 
 #: front/components/assistant/conversation/UserAnswerRequired.tsx
 msgid "Waiting for <0>another user</0>  to answer."
-msgstr ""
-
-#: front/components/assistant/conversation/UserAnswerRequired.tsx
-msgid "Tell the agent what to do differently"
 msgstr ""
 
 #: front/components/assistant/conversation/UserAnswerRequired.tsx

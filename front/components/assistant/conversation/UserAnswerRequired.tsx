@@ -10,6 +10,7 @@ import type {
 import { canCurrentUserRespondToParentUserMessage } from "@app/lib/api/assistant/conversation/can_current_user_respond";
 import { useAuth } from "@app/lib/auth/AuthContext";
 import { isEditableTarget } from "@app/lib/utils/dom";
+import { assertNever } from "@app/types/shared/utils/assert_never";
 import type { LightWorkspaceType, UserType } from "@app/types/user";
 import {
   ArrowUp,
@@ -19,6 +20,8 @@ import {
   OptionCard,
   Spinner,
 } from "@dust-tt/sparkle";
+import type { MessageDescriptor } from "@lingui/core";
+import { msg } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { useReducedMotion } from "framer-motion";
 import type { KeyboardEvent } from "react";
@@ -57,6 +60,20 @@ function getQuestionLayout(question: UserQuestion): QuestionLayout {
   }
 
   return question.options.length === 2 ? "columns" : "preview_pane";
+}
+
+function getCustomResponsePlaceholder(
+  layout: QuestionLayout
+): MessageDescriptor {
+  switch (layout) {
+    case "list":
+      return msg`Tell the agent what to do differently`;
+    case "columns":
+    case "preview_pane":
+      return msg`Describe another approach`;
+    default:
+      return assertNever(layout);
+  }
 }
 
 function isPrintableKey(e: KeyboardEvent<HTMLDivElement>) {
@@ -439,7 +456,7 @@ export function UserAnswerRequired({
             inputRef={customResponseInputRef}
             id={`custom-response-${blockedAction.actionId}`}
             name="custom-response"
-            placeholder={t`Tell the agent what to do differently`}
+            placeholder={t(getCustomResponsePlaceholder(layout))}
             value={answerDraft.customResponse}
             disabled={isSubmitting}
             onFocus={() => {
