@@ -12,7 +12,7 @@ import type {
   GetSpaceDataSourceViewsResponseBody,
   PostSpaceDataSourceViewsResponseBody,
 } from "@app/types/api/data_source_view";
-import type { DataSourceViewCategory } from "@app/types/api/public/spaces";
+import { DATA_SOURCE_VIEW_CATEGORIES } from "@app/types/api/public/spaces";
 import { ContentSchema } from "@app/types/api/spaces";
 import type { DataSourceViewsWithDetails } from "@app/types/data_source_view";
 import { workspaceApp } from "@front-api/middlewares/ctx";
@@ -21,10 +21,16 @@ import { apiError } from "@front-api/middlewares/utils";
 import { validate } from "@front-api/middlewares/validator";
 import { withSpace } from "@front-api/middlewares/with_space";
 
+import { z } from "zod";
+
 import dsvId from "./[dsvId]";
 
 // Mounted under /api/w/:wId/spaces/:spaceId/data_source_views.
 const app = workspaceApp();
+
+const GetDataSourceViewsQuerySchema = z.object({
+  category: z.enum(DATA_SOURCE_VIEW_CATEGORIES).optional(),
+});
 
 /**
  * @swagger
@@ -53,7 +59,7 @@ const app = workspaceApp();
  *         description: Filter by data source view category
  *         schema:
  *           type: string
- *           enum: [managed, folder, website, apps]
+ *           enum: [managed, folder, website, apps, actions, triggers]
  *       - in: query
  *         name: withDetails
  *         required: false
@@ -136,12 +142,11 @@ const app = workspaceApp();
 app.get(
   "/",
   withSpace({ requireCanReadOrAdministrate: true }),
+  validate("query", GetDataSourceViewsQuerySchema),
   async (ctx): HandlerResult<GetSpaceDataSourceViewsResponseBody> => {
     const auth = ctx.get("auth");
     const space = ctx.get("space");
-    const category = ctx.req.query("category") as
-      | DataSourceViewCategory
-      | undefined;
+    const { category } = ctx.req.valid("query");
     const withDetails = ctx.req.query("withDetails");
     const includeEditedBy = ctx.req.query("includeEditedBy");
 
