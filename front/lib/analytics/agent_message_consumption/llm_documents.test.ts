@@ -6,6 +6,7 @@ import { AgentMessageModel } from "@app/lib/models/agent/conversation";
 import { AgentMessageConsumptionItemResource } from "@app/lib/resources/agent_message_consumption_item_resource";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { AgentConfigurationFactory } from "@app/tests/utils/AgentConfigurationFactory";
+import { AgentMessageConsumptionItemFactory } from "@app/tests/utils/AgentMessageConsumptionItemFactory";
 import { ConversationFactory } from "@app/tests/utils/ConversationFactory";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
 import {
@@ -109,6 +110,9 @@ describe("buildLlmConsumptionDocuments", () => {
       pendingToolItems: [],
     });
 
+    await AgentMessageConsumptionItemFactory.reconcileStoredItems(auth, {
+      agentMessageId: agentMessage.sId,
+    });
     const input = await loadAgentMessageConsumptionAnalyticsInput(auth, {
       agentMessageId: agentMessage.sId,
     });

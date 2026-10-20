@@ -69,12 +69,18 @@ export type ConsumptionAnalyticsMessageMetadata = {
   workspaceId: string;
 };
 
+export type ReconciledConsumptionItem = AgentMessageConsumptionItemResource & {
+  reconciledCreditAmountMicro: number;
+};
+
 export type AgentMessageConsumptionAnalyticsInput =
   ConsumptionAnalyticsMessageMetadata & {
     actions: AgentMCPActionResource[];
+    attributionVersion: number;
     dustRunIds: string[];
     enabledSkillIdsByActionId: ReadonlyMap<string, string[]>;
-    items: AgentMessageConsumptionItemResource[];
+    // Every item of the newest attribution version, all reconciled.
+    items: ReconciledConsumptionItem[];
     runs: RunResource[];
     skills: SkillResource[];
     stepContents: AgentStepContentResource[];
@@ -99,6 +105,46 @@ function isBilledRunUsage(
     default:
       return assertNever(usage.usageType);
   }
+}
+
+// Indexing only projects the outcome of the attribution activity that ran before it: the newest
+// attribution version, whose items are all reconciled in one transaction. A message whose newest
+// version has no reconciled item has nothing to index.
+async function loadNewestReconciledItems(
+  auth: Authenticator,
+  agentMessageModelId: ModelId
+): Promise<{
+  attributionVersion: number;
+  items: ReconciledConsumptionItem[];
+} | null> {
+  const items =
+    await AgentMessageConsumptionItemResource.listByAgentMessageModelIds(auth, {
+      agentMessageModelIds: [agentMessageModelId],
+      maxAttributionVersion: AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION,
+    });
+  if (items.length === 0) {
+    return null;
+  }
+
+  const attributionVersion = Math.max(
+    ...items.map((item) => item.attributionVersion)
+  );
+  const newestItems = items.filter(
+    (item) => item.attributionVersion === attributionVersion
+  );
+  const reconciledItems = newestItems.filter(
+    (item): item is ReconciledConsumptionItem =>
+      item.reconciledCreditAmountMicro !== null
+  );
+  if (reconciledItems.length === 0) {
+    return null;
+  }
+  assert(
+    reconciledItems.length === newestItems.length,
+    "Only part of the newest attribution version is reconciled"
+  );
+
+  return { attributionVersion, items: reconciledItems };
 }
 
 async function loadApiKeyName(
@@ -190,6 +236,12 @@ async function loadAnalyticsUser({
 }
 
 /**
+ * @cc [owner:sfriquet,label:product;backend] index-newest-reconciled-version
+ * MUST return null when the newest attribution version of the message has no reconciled item.
+ * Otherwise `items` MUST be exactly the items of that version, and every one of them MUST be
+ * reconciled.
+ */
+/**
  * @cc [owner:sfriquet,label:product;backend] unbilled-execution-snapshot
  * A terminal message whose status is not tracked for billing (`failed`) MUST return null when its
  * `costCredits` is null. Otherwise it MUST be loaded like any other message: the indexed snapshot
@@ -223,6 +275,13 @@ export async function loadAgentMessageConsumptionAnalyticsInput(
   }
 
   const { agentMessage, conversation, triggeringUserMessage } = context;
+  const reconciledItems = await loadNewestReconciledItems(
+    auth,
+    agentMessage.agentMessageModelId
+  );
+  if (!reconciledItems) {
+    return null;
+  }
   // Deleted conversations still incurred billable consumption and must remain visible in
   // historical analytics. This system workflow is already workspace-scoped and loads the message
   // graph without user permission filtering, so load the conversation under the same conditions.
@@ -278,11 +337,6 @@ export async function loadAgentMessageConsumptionAnalyticsInput(
     auth,
     triggeringUserMessage.apiKeyModelId
   );
-  const items =
-    await AgentMessageConsumptionItemResource.listByAgentMessageModelIds(auth, {
-      agentMessageModelIds: [agentMessage.agentMessageModelId],
-      maxAttributionVersion: AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION,
-    });
   const actions =
     preloadedActions ??
     (await AgentMCPActionResource.listByAgentMessageIds(auth, [
@@ -349,12 +403,13 @@ export async function loadAgentMessageConsumptionAnalyticsInput(
     },
     agentMessageId,
     apiKeyName,
+    attributionVersion: reconciledItems.attributionVersion,
     completedAt,
     contextOrigin: triggeringUserMessage.origin,
     conversationId: conversation.conversationId,
     dustRunIds,
     enabledSkillIdsByActionId,
-    items,
+    items: reconciledItems.items,
     messageStatus: agentMessage.status,
     messageVersion: agentMessage.version,
     model: resolvedModel

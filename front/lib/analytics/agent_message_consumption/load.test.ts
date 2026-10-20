@@ -1,4 +1,5 @@
 import { loadAgentMessageConsumptionAnalyticsInput } from "@app/lib/analytics/agent_message_consumption/load";
+import { AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION } from "@app/lib/api/assistant/agent_message_consumption_attribution/attribution_builder";
 import type { Authenticator } from "@app/lib/auth";
 import {
   USAGE_TYPE_FREE,
@@ -7,6 +8,7 @@ import {
 } from "@app/lib/metronome/constants";
 import type { UsageType } from "@app/lib/metronome/types";
 import { AgentMessageModel } from "@app/lib/models/agent/conversation";
+import { AgentMessageConsumptionItemResource } from "@app/lib/resources/agent_message_consumption_item_resource";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { AgentConfigurationFactory } from "@app/tests/utils/AgentConfigurationFactory";
 import { ConversationFactory } from "@app/tests/utils/ConversationFactory";
@@ -129,6 +131,7 @@ async function setupSettledMessage({
   depth = 0,
   agenticOriginMessageId,
   agentName,
+  reconciled = true,
   testContext,
   usageType = USAGE_TYPE_USER,
 }: {
@@ -137,6 +140,8 @@ async function setupSettledMessage({
   depth?: number;
   agenticOriginMessageId?: string;
   agentName?: string;
+  // Whether the attribution activity reconciled the items it stored for the message.
+  reconciled?: boolean;
   testContext?: { authenticator: Authenticator; workspace: WorkspaceType };
   usageType?: UsageType | null;
 } = {}) {
@@ -154,7 +159,7 @@ async function setupSettledMessage({
       authorless,
       agentName,
     });
-  const { run } = await RunFactory.createWithUsage(auth, {
+  const { run, runUsageModelId } = await RunFactory.createWithUsage(auth, {
     inputTokens: 100,
     outputTokens: 20,
     modelId: GPT_5_MINI_MODEL_CONFIG.modelId,
@@ -174,6 +179,41 @@ async function setupSettledMessage({
       },
     }
   );
+  await AgentMessageConsumptionItemResource.recordItemsIdempotently(auth, {
+    conversation,
+    agentMessageModelId,
+    attributionVersion: AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION,
+    records: [
+      {
+        itemType: "input",
+        runUsageModelId,
+        inputTokensCount: 100,
+        grossAttributedCreditAmountMicro: 4_000_000,
+      },
+      {
+        itemType: "output",
+        runUsageModelId,
+        outputTokensCount: 20,
+        grossAttributedCreditAmountMicro: 1_000_000,
+      },
+    ],
+    pendingToolItems: [],
+  });
+  if (reconciled) {
+    const items =
+      await AgentMessageConsumptionItemResource.listByAgentMessageModelIds(
+        auth,
+        {
+          agentMessageModelIds: [agentMessageModelId],
+          maxAttributionVersion: AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION,
+        }
+      );
+    await AgentMessageConsumptionItemResource.setReconciledCreditAmounts(auth, {
+      reconciledCreditAmountByItem: new Map(
+        items.map((item) => [item, item.grossAttributedCreditAmountMicro])
+      ),
+    });
+  }
   return {
     agent,
     agentMessage,
@@ -182,6 +222,7 @@ async function setupSettledMessage({
     completedAt,
     conversation,
     run,
+    runUsageModelId,
     workspace,
   };
 }
@@ -196,6 +237,47 @@ describe("loadAgentMessageConsumptionAnalyticsInput", () => {
     );
 
     expect(input).toBeNull();
+  });
+
+  it("returns null when the newest attribution version has no reconciled item", async () => {
+    const context = await setupSettledMessage({ reconciled: false });
+
+    const input = await loadAgentMessageConsumptionAnalyticsInput(
+      context.auth,
+      { agentMessageId: context.agentMessage.sId }
+    );
+
+    expect(input).toBeNull();
+  });
+
+  it("fails when only part of the newest attribution version is reconciled", async () => {
+    const context = await setupSettledMessage();
+    // Evidence written by a later pass that did not reconcile.
+    await AgentMessageConsumptionItemResource.recordItemsIdempotently(
+      context.auth,
+      {
+        conversation: context.conversation,
+        agentMessageModelId: context.agentMessageModelId,
+        attributionVersion: AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION,
+        records: [
+          {
+            itemType: "reasoning",
+            runUsageModelId: context.runUsageModelId,
+            outputTokensCount: 5,
+            grossAttributedCreditAmountMicro: 100_000,
+          },
+        ],
+        pendingToolItems: [],
+      }
+    );
+
+    await expect(
+      loadAgentMessageConsumptionAnalyticsInput(context.auth, {
+        agentMessageId: context.agentMessage.sId,
+      })
+    ).rejects.toThrow(
+      "Only part of the newest attribution version is reconciled"
+    );
   });
 
   it("loads the authoritative inputs for billed user usage", async () => {
