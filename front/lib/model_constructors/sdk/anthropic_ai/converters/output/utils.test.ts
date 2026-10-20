@@ -1228,24 +1228,22 @@ describe("messageDeltaToEvents", () => {
   });
 
   it("forwards refusal stop details, keeping unknown categories verbatim", () => {
-    // Parsed from JSON like the wire payload: the category is not in the SDK
-    // union.
-    const event: BetaRawMessageDeltaEvent = JSON.parse(
-      JSON.stringify({
-        type: "message_delta",
-        delta: {
-          stop_reason: "refusal",
-          stop_sequence: null,
-          stop_details: {
-            type: "refusal",
-            category: "some_new_category",
-            explanation: "New policy.",
-          },
-        },
-        usage,
-        context_management: null,
-      })
-    );
+    // Parsed from a raw payload like the wire one: the category is not in the
+    // SDK union.
+    const event: BetaRawMessageDeltaEvent = JSON.parse(`{
+      "type": "message_delta",
+      "delta": {
+        "stop_reason": "refusal",
+        "stop_sequence": null,
+        "stop_details": {
+          "type": "refusal",
+          "category": "some_new_category",
+          "explanation": "New policy."
+        }
+      },
+      "usage": { "output_tokens": 5 },
+      "context_management": null
+    }`);
     const [events] = messageDeltaToEvents(event, metadata, realConverters);
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
