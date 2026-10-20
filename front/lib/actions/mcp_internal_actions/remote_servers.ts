@@ -7587,6 +7587,172 @@ export const DEFAULT_REMOTE_MCP_SERVERS: DefaultRemoteMCPServerConfig[] = [
       },
     },
   },
+  {
+    id: 10059,
+    name: "Multi Mail",
+    description:
+      "Multi Mail tools to search, read, draft, send and organise mail across several Gmail, Outlook.com, Microsoft 365, iCloud and Fastmail mailboxes at once, including attachments, labels, filters and the vacation responder.",
+    url: "https://mail.lumman.co/mcp",
+    icon: "MultiMailLogo",
+    documentationUrl: "https://lumman.co/mcp/multi-mail",
+    connectionInstructions:
+      "Multi Mail uses OAuth with dynamic client registration. Choose personal accounts so each member connects their own mailboxes. Sign in to Lumman with Google, Microsoft or an emailed code and approve Dust; mailboxes are added, and what each allows is set, at lumman.co/mcp/account/multi-mail. 25 actions a day are free; a plan at lumman.co/mcp raises that to 1,000 a day.",
+    authMethod: "oauth-dynamic",
+    toolStakes: {
+      mailboxes_list: "never_ask",
+      messages_list: "never_ask",
+      messages_list_all_mailboxes: "never_ask",
+      threads_get: "never_ask",
+      messages_get: "never_ask",
+      messages_attachments_get: "never_ask",
+      labels_list: "never_ask",
+      settings_filters_list: "never_ask",
+      settings_send_as_get: "never_ask",
+      settings_get_vacation: "never_ask",
+      drafts_create: "low",
+      drafts_reply: "low",
+      drafts_forward: "low",
+      drafts_update: "low",
+      drafts_delete: "low",
+      labels_create: "low",
+      labels_update: "low",
+      threads_modify: "low",
+      threads_archive: "low",
+      threads_trash: "low",
+      threads_untrash: "low",
+      labels_delete: "high",
+      settings_filters_create: "high",
+      settings_filters_delete: "high",
+      settings_send_as_patch: "high",
+      settings_update_vacation: "high",
+      messages_send: "high",
+      drafts_send: "high",
+      messages_reply: "high",
+      messages_forward: "high",
+    },
+    toolDisplayLabels: {
+      mailboxes_list: {
+        running: "Listing mailboxes on Multi Mail",
+        done: "Listed mailboxes on Multi Mail",
+      },
+      messages_list: {
+        running: "Searching a mailbox on Multi Mail",
+        done: "Searched a mailbox on Multi Mail",
+      },
+      messages_list_all_mailboxes: {
+        running: "Searching every mailbox on Multi Mail",
+        done: "Searched every mailbox on Multi Mail",
+      },
+      threads_get: {
+        running: "Reading a thread on Multi Mail",
+        done: "Read a thread on Multi Mail",
+      },
+      messages_get: {
+        running: "Reading a message on Multi Mail",
+        done: "Read a message on Multi Mail",
+      },
+      messages_attachments_get: {
+        running: "Reading an attachment on Multi Mail",
+        done: "Read an attachment on Multi Mail",
+      },
+      labels_list: {
+        running: "Listing labels on Multi Mail",
+        done: "Listed labels on Multi Mail",
+      },
+      settings_filters_list: {
+        running: "Listing filters on Multi Mail",
+        done: "Listed filters on Multi Mail",
+      },
+      settings_send_as_get: {
+        running: "Reading the signature on Multi Mail",
+        done: "Read the signature on Multi Mail",
+      },
+      settings_get_vacation: {
+        running: "Reading the vacation responder on Multi Mail",
+        done: "Read the vacation responder on Multi Mail",
+      },
+      drafts_create: {
+        running: "Drafting a message on Multi Mail",
+        done: "Drafted a message on Multi Mail",
+      },
+      drafts_reply: {
+        running: "Drafting a reply on Multi Mail",
+        done: "Drafted a reply on Multi Mail",
+      },
+      drafts_forward: {
+        running: "Drafting a forward on Multi Mail",
+        done: "Drafted a forward on Multi Mail",
+      },
+      drafts_update: {
+        running: "Editing a draft on Multi Mail",
+        done: "Edited a draft on Multi Mail",
+      },
+      drafts_delete: {
+        running: "Discarding a draft on Multi Mail",
+        done: "Discarded a draft on Multi Mail",
+      },
+      labels_create: {
+        running: "Creating a label on Multi Mail",
+        done: "Created a label on Multi Mail",
+      },
+      labels_update: {
+        running: "Editing a label on Multi Mail",
+        done: "Edited a label on Multi Mail",
+      },
+      threads_modify: {
+        running: "Labelling a thread on Multi Mail",
+        done: "Labelled a thread on Multi Mail",
+      },
+      threads_archive: {
+        running: "Archiving a thread on Multi Mail",
+        done: "Archived a thread on Multi Mail",
+      },
+      threads_trash: {
+        running: "Moving a thread to the trash on Multi Mail",
+        done: "Moved a thread to the trash on Multi Mail",
+      },
+      threads_untrash: {
+        running: "Restoring a thread from the trash on Multi Mail",
+        done: "Restored a thread from the trash on Multi Mail",
+      },
+      labels_delete: {
+        running: "Deleting a label on Multi Mail",
+        done: "Deleted a label on Multi Mail",
+      },
+      settings_filters_create: {
+        running: "Creating a filter on Multi Mail",
+        done: "Created a filter on Multi Mail",
+      },
+      settings_filters_delete: {
+        running: "Deleting a filter on Multi Mail",
+        done: "Deleted a filter on Multi Mail",
+      },
+      settings_send_as_patch: {
+        running: "Editing the signature on Multi Mail",
+        done: "Edited the signature on Multi Mail",
+      },
+      settings_update_vacation: {
+        running: "Setting the vacation responder on Multi Mail",
+        done: "Set the vacation responder on Multi Mail",
+      },
+      messages_send: {
+        running: "Sending a message on Multi Mail",
+        done: "Sent a message on Multi Mail",
+      },
+      drafts_send: {
+        running: "Sending a draft on Multi Mail",
+        done: "Sent a draft on Multi Mail",
+      },
+      messages_reply: {
+        running: "Replying to a message on Multi Mail",
+        done: "Replied to a message on Multi Mail",
+      },
+      messages_forward: {
+        running: "Forwarding a message on Multi Mail",
+        done: "Forwarded a message on Multi Mail",
+      },
+    },
+  },
 ];
 
 export const getDefaultRemoteMCPServerByURL = (

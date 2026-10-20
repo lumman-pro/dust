@@ -3714,6 +3714,7 @@ const InternalAllowedIconSchema = FlexibleEnumSchema<
   | "MiroLogo"
   | "ModjoLogo"
   | "MondayLogo"
+  | "MultiMailLogo"
   | "N8NLogo"
   | "NaptaLogo"
   | "NetSuiteLogo"

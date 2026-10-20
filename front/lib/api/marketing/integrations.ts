@@ -189,6 +189,7 @@ const REMOTE_MCP_CATEGORY_MAP: Record<string, IntegrationCategory> = {
   "bright data": "data",
   swarmia: "development",
   fireflies: "transcripts",
+  "multi mail": "email",
 };
 
 // Category mapping for connectors
