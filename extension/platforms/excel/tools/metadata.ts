@@ -34,6 +34,8 @@ Each write is an Office.js Excel expression that starts with \`workbook\` and en
 
 The writes run in the order given, in one sync. A write that fails stops the call, and the writes after it do not run.
 
+Write a formula as text, in the \`formulas\` or the \`values\` property of \`set\`.
+
 Use ${READ_WORKBOOK_TOOL_NAME} to see the sheets, the used range and the current content before a write, and to check the result after it.
 
 Example:
