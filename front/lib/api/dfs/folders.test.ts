@@ -178,7 +178,7 @@ describe("getOrCreatePodFolder", () => {
     ]);
   });
 
-  it("does not reuse the folder of another pod with the same name", async () => {
+  it("fails instead of reusing the folder of another pod with the same name", async () => {
     const { authenticator, workspace, user } = await createResourceTest({});
     const { dfs, context } = setup();
     const pod = await SpaceFactory.project(workspace);
@@ -198,10 +198,11 @@ describe("getOrCreatePodFolder", () => {
       user,
     });
 
-    expect(res.isOk() && res.value).not.toBe(other);
-    expect(dfs.paths()).toContain(
-      `/users/${user.sId}/pods/${pod.name} (${pod.sId})`
-    );
+    expect(res.isErr() && res.error.code).toBe("already_exists");
+    expect(dfs.paths().filter((path) => path.includes("/pods/"))).toEqual([
+      `/users/${user.sId}/pods/${pod.name}`,
+    ]);
+    expect(other).toBeDefined();
   });
 
   it("uses the first editor of the pod when no user is given", async () => {

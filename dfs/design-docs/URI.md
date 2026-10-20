@@ -147,11 +147,12 @@ create dfs://<userSId>--<user-folder-id>/.conversations/conv-<conversationSId>
   `dust.display_name`, with only `%`, `/`, control characters and a leading `.` percent-encoded
   (`Q3/Q4 plan` becomes `Q3%2FQ4 plan`): `/` cannot appear in a basename and a leading `.` would
   hide the folder, and encoding `%` too keeps distinct names distinct. URI percent-encoding then
-  applies on top, like for any name. Each pod folder carries its pod's sId in the `dust.pod_id`
-  xattr, and front only reuses an existing folder carrying the pod's sId. When the name is taken by
-  another pod's folder (e.g. a deleted pod with the same name), or is longer than 255 bytes, the
-  folder is named `<name> (<podSId>)` instead, cut to 255 bytes: a collision never makes distinct
-  pods share a folder. Pod renames remain unimplemented; a rename must preserve the folder ID.
+  applies on top, like for any name. A name longer than 255 bytes once encoded gets no folder: it
+  is never cut. Each pod folder carries its pod's sId in the `dust.pod_id` xattr, and front only
+  reuses an existing folder carrying the pod's sId. When the name is taken by another pod's folder
+  (e.g. a deleted pod with the same name), creating the folder fails: a collision never makes
+  distinct pods share a folder. Pod renames remain unimplemented; a rename must preserve the
+  folder ID.
 - **Stored reference:** front stores the returned folder ID on the user, the pod, or the
   conversation. All later access to that context's content uses this ID as the anchor, never a path
   from the root or from the user folder.

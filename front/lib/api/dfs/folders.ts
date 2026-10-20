@@ -4,7 +4,7 @@ import type { DfsClient } from "@app/lib/dfs/client";
 import type { DfsFileSystem } from "@app/lib/dfs/file_system";
 import {
   conversationFolderUri,
-  podFolderNames,
+  podFolderName,
   podFolderUri,
   userFolderUri,
 } from "@app/lib/dfs/folders";
@@ -24,7 +24,7 @@ import { Err, Ok } from "@app/types/shared/result";
  * recognize them wherever they are. Changing a value leaves existing folders with the previous one.
  */
 export const DFS_POD_FOLDER_MIME_TYPE = "application/vnd.dust.pod";
-// The pod's actual name, since its folder's name is encoded (see `podFolderNames`).
+// The pod's actual name, since its folder's name is encoded (see `podFolderName`).
 export const DFS_DISPLAY_NAME_XATTR = "dust.display_name";
 // The sId of the pod a folder was created for, to tell it apart from a folder of another pod with
 // the same name.
@@ -181,47 +181,49 @@ function realObjectId(id: string): Result<DfsObjectId, DfsError> {
 /**
  * @cc [owner:fabiencelier,label:security] pod-folder-owned
  * A pod folder MUST be created with the `dust.pod_id` xattr set to the pod's sId. An existing folder
- * MUST only be reused when its `dust.pod_id` is the pod's sId: a folder of another pod (e.g. a
- * deleted pod with the same name) MUST never be reused, and the next name of `podFolderNames` is
- * tried instead. When no name is available, the call MUST fail with `already_exists`.
+ * MUST only be reused when its `dust.pod_id` is the pod's sId: when the name is taken by another
+ * object (e.g. the folder of a deleted pod with the same name), the call MUST fail with
+ * `already_exists` and MUST NOT reuse it.
  */
 async function ensurePodFolder(
   fs: DfsFileSystem,
   userFolderId: DfsObjectId,
   space: SpaceResource
 ): Promise<Result<DfsObjectId, DfsError>> {
-  for (const name of podFolderNames(space)) {
-    const uri = podFolderUri(userFolderId, name);
-    const made = await fs.mkdir(uri, {
-      mimeType: DFS_POD_FOLDER_MIME_TYPE,
-      xattrs: {
-        [DFS_DISPLAY_NAME_XATTR]: Buffer.from(space.name, "utf8"),
-        [DFS_POD_ID_XATTR]: Buffer.from(space.sId, "utf8"),
-      },
-    });
-    if (made.isOk()) {
-      return realObjectId(made.value.attr.id);
-    }
-    if (made.error.code !== "already_exists") {
-      return made;
-    }
-    const existing = await fs.stat(uri, { includeMetadata: true });
-    if (existing.isErr()) {
-      return existing;
-    }
-    const podId = existing.value?.attr.metadata?.xattrs[DFS_POD_ID_XATTR];
-    if (
-      existing.value?.attr.kind === "directory" &&
-      podId &&
-      Buffer.from(podId).toString("utf8") === space.sId
-    ) {
-      return realObjectId(existing.value.attr.id);
-    }
+  const name = podFolderName(space.name);
+  if (name.isErr()) {
+    return name;
+  }
+  const uri = podFolderUri(userFolderId, name.value);
+  const made = await fs.mkdir(uri, {
+    mimeType: DFS_POD_FOLDER_MIME_TYPE,
+    xattrs: {
+      [DFS_DISPLAY_NAME_XATTR]: Buffer.from(space.name, "utf8"),
+      [DFS_POD_ID_XATTR]: Buffer.from(space.sId, "utf8"),
+    },
+  });
+  if (made.isOk()) {
+    return realObjectId(made.value.attr.id);
+  }
+  if (made.error.code !== "already_exists") {
+    return made;
+  }
+  const existing = await fs.stat(uri, { includeMetadata: true });
+  if (existing.isErr()) {
+    return existing;
+  }
+  const podId = existing.value?.attr.metadata?.xattrs[DFS_POD_ID_XATTR];
+  if (
+    existing.value?.attr.kind === "directory" &&
+    podId &&
+    Buffer.from(podId).toString("utf8") === space.sId
+  ) {
+    return realObjectId(existing.value.attr.id);
   }
   return new Err(
     new DfsError(
       "already_exists",
-      `Every folder name of pod ${space.sId} is taken by another object.`
+      `The folder name of pod ${space.sId} is taken by another object.`
     )
   );
 }

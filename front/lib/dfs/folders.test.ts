@@ -1,36 +1,28 @@
-import { podFolderNames } from "@app/lib/dfs/folders";
+import { podFolderName } from "@app/lib/dfs/folders";
 import { describe, expect, it } from "vitest";
 
-function namesOf(name: string) {
-  return podFolderNames({ sId: "pod_1", name });
+function nameOf(name: string) {
+  const res = podFolderName(name);
+  return res.isOk() ? res.value : res.error.code;
 }
 
-describe("podFolderNames", () => {
-  it("keeps a name without characters to encode, then the unique name", () => {
-    expect(namesOf("Équipe Paris (draft)")).toEqual([
-      "Équipe Paris (draft)",
-      "Équipe Paris (draft) (pod_1)",
-    ]);
+describe("podFolderName", () => {
+  it("keeps a name without characters to encode", () => {
+    expect(nameOf("Équipe Paris (draft)")).toBe("Équipe Paris (draft)");
   });
 
   it("percent-encodes only %, /, control characters and a leading dot", () => {
-    expect(namesOf(".a/b%c\nd.e")[0]).toBe("%2Ea%2Fb%25c%0Ad.e");
+    expect(nameOf(".a/b%c\nd.e")).toBe("%2Ea%2Fb%25c%0Ad.e");
   });
 
   it("gives different names to names that differ only by encoded characters", () => {
-    expect(namesOf("a/b")[0]).not.toBe(namesOf("a-b")[0]);
-    expect(namesOf("a%2Fb")[0]).not.toBe(namesOf("a/b")[0]);
+    expect(nameOf("a/b")).not.toBe(nameOf("a-b"));
+    expect(nameOf("a%2Fb")).not.toBe(nameOf("a/b"));
   });
 
-  it("only gives the unique name to an empty pod name", () => {
-    expect(namesOf("")).toEqual(["pod-pod_1"]);
-  });
-
-  it("only gives a unique name cut to 255 bytes to a name too long", () => {
-    const names = namesOf("/".repeat(100));
-
-    expect(names).toHaveLength(1);
-    expect(names[0]).toBe(`${"%2F".repeat(82)} (pod_1)`);
-    expect(Buffer.byteLength(names[0])).toBeLessThanOrEqual(255);
+  it("refuses an empty name and a name longer than 255 bytes once encoded", () => {
+    expect(nameOf("")).toBe("invalid_input");
+    expect(nameOf("a".repeat(255))).toBe("a".repeat(255));
+    expect(nameOf("/".repeat(86))).toBe("invalid_input");
   });
 });

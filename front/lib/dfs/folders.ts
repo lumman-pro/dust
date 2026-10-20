@@ -1,5 +1,8 @@
 import { formatDfsUri } from "@app/lib/dfs/uri";
 import type { DfsObjectId } from "@app/types/dfs";
+import { DfsError } from "@app/types/dfs";
+import type { Result } from "@app/types/shared/result";
+import { Err, Ok } from "@app/types/shared/result";
 
 /**
  * URIs of the context folders of `dfs/design-docs/URI.md`, each anchored at the folder that holds
@@ -9,8 +12,8 @@ import type { DfsObjectId } from "@app/types/dfs";
 /**
  * @cc [owner:fabiencelier,label:product] folder-layout
  * The URIs MUST follow the layout of `dfs/design-docs/URI.md`: `users/<userSId>` under the tenant
- * root, `pods/<one of podFolderNames(pod)>` and `.conversations/conv-<conversationSId>` under
- * their parent folder. Changing a name orphans the folders already created under the previous one.
+ * root, `pods/<podFolderName(podName)>` and `.conversations/conv-<conversationSId>` under their
+ * parent folder. Changing a name orphans the folders already created under the previous one.
  */
 export function userFolderUri(rootId: DfsObjectId, userId: string): string {
   return formatDfsUri(rootId, { path: ["users", userId] });
@@ -32,54 +35,36 @@ function percentEncode(char: string): string {
     .join("");
 }
 
-// The pod name split into encoded characters (see `pod-folder-names`), so that truncating never
-// cuts an escape sequence.
-function encodedPodNameChars(name: string): string[] {
-  return [...name].map((char, i) =>
-    char === "%" ||
-    char === "/" ||
-    /\p{Cc}/u.test(char) ||
-    (i === 0 && char === ".")
-      ? percentEncode(char)
-      : char
-  );
-}
-
 /**
- * The names to try, in order, for the folder of `pod`, see `pod-folder-names`.
+ * The name of the folder of the pod named `name`, see `pod-folder-name`.
  */
 /**
- * @cc [owner:fabiencelier,label:product] pod-folder-names
- * The first name MUST be the pod's name with only `%`, `/`, control characters and a leading `.`
+ * @cc [owner:fabiencelier,label:product] pod-folder-name
+ * The name MUST be the pod's name with only `%`, `/`, control characters and a leading `.`
  * percent-encoded (UTF-8 bytes, `%XX`), so that two different pod names never give the same folder
- * name; it is omitted when empty or longer than 255 UTF-8 bytes. The last name MUST be that encoded
- * name, cut without splitting a character or an escape sequence, followed by ` (<podSId>)`, within
- * 255 bytes, or `pod-<podSId>` for an empty pod name: it is unique to the pod.
+ * name. An empty name, or one longer than 255 UTF-8 bytes once encoded, MUST fail with
+ * `invalid_input`: it is never cut or replaced.
  */
-export function podFolderNames({
-  sId,
-  name,
-}: {
-  sId: string;
-  name: string;
-}): string[] {
-  const chars = encodedPodNameChars(name);
-  const encoded = chars.join("");
-  if (encoded === "") {
-    return [`pod-${sId}`];
+export function podFolderName(name: string): Result<string, DfsError> {
+  const encoded = [...name]
+    .map((char, i) =>
+      char === "%" ||
+      char === "/" ||
+      /\p{Cc}/u.test(char) ||
+      (i === 0 && char === ".")
+        ? percentEncode(char)
+        : char
+    )
+    .join("");
+  if (encoded === "" || Buffer.byteLength(encoded) > MAX_NAME_BYTES) {
+    return new Err(
+      new DfsError(
+        "invalid_input",
+        `The pod name gives a folder name of ${Buffer.byteLength(encoded)} bytes, not 1 to ${MAX_NAME_BYTES}.`
+      )
+    );
   }
-  const suffix = ` (${sId})`;
-  let truncated = "";
-  for (const char of chars) {
-    if (Buffer.byteLength(truncated + char + suffix) > MAX_NAME_BYTES) {
-      break;
-    }
-    truncated += char;
-  }
-  const unique = `${truncated}${suffix}`;
-  return Buffer.byteLength(encoded) <= MAX_NAME_BYTES
-    ? [encoded, unique]
-    : [unique];
+  return new Ok(encoded);
 }
 
 /**
