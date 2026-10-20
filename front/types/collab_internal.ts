@@ -4,13 +4,15 @@ import { collabAgentSchema } from "@app/types/collab";
 
 /**
  * Agents change a live document through the collab server's internal routes: they read the
- * session's source, change it, then write it back conditional on the source they read.
+ * session's source, change it, then write it back conditional on the source they read. An
+ * agent's find-and-replace is sent as is instead, and applied by the session to its current source.
  */
 
 /** Where the collab server mounts the routes only reached from inside the cluster. */
 export const COLLAB_INTERNAL_ROUTES_PREFIX = "/internal";
 export const COLLAB_SOURCE_READ_PATH = "/documents/read";
 export const COLLAB_SOURCE_WRITE_PATH = "/documents/write";
+export const COLLAB_SOURCE_EDIT_PATH = "/documents/edit";
 
 export const collabSourceReadRequestSchema = z.object({
   workspaceId: z.string().min(1),
@@ -66,4 +68,51 @@ export const collabSourceWriteResponseSchema = z.discriminatedUnion("result", [
 
 export type CollabSourceWriteResponse = z.infer<
   typeof collabSourceWriteResponseSchema
+>;
+
+/** Why an edit does not apply to the session's current source, as `edit_document` reports it. */
+export const COLLAB_EDIT_REFUSAL_CODES = [
+  "string_not_found",
+  "outside_body",
+  "unexpected_count",
+  "anchors_invalid",
+] as const;
+
+export type CollabEditRefusalCode = (typeof COLLAB_EDIT_REFUSAL_CODES)[number];
+
+/** An agent's find-and-replace, applied by the session to its source at its turn. */
+export const collabSourceEditSchema = z.object({
+  oldString: z.string(),
+  newString: z.string(),
+  expectedReplacements: z.number().int().positive(),
+});
+
+export type CollabSourceEdit = z.infer<typeof collabSourceEditSchema>;
+
+export const collabSourceEditRequestSchema =
+  collabSourceReadRequestSchema.extend({
+    userId: z.string().min(1),
+    edit: collabSourceEditSchema,
+  });
+
+export type CollabSourceEditRequest = z.infer<
+  typeof collabSourceEditRequestSchema
+>;
+
+export const collabSourceEditResponseSchema = z.discriminatedUnion("result", [
+  z.object({
+    result: z.literal("written"),
+    replacements: z.number().int(),
+  }),
+  z.object({ result: z.enum(["closed", "busy", "unsaved"]) }),
+  z.object({ result: z.literal("refused"), message: z.string() }),
+  z.object({
+    result: z.literal("edit_refused"),
+    code: z.enum(COLLAB_EDIT_REFUSAL_CODES),
+    message: z.string(),
+  }),
+]);
+
+export type CollabSourceEditResponse = z.infer<
+  typeof collabSourceEditResponseSchema
 >;

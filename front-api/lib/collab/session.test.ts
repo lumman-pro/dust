@@ -13,6 +13,7 @@ import {
 } from "@front-api/lib/collab/collab.test_utils";
 import { createCollabHocuspocus } from "@front-api/lib/collab/hocuspocus";
 import {
+  editSessionSource,
   readSessionSource,
   writeSessionSource,
 } from "@front-api/lib/collab/session";
@@ -339,5 +340,46 @@ describe("readSessionSource and writeSessionSource", () => {
     expect(taskList.isErr()).toBe(true);
     expect(unwritable.isErr()).toBe(true);
     expect(await openSource(hocuspocus, name)).toBe(base);
+  });
+
+  it("apply an edit to the current source, keeping what was typed since the agent read it", async () => {
+    const hocuspocus = createCollabHocuspocus();
+    const { agent, name } = await collabAccesses();
+    const connection = await hocuspocus.openDirectConnection(name, {
+      ...agent,
+    });
+    await connection.transact((doc) => typeInto(doc, "Typed meanwhile."));
+
+    const edited = await editSessionSource(hocuspocus, {
+      file: agent,
+      edit: {
+        oldString: "Hello.",
+        newString: "Hello, edited.",
+        expectedReplacements: 1,
+      },
+    });
+
+    expect(edited).toEqual(new Ok({ result: "written", replacements: 1 }));
+    expect(await openSource(hocuspocus, name)).toBe(
+      "# Notes\n\nHello, edited.\n\nTyped meanwhile.\n"
+    );
+  });
+
+  it("refuse an edit whose text is no longer in the source, changing nothing", async () => {
+    const hocuspocus = createCollabHocuspocus();
+    const { agent, reader, name } = await collabAccesses();
+    await hocuspocus.openDirectConnection(name, reader);
+
+    const edited = await editSessionSource(hocuspocus, {
+      file: agent,
+      edit: {
+        oldString: "Goodbye.",
+        newString: "Hello, edited.",
+        expectedReplacements: 1,
+      },
+    });
+
+    expect(edited.isOk() && edited.value.result).toBe("edit_refused");
+    expect(await openSource(hocuspocus, name)).toBe(SOURCE);
   });
 });

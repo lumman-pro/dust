@@ -2,6 +2,9 @@ import config from "@app/lib/api/config";
 import type { Authenticator } from "@app/lib/auth";
 import type { CollabAgent } from "@app/types/collab";
 import type {
+  CollabSourceEdit,
+  CollabSourceEditRequest,
+  CollabSourceEditResponse,
   CollabSourceReadRequest,
   CollabSourceReadResponse,
   CollabSourceWriteRequest,
@@ -9,9 +12,11 @@ import type {
 } from "@app/types/collab_internal";
 import {
   COLLAB_INTERNAL_ROUTES_PREFIX,
+  COLLAB_SOURCE_EDIT_PATH,
   COLLAB_SOURCE_READ_PATH,
   COLLAB_SOURCE_WRITE_PATH,
   COLLAB_SOURCE_WRITE_WAIT_MS,
+  collabSourceEditResponseSchema,
   collabSourceReadResponseSchema,
   collabSourceWriteResponseSchema,
 } from "@app/types/collab_internal";
@@ -33,6 +38,12 @@ export interface CollabSourceError {
   message: string;
 }
 
+const noUser = (): CollabSourceError => ({
+  code: "refused",
+  message:
+    "This document is being edited live and can only be changed on behalf of a user.",
+});
+
 const unavailable = (message: string): CollabSourceError => ({
   code: "unavailable",
   message,
@@ -52,7 +63,10 @@ const isRefusal = (status: number) =>
 /** The collab server's answer, or `null` when nothing listens: no session can then be open. */
 async function postToCollabServer<S extends z.ZodTypeAny>(
   path: string,
-  body: CollabSourceReadRequest | CollabSourceWriteRequest,
+  body:
+    | CollabSourceReadRequest
+    | CollabSourceWriteRequest
+    | CollabSourceEditRequest,
   schema: S
 ): Promise<Result<z.infer<S> | null, CollabSourceError>> {
   const url = config.getCollabServerInternalUrl();
@@ -153,11 +167,7 @@ export async function writeCollabSource(
 ): Promise<Result<CollabSourceWriteResult, CollabSourceError>> {
   const user = auth.user();
   if (!user) {
-    return new Err({
-      code: "refused",
-      message:
-        "This document is being edited live and can only be changed on behalf of a user.",
-    });
+    return new Err(noUser());
   }
   const answer = await postToCollabServer(
     COLLAB_SOURCE_WRITE_PATH,
@@ -181,4 +191,55 @@ export async function writeCollabSource(
     return new Err({ code: "refused", message: answer.value.message });
   }
   return new Ok(answer.value.result);
+}
+
+/**
+ * @cc [owner:tdraier,label:product;concurrency;security] collab-client-edit
+ * The edit MUST be sent as `auth`'s user, for the session to apply to its source at its turn, and
+ * MUST be refused without asking the collab server when `auth` has no user. Nothing listening at
+ * the collab server's address MUST count as `closed`, and a refusal and any other failure MUST be
+ * reported as `writeCollabSource` reports them (`collab-client-write`).
+ */
+export async function editCollabSource(
+  auth: Authenticator,
+  {
+    canonicalPath,
+    edit,
+    agent,
+  }: {
+    canonicalPath: string;
+    edit: CollabSourceEdit;
+    agent?: CollabAgent;
+  }
+): Promise<
+  Result<
+    Exclude<CollabSourceEditResponse, { result: "refused" }>,
+    CollabSourceError
+  >
+> {
+  const user = auth.user();
+  if (!user) {
+    return new Err(noUser());
+  }
+  const answer = await postToCollabServer(
+    COLLAB_SOURCE_EDIT_PATH,
+    {
+      workspaceId: auth.getNonNullableWorkspace().sId,
+      userId: user.sId,
+      canonicalPath,
+      edit,
+      agent,
+    },
+    collabSourceEditResponseSchema
+  );
+  if (answer.isErr()) {
+    return answer;
+  }
+  if (answer.value === null) {
+    return new Ok({ result: "closed" });
+  }
+  if (answer.value.result === "refused") {
+    return new Err({ code: "refused", message: answer.value.message });
+  }
+  return new Ok(answer.value);
 }

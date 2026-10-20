@@ -1,20 +1,23 @@
-import type { DfmStoredDocumentError } from "@app/lib/api/documents/read_write";
 import {
+  DfmStoredDocumentError,
+  editLiveDocument,
   readCurrentDocumentSource,
   writeDocumentChange,
 } from "@app/lib/api/documents/read_write";
 import type { DustFileSystem } from "@app/lib/api/file_system/dust_file_system";
 import type { Authenticator } from "@app/lib/auth";
-import { extractAnchors } from "@app/lib/markdown/dfm";
+import type { DfmDocument } from "@app/lib/markdown/dfm";
+import { extractAnchors, parseDfm, serializeDfm } from "@app/lib/markdown/dfm";
 import type { CollabAgent } from "@app/types/collab";
+import type {
+  CollabEditRefusalCode,
+  CollabSourceEdit,
+} from "@app/types/collab_internal";
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
+import { assertNever } from "@app/types/shared/utils/assert_never";
 
-export type DfmAgentDocumentErrorCode =
-  | "string_not_found"
-  | "outside_body"
-  | "unexpected_count"
-  | "anchors_invalid";
+export type DfmAgentDocumentErrorCode = CollabEditRefusalCode;
 
 export class DfmAgentDocumentError extends Error {
   constructor(
@@ -112,6 +115,91 @@ function anchorIds(body: string): Set<string> | null {
     : null;
 }
 
+/** `edit` applied to a document read as `text`, as `dfm-agent-document-edit` describes it. */
+function applyAgentEdit(
+  { text, document }: { text: string; document: DfmDocument },
+  { oldString, newString, expectedReplacements }: CollabSourceEdit
+): Result<
+  { document: DfmDocument; value: { replacements: number } },
+  DfmAgentDocumentError
+> {
+  // The codec normalizes the body's line breaks to `\n`, so a passage quoted from a source
+  // stored with CRLF line endings only matches once normalized the same way.
+  const replaced = replaceInBody({
+    text: text.replaceAll("\r\n", "\n"),
+    body: document.body,
+    oldString: oldString.replaceAll("\r\n", "\n"),
+    newString,
+    expectedReplacements,
+  });
+  if (replaced.isErr()) {
+    return replaced;
+  }
+  const { replacements } = replaced.value;
+  // The codec refuses carriage returns and a body ending with a line break, which agents
+  // often write; neither changes the rendered document.
+  const editedBody = replaced.value.editedBody
+    .replaceAll("\r\n", "\n")
+    .replace(/\n+$/, "");
+
+  // Removing a whole pair is allowed, as when people delete commented text in the editor:
+  // its thread stays in the annotations block, without an anchor.
+  const anchorsBefore = anchorIds(document.body);
+  const anchorsAfter = anchorIds(editedBody);
+  if (
+    anchorsAfter === null ||
+    anchorsBefore === null ||
+    !anchorsAfter.isSubsetOf(anchorsBefore)
+  ) {
+    return new Err(
+      new DfmAgentDocumentError(
+        "anchors_invalid",
+        "The edit would add or break `:comment-start{…}` / `:comment-end{…}` anchors. " +
+          "Edit the text inside an anchor pair, or delete it together with both anchors. " +
+          "Never leave one anchor without the other, and never write new ones."
+      )
+    );
+  }
+
+  return new Ok({
+    document: { ...document, body: editedBody },
+    value: { replacements },
+  });
+}
+
+/** `edit` applied to `source`, for a live session to apply it to its current source. */
+export function editDocumentSource(
+  source: string,
+  edit: CollabSourceEdit
+): Result<
+  { source: string; replacements: number },
+  DfmAgentDocumentError | DfmStoredDocumentError
+> {
+  const document = parseDfm(source);
+  if (document.isErr()) {
+    return new Err(
+      new DfmStoredDocumentError("invalid_document", document.error.message)
+    );
+  }
+  const edited = applyAgentEdit(
+    { text: source, document: document.value },
+    edit
+  );
+  if (edited.isErr()) {
+    return edited;
+  }
+  const serialized = serializeDfm(edited.value.document);
+  if (serialized.isErr()) {
+    return new Err(
+      new DfmStoredDocumentError("invalid_document", serialized.error.message)
+    );
+  }
+  return new Ok({
+    source: serialized.value,
+    replacements: edited.value.value.replacements,
+  });
+}
+
 /**
  * @cc [owner:tdraier,label:product] dfm-agent-document-read
  * Reading MUST return the full DFM source of the document that `editAgentDocument` matches
@@ -137,7 +225,9 @@ export async function readAgentDocument(
  * quoted from a CRLF source still matches; they MAY be normalized to `\n` and trailing ones
  * dropped from the edited body. It MUST leave the front matter and the comment threads unchanged,
  * and refuse with `anchors_invalid` an edit that adds anchors or breaks a pair. It MAY remove
- * whole anchor pairs, keeping their threads. It MUST be written through `writeDocumentChange`.
+ * whole anchor pairs, keeping their threads. While a live session holds the document, the session
+ * MUST apply it to its source at its turn (`editLiveDocument`), so changes made since the agent's
+ * call do not refuse it; otherwise it MUST be written through `writeDocumentChange`.
  */
 export async function editAgentDocument(
   auth: Authenticator,
@@ -161,55 +251,28 @@ export async function editAgentDocument(
     DfmAgentDocumentError | DfmStoredDocumentError
   >
 > {
+  const edit = { oldString, newString, expectedReplacements };
   // TODO(co-edition): pass an idempotency key so a retried tool call is applied once.
-  return writeDocumentChange(
-    auth,
-    dustFs,
-    scopedPath,
-    async ({ text, document }) => {
-      // The codec normalizes the body's line breaks to `\n`, so a passage quoted from a source
-      // stored with CRLF line endings only matches once normalized the same way.
-      const replaced = replaceInBody({
-        text: text.replaceAll("\r\n", "\n"),
-        body: document.body,
-        oldString: oldString.replaceAll("\r\n", "\n"),
-        newString,
-        expectedReplacements,
-      });
-      if (replaced.isErr()) {
-        return replaced;
-      }
-      const { replacements } = replaced.value;
-      // The codec refuses carriage returns and a body ending with a line break, which agents
-      // often write; neither changes the rendered document.
-      const editedBody = replaced.value.editedBody
-        .replaceAll("\r\n", "\n")
-        .replace(/\n+$/, "");
-
-      // Removing a whole pair is allowed, as when people delete commented text in the editor:
-      // its thread stays in the annotations block, without an anchor.
-      const anchorsBefore = anchorIds(document.body);
-      const anchorsAfter = anchorIds(editedBody);
-      if (
-        anchorsAfter === null ||
-        anchorsBefore === null ||
-        !anchorsAfter.isSubsetOf(anchorsBefore)
-      ) {
-        return new Err(
-          new DfmAgentDocumentError(
-            "anchors_invalid",
-            "The edit would add or break `:comment-start{…}` / `:comment-end{…}` anchors. " +
-              "Edit the text inside an anchor pair, or delete it together with both anchors. " +
-              "Never leave one anchor without the other, and never write new ones."
-          )
-        );
-      }
-
-      return new Ok({
-        document: { ...document, body: editedBody },
-        value: { replacements },
-      });
-    },
-    agent
-  );
+  const live = await editLiveDocument(auth, dustFs, scopedPath, edit, agent);
+  if (live.isErr()) {
+    return live;
+  }
+  switch (live.value.kind) {
+    case "written":
+      return new Ok(live.value.value);
+    case "edit_refused":
+      return new Err(
+        new DfmAgentDocumentError(live.value.code, live.value.message)
+      );
+    case "no_session":
+      return writeDocumentChange(
+        auth,
+        dustFs,
+        scopedPath,
+        async (read) => applyAgentEdit(read, edit),
+        agent
+      );
+    default:
+      return assertNever(live.value);
+  }
 }

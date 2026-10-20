@@ -9,19 +9,24 @@ import { WRITE_CANONICAL_FILE_CONTENT_MAX_BYTES } from "@app/lib/api/files/file_
 import { Authenticator } from "@app/lib/auth";
 import { toSessionName } from "@app/types/collab";
 import type {
+  CollabSourceEditResponse,
   CollabSourceReadResponse,
   CollabSourceWriteResponse,
 } from "@app/types/collab_internal";
 import {
+  COLLAB_SOURCE_EDIT_PATH,
   COLLAB_SOURCE_READ_PATH,
   COLLAB_SOURCE_WRITE_PATH,
+  collabSourceEditRequestSchema,
   collabSourceReadRequestSchema,
   collabSourceWriteRequestSchema,
 } from "@app/types/collab_internal";
 import { collabAccessErrorToApiError } from "@front-api/lib/collab/collab_access_errors";
 import {
+  editSessionSource,
   readSessionSource,
   showAgentActivity,
+  TOO_LARGE_TO_EDIT_LIVE_MESSAGE,
   writeSessionSource,
 } from "@front-api/lib/collab/session";
 import { createHono } from "@front-api/lib/hono";
@@ -54,7 +59,9 @@ function isAuthorized(authorization: string | undefined): boolean {
  * for them, both answering as the collab ticket route does when they refuse. A read of an open
  * document, readable or not, MUST answer 403 when the request has no user, and a write MUST carry
  * one. A write whose source is larger than `WRITE_CANONICAL_FILE_CONTENT_MAX_BYTES` MUST be refused
- * before it reaches the session, since no save could write it.
+ * before it reaches the session, since no save could write it. An edit MUST be checked as a write
+ * is, its replacement text in place of the source, and the session refuses an edited source over
+ * that size itself (`collab-session-source-edit`).
  */
 export function createInternalRoutes(hocuspocus: Hocuspocus<CollabAccess>) {
   const app = createHono();
@@ -148,7 +155,7 @@ export function createInternalRoutes(hocuspocus: Hocuspocus<CollabAccess>) {
       ) {
         return ctx.json<CollabSourceWriteResponse>({
           result: "refused",
-          message: "This document would be too large to edit live.",
+          message: TOO_LARGE_TO_EDIT_LIVE_MESSAGE,
         });
       }
 
@@ -162,6 +169,44 @@ export function createInternalRoutes(hocuspocus: Hocuspocus<CollabAccess>) {
         written.isOk()
           ? { result: written.value }
           : { result: "refused", message: written.error }
+      );
+    }
+  );
+
+  /** @ignoreswagger */
+  app.post(
+    COLLAB_SOURCE_EDIT_PATH,
+    validate("json", collabSourceEditRequestSchema),
+    async (ctx) => {
+      const { workspaceId, userId, canonicalPath, edit, agent } =
+        ctx.req.valid("json");
+
+      const file = await checkCollabAccess(
+        await Authenticator.fromUserIdAndWorkspaceId(userId, workspaceId),
+        canonicalPath
+      );
+      if (file.isErr()) {
+        return apiError(ctx, collabAccessErrorToApiError(file.error));
+      }
+      if (
+        Buffer.byteLength(edit.newString, "utf8") >
+        WRITE_CANONICAL_FILE_CONTENT_MAX_BYTES
+      ) {
+        return ctx.json<CollabSourceEditResponse>({
+          result: "refused",
+          message: TOO_LARGE_TO_EDIT_LIVE_MESSAGE,
+        });
+      }
+
+      const edited = await editSessionSource(hocuspocus, {
+        file: file.value,
+        edit,
+        agent,
+      });
+      return ctx.json<CollabSourceEditResponse>(
+        edited.isOk()
+          ? edited.value
+          : { result: "refused", message: edited.error }
       );
     }
   );

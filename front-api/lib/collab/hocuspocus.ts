@@ -416,9 +416,9 @@ export function createCollabHocuspocus(): Hocuspocus<CollabAccess> {
  * @cc [owner:PopDaph,label:product;concurrency] collab-shutdown-save
  * Once no connection can send edits any more, every document MUST be saved at once, in
  * place of its pending debounced store, including documents still loading, which are waited for
- * first. From the call on, `writeSessionSource` MUST answer `busy`, and the writes and comment
- * commands already queued MUST finish before the saves. The returned promise MUST resolve
- * only once each save has finished or failed.
+ * first. From the call on, `writeSessionSource` and `editSessionSource` MUST answer `busy`, and the
+ * writes, edits and comment commands already queued MUST finish before the saves. The returned
+ * promise MUST resolve only once each save has finished or failed.
  */
 export async function saveAllSessions(
   hocuspocus: Hocuspocus<CollabAccess>

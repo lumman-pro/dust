@@ -1,7 +1,11 @@
 import type { CollabSourceError } from "@app/lib/api/collab/client";
 import { readCollabSource } from "@app/lib/api/collab/client";
-import type { CollabSessionWriteError } from "@app/lib/api/collab/write_through_session";
+import type {
+  CollabSessionEdit,
+  CollabSessionWriteError,
+} from "@app/lib/api/collab/write_through_session";
 import {
+  editThroughCollabSession,
   isCollabSessionWriteError,
   writeThroughCollabSession,
 } from "@app/lib/api/collab/write_through_session";
@@ -12,6 +16,7 @@ import type { Authenticator } from "@app/lib/auth";
 import type { DfmDocument } from "@app/lib/markdown/dfm";
 import { parseDfm, serializeDfm } from "@app/lib/markdown/dfm";
 import type { CollabAgent } from "@app/types/collab";
+import type { CollabSourceEdit } from "@app/types/collab_internal";
 import { contentTypeFromFileName } from "@app/types/files";
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
@@ -234,6 +239,41 @@ export async function readCurrentDocumentSource(
     return read;
   }
   return new Ok({ source: read.value.text });
+}
+
+/**
+ * @cc [owner:tdraier,label:concurrency] document-live-edit
+ * While a live session holds the document, `edit` MUST be applied by the session at its turn,
+ * through `editThroughCollabSession` with `agent` (`collab-session-edit`), after the name check of
+ * `readStoredDocument` and once the file is found to exist; the file MUST NOT be read or written.
+ * Without a session it MUST change nothing and answer `no_session`, for the caller to write the
+ * file with `writeDocumentChange`.
+ */
+export async function editLiveDocument(
+  auth: Authenticator,
+  dustFs: DustFileSystem,
+  scopedPath: string,
+  edit: CollabSourceEdit,
+  agent?: CollabAgent
+): Promise<Result<CollabSessionEdit, DfmStoredDocumentError>> {
+  const filePath = resolveDocumentPath(scopedPath);
+  if (filePath.isErr()) {
+    return filePath;
+  }
+  const live = await editThroughCollabSession(auth, dustFs, {
+    filePath: filePath.value,
+    edit,
+    agent,
+    beforeEdit: () => checkDocumentFound(dustFs, filePath.value),
+  });
+  if (live.isErr()) {
+    return new Err(
+      isCollabSessionWriteError(live.error)
+        ? collabSessionWriteError(live.error)
+        : live.error
+    );
+  }
+  return live;
 }
 
 /**
