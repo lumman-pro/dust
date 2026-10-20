@@ -4,12 +4,9 @@
 # https://apple.github.io/foundationdb/getting-started-mac.html (the database itself runs in Docker).
 #
 # Usage: tools/install-fdb-client.sh [--check]
-#   --check  exit 0 if the library is installed, 1 otherwise; installs nothing.
 set -euo pipefail
 
-# Keep in sync with the foundationdb image in docker-compose.yml: client and server must share
-# the same 7.3.x line.
-FDB_VERSION=7.3.69
+FDB_VERSION=7.4.8
 LIBRARY=/usr/local/lib/libfdb_c.dylib
 
 # Linux installs the client from its own package (the dev container image does), so there is
@@ -21,8 +18,29 @@ if [ "$(uname -s)" != "Darwin" ]; then
   exit 1
 fi
 
-if [ -e "$LIBRARY" ]; then
-  [ "${1:-}" = "--check" ] || echo "FoundationDB client library already installed: $LIBRARY"
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "Python 3 is required to verify the FoundationDB client library version." >&2
+  exit 1
+fi
+
+client_is_current() {
+  [ -e "$LIBRARY" ] || return 1
+  python3 - "$LIBRARY" "$FDB_VERSION" <<'PYTHON'
+import ctypes
+import sys
+
+try:
+    library = ctypes.CDLL(sys.argv[1])
+except OSError:
+    sys.exit(1)
+library.fdb_get_client_version.restype = ctypes.c_char_p
+version = library.fdb_get_client_version().decode().split(",")[0]
+sys.exit(0 if version == sys.argv[2] else 1)
+PYTHON
+}
+
+if client_is_current; then
+  [ "${1:-}" = "--check" ] || echo "FoundationDB $FDB_VERSION client library already installed: $LIBRARY"
   exit 0
 fi
 
@@ -34,11 +52,11 @@ fi
 case "$(uname -m)" in
   arm64)
     ARCH=arm64
-    SHA256=6bfbd48ac21356de0baa0c1e84c6e33d15d95d0b9d022c35a7625e5d9293b71e
+    SHA256=22fd356d47ad8991b4688150809407a024dcc349cb5d6690e9f02cd98664a2eb
     ;;
   x86_64)
     ARCH=x86_64
-    SHA256=f22f4471d06189df8bbaa5474b20d52647b5fb0e4d4516809890316b31a4df2a
+    SHA256=392bb36930a4aa66c3329a3bceaff7a242575f532308a509babb2abec548d49a
     ;;
   *)
     echo "Unsupported architecture: $(uname -m)"
@@ -65,8 +83,8 @@ pkgutil --flatten "$WORK_DIR/expanded/FoundationDB-clients.pkg" "$WORK_DIR/clien
 echo "Installing the client library into /usr/local (asks for your password)..."
 sudo installer -pkg "$WORK_DIR/clients.pkg" -target /
 
-if [ ! -e "$LIBRARY" ]; then
-  echo "Installation finished but $LIBRARY is missing."
+if ! client_is_current; then
+  echo "Installation finished but $LIBRARY is not a usable FoundationDB $FDB_VERSION client."
   exit 1
 fi
 echo "Installed $LIBRARY"

@@ -4,6 +4,7 @@ import {
   dispatchSessionCommentMentions,
 } from "@app/lib/api/collab/comments";
 import { loadCollabSession } from "@app/lib/api/collab/session_file";
+import { getYDocUnsavableBodyReason } from "@app/lib/api/collab/ydoc";
 import {
   concurrentExecutor,
   setTimeoutAsync,
@@ -232,6 +233,10 @@ export function createCollabHocuspocus(): Hocuspocus<CollabAccess> {
             workspaceId: writer.workspaceId,
             reason: saved.error.message,
             code: saved.error.code,
+            bodyReason: getYDocUnsavableBodyReason(
+              { doc: document, comments: session.comments },
+              saved.error.message
+            ),
           },
           "Collab save failed"
         );

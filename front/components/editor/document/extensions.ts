@@ -32,8 +32,8 @@ import { StarterKit } from "@tiptap/starter-kit";
 
 /**
  * @cc [owner:tdraier,label:product] document-link-click
- * In an editable document, clicking a link MUST NOT open it, so its text can be clicked and
- * selected like any other text.
+ * In an editable document, a plain click on a link MUST NOT open it, so its text can be clicked
+ * and selected like any other text. Cmd or Ctrl+click opens it (see `document-link-modified-click`).
  */
 const starterKitOptions: Partial<StarterKitOptions> = {
   heading: false,

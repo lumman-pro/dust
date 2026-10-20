@@ -1,11 +1,14 @@
 // @vitest-environment node
+import { documentSchema } from "@app/components/editor/document/content";
 import {
   loadDfm,
   saveDfm,
+  UNSAVABLE_BODY_MESSAGE,
 } from "@app/components/editor/document/dfm_persistence";
 import {
   dfmToYDoc,
   ENVELOPE_MAP_NAME,
+  getYDocUnsavableBodyReason,
   replaceYDocContent,
   yDocCommentedTexts,
   yDocToDfm,
@@ -14,6 +17,8 @@ import { serializeDfm } from "@app/lib/markdown/dfm";
 import { FIXTURE, FIXTURES } from "@app/lib/markdown/dfm/tests/dfm.test_utils";
 import { BODY_FRAGMENT_NAME } from "@app/types/collab";
 import type { LocalTransactionOrigin } from "@hocuspocus/server";
+import type { JSONContent } from "@tiptap/core";
+import { prosemirrorJSONToYXmlFragment } from "@tiptap/y-tiptap";
 import { describe, expect, it } from "vitest";
 import * as Y from "yjs";
 
@@ -293,5 +298,66 @@ describe("yDocCommentedTexts", () => {
     doc.getXmlFragment(BODY_FRAGMENT_NAME).insert(0, [new Y.Map()] as never);
 
     expect(yDocCommentedTexts(doc)).toEqual(new Map());
+  });
+});
+
+describe("getYDocUnsavableBodyReason", () => {
+  const bullets = (text: string): JSONContent => ({
+    type: "bulletList",
+    content: [
+      {
+        type: "listItem",
+        content: [{ type: "paragraph", content: [{ type: "text", text }] }],
+      },
+    ],
+  });
+
+  const liveDocument = (content: JSONContent[]) => {
+    const live = dfmToYDoc("Intro.\n");
+    if (live.isErr()) {
+      throw new Error(live.error);
+    }
+    const body = live.value.doc.getXmlFragment(BODY_FRAGMENT_NAME);
+    live.value.doc.transact(() => body.delete(0, body.length));
+    prosemirrorJSONToYXmlFragment(
+      documentSchema,
+      { type: "doc", content },
+      body
+    );
+    return live.value;
+  };
+
+  it("names what a live body cannot write, without its text", () => {
+    const live = liveDocument([
+      bullets("secret plan"),
+      bullets("other secret"),
+    ]);
+    const saved = yDocToDfm(live);
+    if (saved.isOk()) {
+      throw new Error("The body saved.");
+    }
+
+    expect(saved.error).toBe(UNSAVABLE_BODY_MESSAGE);
+    const reason = getYDocUnsavableBodyReason(live, saved.error);
+    expect(reason).toBe(
+      "The document would not read back the same as Markdown, from bulletList > end, which reads back as bulletList > listItem."
+    );
+    expect(reason).not.toContain("secret");
+  });
+
+  it("is null for a live body that saves", () => {
+    const live = liveDocument([bullets("milk")]);
+
+    expect(yDocToDfm(live).isOk()).toBe(true);
+    expect(getYDocUnsavableBodyReason(live, UNSAVABLE_BODY_MESSAGE)).toBeNull();
+  });
+
+  it("is null for a failure that is not about the body", () => {
+    const live = liveDocument([
+      bullets("secret plan"),
+      bullets("other secret"),
+    ]);
+
+    expect(getYDocUnsavableBodyReason(live, "The storage is down.")).toBeNull();
   });
 });

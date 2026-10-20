@@ -3,7 +3,7 @@ import { canCurrentUserRespondToParentUserMessage } from "@app/lib/api/assistant
 import { getUserMessageIdFromMessageId } from "@app/lib/api/assistant/conversation/messages";
 import {
   canCurrentUserAddProjectMembers,
-  canUserAccessConversation,
+  getUserConversationAccess,
   isUserMemberOfSpace,
 } from "@app/lib/api/assistant/conversation/permissions";
 import { getRichMentionsWithStatusForMessage } from "@app/lib/api/assistant/messages";
@@ -91,7 +91,7 @@ export async function getMentionStatus(
     return "user_restricted_by_conversation_access";
   }
 
-  const access = await canUserAccessConversation(auth, {
+  const access = await getUserConversationAccess(auth, {
     userId: mentionedUser.sId,
     conversationId: conversation.sId,
   });

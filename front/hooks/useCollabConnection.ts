@@ -6,6 +6,7 @@ import type { CommentChannel } from "@app/lib/client/collab/comments";
 import { createCommentChannel } from "@app/lib/client/collab/comments";
 import { onStatelessMessage } from "@app/lib/client/collab/messages";
 import type { DfmComment } from "@app/lib/markdown/dfm";
+import datadogLogger from "@app/logger/datadogLogger";
 import type { SaveState } from "@app/types/collab";
 import { DEFAULT_SAVE_STATE, saveStateMessageSchema } from "@app/types/collab";
 import { HocuspocusProvider } from "@hocuspocus/provider";
@@ -25,7 +26,33 @@ export interface CollabConnection {
 let nextConnectionId = 0;
 
 const RECONNECT_DELAY_MS = 1_000;
-const MAX_RECONNECT_DELAY_MS = 30_000;
+// A deploy restarts the collab pod: retrying every 5 s at most rejoins soon after it is back.
+const MAX_RECONNECT_DELAY_MS = 5_000;
+// A refusal (no access, formatting the editor cannot keep) gets the same answer until that changes.
+const REFUSED_RETRY_DELAY_MS = 30_000;
+
+/**
+ * The wait before the next attempt, after `failures` losses since the last sync: 1 s doubling up
+ * to 5 s, then a random part of it from half to all, so tabs lost together do not retry together.
+ */
+export function reconnectDelayMs(failures: number, random = Math.random()) {
+  const delayMs = Math.min(
+    RECONNECT_DELAY_MS * 2 ** failures,
+    MAX_RECONNECT_DELAY_MS
+  );
+  return delayMs / 2 + (delayMs / 2) * random;
+}
+
+/** The wait before the next attempt: 30 s after a refusal, the `reconnectDelayMs` backoff otherwise. */
+export function nextAttemptDelayMs({
+  failures,
+  isRefused,
+}: {
+  failures: number;
+  isRefused: boolean;
+}) {
+  return isRefused ? REFUSED_RETRY_DELAY_MS : reconnectDelayMs(failures);
+}
 
 /**
  * @cc [owner:PopDaph,label:product] collab-connection-reconnect
@@ -36,6 +63,10 @@ const MAX_RECONNECT_DELAY_MS = 30_000;
  * screen, read-only, until the new one has synced. The fresh connection's comments MUST start
  * from the threads last received by an earlier connection to the same document and user, if any.
  * Joining another document, or as another user, MUST close the current connection at once.
+ * Attempts MUST wait 1 s after a loss, doubling up to 5 s, each wait randomly shortened by up to
+ * half. After the server refuses the connection, or its ticket cannot be fetched, the next attempt
+ * MUST wait 30 s instead. A synced connection lost MUST be logged once, and again when a
+ * connection syncs after it, with how long it was offline.
  */
 export function useCollabConnection(
   live: CollabConnectionSettings | undefined
@@ -55,6 +86,8 @@ export function useCollabConnection(
   const shownRef = useRef<CollabConnection | null>(null);
   // Losses since the last sync: the delay doubles with each, so a down server is not hammered.
   const failuresRef = useRef(0);
+  // When the last synced connection was lost, until a fresh one syncs.
+  const lostAtMsRef = useRef<number | null>(null);
   // TODO(co-edition): the threads also live in the channel and the editor; one store per session,
   // outliving its connections, would replace this copy taken before each close.
   const lastThreadsRef = useRef<DfmComment[] | null>(null);
@@ -70,6 +103,7 @@ export function useCollabConnection(
       shownRef.current?.close();
       shownRef.current = null;
       failuresRef.current = 0;
+      lostAtMsRef.current = null;
       lastThreadsRef.current = null;
       setConnection(null);
       setStatus("connecting");
@@ -92,6 +126,7 @@ export function useCollabConnection(
     // Disconnected: no more updates. Destroyed: the document is gone too.
     let closed = false;
     let destroyed = false;
+    let refused = false;
     let retry: ReturnType<typeof setTimeout> | undefined;
     let comments: CommentChannel | null = null;
     let stopSaveState = () => {};
@@ -121,16 +156,18 @@ export function useCollabConnection(
       if (synced) {
         setStatus("offline");
         setSyncingSinceMs(null);
+        lostAtMsRef.current = performance.now();
+        datadogLogger.info("Collab connection lost");
       }
       // The next connection is told again if saves still fail: a connection lost before it synced
       // may have been told they failed, and no one tells it once they recover.
       setSaveState(DEFAULT_SAVE_STATE);
-      const delay = Math.min(
-        RECONNECT_DELAY_MS * 2 ** failuresRef.current,
-        MAX_RECONNECT_DELAY_MS
-      );
+      const delayMs = nextAttemptDelayMs({
+        failures: failuresRef.current,
+        isRefused: refused,
+      });
       failuresRef.current++;
-      retry = setTimeout(() => setAttempt((current) => current + 1), delay);
+      retry = setTimeout(() => setAttempt((current) => current + 1), delayMs);
     };
     const provider = new HocuspocusProvider({
       url,
@@ -142,6 +179,16 @@ export function useCollabConnection(
           return;
         }
         synced = true;
+        if (lostAtMsRef.current !== null) {
+          datadogLogger.info(
+            {
+              offlineMs: Math.round(performance.now() - lostAtMsRef.current),
+              attempts: failuresRef.current,
+            },
+            "Collab connection restored"
+          );
+          lostAtMsRef.current = null;
+        }
         failuresRef.current = 0;
         comments = createCommentChannel(provider, lastThreadsRef.current);
         const next = {
@@ -166,8 +213,9 @@ export function useCollabConnection(
       onDisconnect: onLost,
       // Also sent alone, without a disconnect, when the server closes the document.
       onClose: onLost,
-      // A refused or unfetchable ticket: retried with the same backoff, access may come back.
+      // A refused connection or an unfetchable ticket: retried slowly, access may come back.
       onAuthenticationFailed: () => {
+        refused = true;
         setStatus("refused");
         onLost();
       },

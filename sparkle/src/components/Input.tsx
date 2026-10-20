@@ -1,3 +1,4 @@
+import type { IconProps } from "@sparkle/components/Icon";
 import { Icon } from "@sparkle/components/Icon";
 import { AlertCircle } from "@sparkle/icons/v2-stroke";
 import { cn } from "@sparkle/lib/utils";
@@ -15,6 +16,8 @@ type MessageStatus = (typeof MESSAGE_STATUS)[number];
 
 export const INPUT_SIZES = ["xs", "sm", "md"] as const;
 export type InputSizeType = (typeof INPUT_SIZES)[number];
+export const INPUT_VARIANTS = ["default", "borderless"] as const;
+export type InputVariantType = (typeof INPUT_VARIANTS)[number];
 
 const messageVariantStyles: Record<MessageStatus, string> = {
   info: "text-muted-foreground",
@@ -48,7 +51,25 @@ const fieldVariants = cva(
         md: "h-10 rounded-[15px] text-base md:text-sm",
       },
       state: {
-        default: cn(
+        // The resting look of the default state depends on `variant`, see
+        // `compoundVariants` below.
+        default: "",
+        error: cn("border-warning-500", "focus-within:border-warning-600"),
+        disabled: cn(
+          "cursor-not-allowed border-transparent",
+          "bg-muted dark:bg-foreground/5"
+        ),
+      },
+      variant: {
+        default: "",
+        borderless: "",
+      },
+    },
+    compoundVariants: [
+      {
+        state: "default",
+        variant: "default",
+        class: cn(
           "border-border-form",
           "focus-within:border-border-form-active",
           // Filled (has a value) and not focused: a muted fill only. The
@@ -59,16 +80,22 @@ const fieldVariants = cva(
           "[&:has(input:not(:placeholder-shown)):not(:focus-within)]:bg-muted",
           "dark:[&:has(input:not(:placeholder-shown)):not(:focus-within)]:bg-foreground/5"
         ),
-        error: cn("border-warning-500", "focus-within:border-warning-600"),
-        disabled: cn(
-          "cursor-not-allowed border-transparent",
-          "bg-muted dark:bg-foreground/5"
-        ),
       },
-    },
+      {
+        state: "default",
+        variant: "borderless",
+        // No border or fill in any interaction state: the surrounding surface
+        // (e.g. a command palette) provides the framing. The border is removed
+        // rather than made transparent so inline icons sit at exactly the
+        // icon margin from the field edge; the fixed `h-*` keeps the outer
+        // height identical to the default variant.
+        class: "border-0 bg-transparent",
+      },
+    ],
     defaultVariants: {
       size: "sm",
       state: "default",
+      variant: "default",
     },
   }
 );
@@ -131,10 +158,12 @@ const slotBoxVariants = cva(
   }
 );
 
-const ICON_CLASSES: Record<InputSizeType, string> = {
-  xs: "h-3 w-3",
-  sm: "h-3.5 w-3.5",
-  md: "h-4 w-4",
+// Passed as `Icon`'s `size`: `Icon` applies its own size class after
+// `className`, so a size class passed through `className` would be ignored.
+const ICON_SIZE: Record<InputSizeType, IconProps["size"]> = {
+  xs: "2xs",
+  sm: "xs",
+  md: "xs",
 };
 
 // Inline icons sit at the same inset as the inner input's horizontal padding.
@@ -157,6 +186,12 @@ export interface InputProps extends Omit<
   value?: string | number | readonly string[] | null;
   /** Forces the error (warning border) state regardless of `messageStatus`. */
   isError?: boolean;
+  /**
+   * "default" draws the form border and a muted fill when filled; "borderless"
+   * draws neither, for fields framed by their surface (e.g. a command palette).
+   * Error and disabled states render the same in both variants.
+   */
+  variant?: InputVariantType;
   /** Classes applied to the field wrapper. */
   className?: string;
   /** Classes applied to the outer container (label + field + message). */
@@ -189,6 +224,13 @@ export interface InputProps extends Omit<
  *
  * @summary Single-line text field.
  */
+/**
+ * @cc [owner:ClementAupiais,label:react] borderless-variant-has-no-chrome
+ * When `variant` is "borderless" and the field is neither in error nor disabled, the field
+ * wrapper MUST NOT render a visible border or background fill in any interaction state
+ * (resting, focused, filled). The error and disabled states MUST take precedence over the
+ * variant and render identically to the "default" variant.
+ */
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   (
     {
@@ -200,6 +242,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       value,
       label,
       isError,
+      variant = "default",
       disabled,
       icon,
       iconRight,
@@ -229,16 +272,13 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             {label}
           </label>
         )}
-        <div className={cn(fieldVariants({ size, state }), className)}>
+        <div className={cn(fieldVariants({ size, state, variant }), className)}>
           {prefix && <div className={slotBoxVariants({ size })}>{prefix}</div>}
           {icon && (
             <Icon
               visual={icon}
-              className={cn(
-                "shrink-0 text-faint",
-                ICON_MARGIN[size].left,
-                ICON_CLASSES[size]
-              )}
+              size={ICON_SIZE[size]}
+              className={cn("text-faint", ICON_MARGIN[size].left)}
             />
           )}
           <input
@@ -252,11 +292,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           {iconRight && (
             <Icon
               visual={iconRight}
-              className={cn(
-                "shrink-0 text-faint",
-                ICON_MARGIN[size].right,
-                ICON_CLASSES[size]
-              )}
+              size={ICON_SIZE[size]}
+              className={cn("text-faint", ICON_MARGIN[size].right)}
             />
           )}
           {resolvedSuffix && (

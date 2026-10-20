@@ -1,5 +1,6 @@
 import { parseMarkdownBlocks } from "@app/components/editor/document/content";
 import type { DocumentImageOptions } from "@app/components/editor/document/DocumentImage";
+import { DocumentLinks } from "@app/components/editor/document/DocumentLinks";
 import { DocumentListJoin } from "@app/components/editor/document/DocumentListJoin";
 import { buildSchemaExtensions } from "@app/components/editor/document/extensions";
 import type { MessageDescriptor } from "@lingui/core";
@@ -29,6 +30,7 @@ export const buildDocumentEditorExtensions = (
     parsePastedMarkdown: parseMarkdownBlocks,
   }),
   DocumentListJoin,
+  DocumentLinks,
   Placeholder.configure({
     placeholder: ({ node, pos, editor }) =>
       node.type.name === "heading"

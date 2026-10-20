@@ -49,6 +49,32 @@ brew install postgresql
 
 > **Linux users**: Also install `lsof` if not already available (`sudo apt install lsof`)
 
+### FoundationDB for DFS
+
+DFS uses FoundationDB API 740. The native client library, Docker server and initializer are pinned
+to **7.4.8**, matching CI and production. Upgrading only the Docker image does not upgrade the
+host library linked by `cargo run` or DFS tests; a 7.3 client library cannot run API 740.
+
+On macOS, from the repository root:
+
+```bash
+tools/install-fdb-client.sh --check
+tools/install-fdb-client.sh
+```
+
+The check loads `/usr/local/lib/libfdb_c.dylib` with Python 3 and verifies the actual runtime
+version. The explicit installer verifies the pinned package checksum and installs only the client
+component; it does not install or start a FoundationDB server. Restart native DFS processes after
+changing the library. Linux hosts need the official 7.4.8 client package and libclang; the shared
+`dev/Dockerfile` installs the matching library and server binaries. Nonstandard library locations
+can use `FDB_CLIENT_LIB_PATH` at build time and the platform's runtime loader configuration.
+
+Existing local FoundationDB data needs a deliberate migration. The root Compose `dev-fdb` volume,
+each hive's FDB volume, and the dev container data volume may contain 7.3 data. Do not restart them
+under 7.4 automatically or delete them as part of this code update. Preserve any data you need,
+then choose an approved upgrade plan or create a fresh disposable development database. Updating
+these files does not upgrade running databases or installed host libraries.
+
 ### direnv setup
 
 1. **Add the shell hook** to your shell config:

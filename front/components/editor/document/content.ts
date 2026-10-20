@@ -334,16 +334,45 @@ const comparable = (document: JSONContent) =>
     documentSchema.nodeFromJSON(asWritten(withoutTrailingParagraphs(document)))
   );
 
-/** Compares in the editor's form, comment marks included, as the user would reopen it. */
-const canRoundTripMarkdown = (
-  document: JSONContent,
-  markdown: LexedMarkdown
-) => {
-  const reopened = anchorsToMarks(parseMarkdown(markdown), documentSchema);
-  return (
-    reopened.isOk() &&
-    comparable(document).eq(comparable(reopened.value.document))
+/** A node's type, with its marks' names when it has any: no text. */
+const describeNode = (node: Node | null): string => {
+  if (!node) {
+    return "end";
+  }
+  if (!node.marks.length) {
+    return node.type.name;
+  }
+  const marks = node.marks.map((mark) => mark.type.name).join(",");
+  return `${node.type.name}[${marks}]`;
+};
+
+/** The node types from the document down to `position`, then the node there: no text. */
+const describePosition = (document: Node, position: number): string => {
+  const resolved = document.resolve(position);
+  const path = Array.from(
+    { length: resolved.depth },
+    (_, depth) => resolved.node(depth + 1).type.name
   );
+  return [...path, describeNode(resolved.nodeAfter)].join(" > ");
+};
+
+/**
+ * Where `reopened` differs from `document`, or null when they are the same. Compares in the
+ * editor's form, comment marks included, as the user would reopen it.
+ */
+const roundTripDifference = ({
+  document,
+  reopened,
+}: {
+  document: JSONContent;
+  reopened: JSONContent;
+}): string | null => {
+  const written = comparable(document);
+  const read = comparable(reopened);
+  const position = written.content.findDiffStart(read.content);
+  return position === null
+    ? null
+    : `${describePosition(written, position)}, which reads back as ${describePosition(read, position)}`;
 };
 
 // Comment marks share one rank, so their order on a text node only records which was added
@@ -471,9 +500,26 @@ const serializeReadingBack = (
       return markdown;
     }
     const lexed = lexMarkdown(markdown.value);
-    return hasSupportedMarkdown(lexed) && canRoundTripMarkdown(content, lexed)
+    const unsupported = findUnsupportedToken(lexed.tokens);
+    if (unsupported) {
+      return new Err(
+        `The document would be written as ${unsupported.type} Markdown, which the editor cannot read.`
+      );
+    }
+    // An anchor refusal names its comment: it is logged as is, not as a difference.
+    const reopened = anchorsToMarks(parseMarkdown(lexed), documentSchema);
+    if (reopened.isErr()) {
+      return reopened;
+    }
+    const difference = roundTripDifference({
+      document: content,
+      reopened: reopened.value.document,
+    });
+    return difference === null
       ? markdown
-      : new Err("The document would not read back the same as Markdown.");
+      : new Err(
+          `The document would not read back the same as Markdown, from ${difference}.`
+        );
   } catch {
     return new Err("The document could not be written as Markdown.");
   }

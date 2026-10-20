@@ -24,6 +24,7 @@ on:
         options:
           - connectors
           - core
+          - dfs
           - front
           - front-edge
           - front-sse

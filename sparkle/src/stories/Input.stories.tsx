@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import React from "react";
 
-import { INPUT_SIZES } from "@sparkle/components/Input";
+import { INPUT_SIZES, INPUT_VARIANTS } from "@sparkle/components/Input";
 
 import { Input, SearchMd } from "../index_with_tw_base";
 
@@ -62,6 +62,12 @@ const meta = {
     isError: {
       control: "boolean",
       description: "Whether the input is in an error state",
+    },
+    variant: {
+      options: INPUT_VARIANTS,
+      control: { type: "select" },
+      description:
+        "Field chrome: default draws the form border, borderless drops border and fill",
     },
     type: {
       control: "select",
@@ -163,6 +169,25 @@ export const WithError: Story = {
     messageStatus: "error",
     isError: true,
   },
+};
+
+/**
+ * `variant="borderless"` drops the form border and the filled fill so the
+ * field is framed by its surface instead — the search field of a command
+ * palette, for example. Error and disabled states still render as usual.
+ * @summary Borderless input framed by its surface.
+ */
+export const Borderless: Story = {
+  args: {
+    placeholder: "Search…",
+    icon: SearchMd,
+    variant: "borderless",
+  },
+  render: (args) => (
+    <div className="w-80 rounded-2xl bg-background p-3 shadow-xl">
+      <Input {...args} />
+    </div>
+  ),
 };
 
 /**

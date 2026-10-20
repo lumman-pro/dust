@@ -3,6 +3,7 @@ import { documentSchema } from "@app/components/editor/document/content";
 import {
   loadDfm,
   loggableRefusal,
+  getUnsavableBodyReason,
   saveDfm,
   isWritableThread,
 } from "@app/components/editor/document/dfm_persistence";
@@ -1139,5 +1140,69 @@ describe("empty blocks", () => {
   ])("reads %s as the item's text", (_, source, kept) => {
     const [first] = itemTexts(load(source).content);
     expect(first).toContain(kept);
+  });
+});
+
+describe("getUnsavableBodyReason", () => {
+  const envelope = { frontMatter: null, anchorOrder: [] };
+  const bullets = (text: string): JSONContent => ({
+    type: "bulletList",
+    content: [
+      {
+        type: "listItem",
+        content: [{ type: "paragraph", content: [{ type: "text", text }] }],
+      },
+    ],
+  });
+
+  it("is null for a body saveDfm writes", () => {
+    const content = { type: "doc", content: [bullets("milk")] };
+
+    expect(saveDfm(envelope, content).isOk()).toBe(true);
+    expect(getUnsavableBodyReason(envelope, content)).toBeNull();
+  });
+
+  it("names where a refused body would read back differently, without its text", () => {
+    const content = {
+      type: "doc",
+      content: [bullets("secret plan"), bullets("other secret")],
+    };
+
+    expect(saveDfm(envelope, content).isErr()).toBe(true);
+    const reason = getUnsavableBodyReason(envelope, content);
+    expect(reason).toBe(
+      "The document would not read back the same as Markdown, from bulletList > end, which reads back as bulletList > listItem."
+    );
+    expect(reason).not.toContain("secret");
+  });
+
+  it("names the marks where only formatting would read back differently", () => {
+    const content = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "secret ", marks: [{ type: "bold" }] },
+            { type: "text", text: "plan" },
+          ],
+        },
+      ],
+    };
+
+    const reason = getUnsavableBodyReason(envelope, content);
+    expect(reason).toBe(
+      "The document would not read back the same as Markdown, from paragraph > text[bold], which reads back as paragraph > text."
+    );
+    expect(reason).not.toContain("secret");
+  });
+
+  it.each([
+    "The document would not read back the same as Markdown, from bulletList > end, which reads back as bulletList > listItem.",
+    "The document would not read back the same as Markdown, from paragraph > text[bold,link], which reads back as paragraph > text[bold].",
+    "The document would be written as html Markdown, which the editor cannot read.",
+    "The document could not be written as Markdown.",
+  ])("logs the serializer's reason %s as is", (reason) => {
+    expect(loggableRefusal(reason)).toBe(reason);
   });
 });

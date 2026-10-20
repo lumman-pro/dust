@@ -183,11 +183,11 @@ RUN set -eu \
 
 # FoundationDB — server and CLI for the dfs filesystem, client library for anything linking it.
 # Raw release binaries, not the .deb: the package expects systemd/fdbmonitor.
-ARG FDB_VERSION=7.3.69
+ARG FDB_VERSION=7.4.8
 RUN set -eu \
   && case "${TARGETARCH}" in \
-       amd64) fdb_arch="x86_64"; fdbserver_sha256="490dd8de050b3883103ae7513deacde332c75e9a5f06e1897360d21f438b1e17"; fdbcli_sha256="c679051460b7c6f630213f443c523b8881403d4d8d9ce397aa584e12fed65888"; libfdb_c_sha256="7ceb4b1ed4a8646fa57a3d3dbc3f009143424648aa525f24f0498f8650f5e8fc" ;; \
-       arm64) fdb_arch="aarch64"; fdbserver_sha256="0890e3abf4e3abbb391d67de38290033daf0641b42ca1de29d62c3bae912d4f2"; fdbcli_sha256="5e3ce12a2ea1198323be64959b03bf1fdcca0764e79265aafae703d631cb88dc"; libfdb_c_sha256="151280c0920484ec455444e5bb688c9219babe67f07d320e155adb2eb8e55b8e" ;; \
+       amd64) fdb_arch="x86_64"; fdbserver_sha256="ab61eba47af65c960ccf1aa0f317af1790bf1c601cbd3d6659237bdce8c69120"; fdbcli_sha256="420e20b63c9137aa7df715c3751570b793fbac44383fb98a4bbd0604d48fee69"; libfdb_c_sha256="0a3bf7cbc4b95e47571976e282c01ef819cbecd4feb26786650e58155c744fd4" ;; \
+       arm64) fdb_arch="aarch64"; fdbserver_sha256="b273a576772d630c85265fc3551826ffde5f5ebb6164bea66991be2f60bd8fdb"; fdbcli_sha256="135a7389f86674417e2680a2b06f021985b85cd1465a17f7839aeaf717c20b30"; libfdb_c_sha256="727c69ff405dee4cec5f7377d84629da5e619503726f0efe0ae2665cf5269f28" ;; \
        *) echo "Unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
      esac \
   && fdb_url="https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}" \

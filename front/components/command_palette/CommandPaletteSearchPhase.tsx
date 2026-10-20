@@ -26,7 +26,7 @@ import type { LightUserTypeWithWorkspace } from "@app/types/user";
 import {
   Avatar,
   cn,
-  FilterChips,
+  FilterChip,
   Icon,
   LoadingBlock,
   MessageCircle01,
@@ -500,15 +500,6 @@ export function CommandPaletteSearchPhase({
     categoriesWithResults,
   ]);
 
-  const filterLabels = useMemo(
-    () => filters.map((filter) => t(FILTER_LABELS[filter])),
-    [filters, t]
-  );
-  const disabledFilterLabels = useMemo(
-    () => disabledFilters.map((filter) => t(FILTER_LABELS[filter])),
-    [disabledFilters, t]
-  );
-
   const filteredConversations =
     effectiveSelectedCategory === "All" ||
     effectiveSelectedCategory === "Conversations"
@@ -674,7 +665,10 @@ export function CommandPaletteSearchPhase({
 
   return (
     <div className="flex flex-col">
-      <div className="border-b border-separator p-3">
+      {/* 6px side padding + the md field's 12px icon inset puts the search
+          icon at the same 18px x as row icons (6px list padding + 12px row
+          padding). */}
+      <div className="px-1.5 py-3">
         <SearchInput
           ref={searchInputRef}
           name="command-palette-search"
@@ -682,23 +676,29 @@ export function CommandPaletteSearchPhase({
           value={searchQuery}
           onChange={onSearchQueryChange}
           onKeyDown={handleKeyDown}
+          size="md"
+          variant="borderless"
+          iconPosition="left"
         />
-        <div className="pt-2">
-          <FilterChips
-            filters={filterLabels}
-            selectedFilter={t(FILTER_LABELS[effectiveSelectedCategory])}
-            disabledFilters={disabledFilterLabels}
-            variant="secondary"
-            onFilterClick={(label) => {
-              const filter = filters.find(
-                (candidate) => t(FILTER_LABELS[candidate]) === label
-              );
-              if (filter) {
-                onSelectedCategoryChange(filter);
-                onSelectedIndexChange(0);
-              }
-            }}
-          />
+        {/* One chip per category and no "All" chip: clicking the selected
+            chip again clears the filter back to "All". */}
+        <div className="scrollbar-hide flex flex-row gap-2 overflow-x-auto px-1.5 pt-2">
+          {accessibleCategories.map((category) => {
+            const isSelected = category === effectiveSelectedCategory;
+            return (
+              <FilterChip
+                key={category}
+                label={t(FILTER_LABELS[category])}
+                isSelected={isSelected}
+                disabled={disabledFilters.includes(category)}
+                variant="secondary"
+                onClick={() => {
+                  onSelectedCategoryChange(isSelected ? "All" : category);
+                  onSelectedIndexChange(0);
+                }}
+              />
+            );
+          })}
         </div>
       </div>
       <div className="flex max-h-125 flex-col gap-2 overflow-y-auto p-1.5">

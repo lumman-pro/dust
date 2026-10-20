@@ -7,6 +7,8 @@ import { getLlmCredentials } from "@app/lib/api/provider_credentials";
 import { Authenticator } from "@app/lib/auth";
 import { buildAgentMessageBillingPlan } from "@app/lib/credits/agent_message_billing";
 import { getModelConfigByModelId } from "@app/lib/llms/model_configurations";
+import { USAGE_TYPE_FREE } from "@app/lib/metronome/constants";
+import type { UsageType } from "@app/lib/metronome/types";
 import type { ServiceTier } from "@app/lib/model_constructors/types/input/configuration";
 import { AgentMCPActionResource } from "@app/lib/resources/agent_mcp_action_resource";
 import { AgentMessageConsumptionItemResource } from "@app/lib/resources/agent_message_consumption_item_resource";
@@ -62,6 +64,7 @@ async function setupSettledMessageWithUsage({
   outputTokens = OUTPUT_TOKENS_COUNT,
   serviceTier,
   billedCredits,
+  usageType,
   withLeadingUnavailableRun = false,
 }: {
   runCount?: number;
@@ -71,6 +74,7 @@ async function setupSettledMessageWithUsage({
   outputTokens?: number;
   serviceTier?: ServiceTier;
   billedCredits?: number;
+  usageType?: UsageType;
   // Runs a model call whose provider reported no usage before the reported runs.
   withLeadingUnavailableRun?: boolean;
 } = {}) {
@@ -108,6 +112,7 @@ async function setupSettledMessageWithUsage({
       modelId,
       serviceTier,
       retiredModel,
+      usageType,
     });
     runs.push(run);
   }
@@ -206,9 +211,9 @@ describe("computeAndStoreAgentMessageConsumptionAttribution", () => {
         conversationId,
       });
 
-    expect(consumptionUpdate).toEqual({
-      costCredits: billedCreditAmountMicro / 1_000_000,
-    });
+    expect(consumptionUpdate).toEqual(
+      new Ok({ costCredits: billedCreditAmountMicro / 1_000_000 })
+    );
 
     const items =
       await AgentMessageConsumptionItemResource.listByAgentMessageModelIds(
@@ -265,7 +270,9 @@ describe("computeAndStoreAgentMessageConsumptionAttribution", () => {
           agentMessageId: message.agentMessageId,
           conversationId: message.conversationId,
         })
-      ).toEqual({ costCredits: message.billedCreditAmountMicro / 1_000_000 });
+      ).toEqual(
+        new Ok({ costCredits: message.billedCreditAmountMicro / 1_000_000 })
+      );
 
       const items =
         await AgentMessageConsumptionItemResource.listByAgentMessageModelIds(
@@ -344,6 +351,107 @@ describe("computeAndStoreAgentMessageConsumptionAttribution", () => {
       "output",
       "reasoning",
     ]);
+  });
+
+  it("writes nothing for a sidekick message whose free usage was not billed", async () => {
+    const { auth, conversationId, agentMessageId, agentMessageModelId } =
+      await setupSettledMessageWithUsage({
+        billedCredits: 0,
+        usageType: USAGE_TYPE_FREE,
+      });
+
+    const result = await computeAndStoreAgentMessageConsumptionAttribution(
+      auth,
+      { agentMessageId, conversationId }
+    );
+
+    expect(result).toEqual(new Ok(undefined));
+    const items =
+      await AgentMessageConsumptionItemResource.listByAgentMessageModelIds(
+        auth,
+        {
+          agentMessageModelIds: [agentMessageModelId],
+          maxAttributionVersion: AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION,
+        }
+      );
+    expect(items).toHaveLength(0);
+  });
+
+  it("returns the skip reason and keeps the evidence when the bill does not reconcile", async () => {
+    const { auth, conversationId, agentMessageId, agentMessageModelId } =
+      await setupSettledMessageWithUsage({ billedCredits: 100 });
+
+    const result = await computeAndStoreAgentMessageConsumptionAttribution(
+      auth,
+      { agentMessageId, conversationId }
+    );
+
+    expect(result.isErr() && result.error.code).toBe("llm_bill_mismatch");
+    const items =
+      await AgentMessageConsumptionItemResource.listByAgentMessageModelIds(
+        auth,
+        {
+          agentMessageModelIds: [agentMessageModelId],
+          maxAttributionVersion: AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION,
+        }
+      );
+    expect(items.map((item) => item.itemType).sort()).toEqual([
+      "input",
+      "output",
+      "reasoning",
+    ]);
+    expect(
+      items.every((item) => item.reconciledCreditAmountMicro === null)
+    ).toBe(true);
+  });
+
+  it("keeps the amounts of the last reconciliation when a later pass does not reconcile", async () => {
+    const {
+      auth,
+      billedCreditAmountMicro,
+      conversationId,
+      agentMessageId,
+      agentMessageModelId,
+    } = await setupSettledMessageWithUsage();
+    const listItems = async () =>
+      (
+        await AgentMessageConsumptionItemResource.listByAgentMessageModelIds(
+          auth,
+          {
+            agentMessageModelIds: [agentMessageModelId],
+            maxAttributionVersion:
+              AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION,
+          }
+        )
+      ).sort((left, right) => left.id - right.id);
+    await computeAndStoreAgentMessageConsumptionAttribution(auth, {
+      agentMessageId,
+      conversationId,
+    });
+    const reconciledAmounts = (await listItems()).map((item) => [
+      item.id,
+      item.reconciledCreditAmountMicro,
+    ]);
+
+    await ConversationResource.updateAgentMessageCostCredits(auth, {
+      agentMessageModelId,
+      costCredits: billedCreditAmountMicro / 1_000_000 + 50,
+    });
+    const result = await computeAndStoreAgentMessageConsumptionAttribution(
+      auth,
+      { agentMessageId, conversationId }
+    );
+
+    expect(result.isErr()).toBe(true);
+    expect(
+      (await listItems()).map((item) => [
+        item.id,
+        item.reconciledCreditAmountMicro,
+      ])
+    ).toEqual(reconciledAmounts);
+    expect(
+      reconciledAmounts.reduce((total, [, amount]) => total + (amount ?? 0), 0)
+    ).toBe(billedCreditAmountMicro);
   });
 
   it("rejects an action added after its run usage was attributed", async () => {
@@ -1321,7 +1429,7 @@ describe("computeAndStoreAgentMessageConsumptionAttribution", () => {
         conversationId: conversation.sId,
       });
 
-    expect(consumptionUpdate).toBeUndefined();
+    expect(consumptionUpdate).toEqual(new Ok(undefined));
 
     const items =
       await AgentMessageConsumptionItemResource.listByAgentMessageModelIds(

@@ -5,6 +5,7 @@ import { fn } from "storybook/test";
 import {
   cn,
   InfoCircle,
+  INPUT_SIZES,
   SearchInput,
   SearchInputWithPopover,
 } from "../index_with_tw_base";
@@ -50,6 +51,24 @@ const meta = {
       description: "Additional CSS classes",
       control: "text",
     },
+    variant: {
+      description:
+        "Field chrome: default draws the form border, borderless drops border and fill",
+      control: "select",
+      options: ["default", "borderless"],
+    },
+    size: {
+      description:
+        "Field height, same scale as Input (xs 24px, sm 32px, md 40px)",
+      control: "select",
+      options: INPUT_SIZES,
+    },
+    iconPosition: {
+      description:
+        "Search icon placement: right shares the trailing slot with clear/spinner, left uses the leading icon slot",
+      control: "select",
+      options: ["left", "right"],
+    },
     onChange: {
       description: "Callback when input value changes",
       action: "changed",
@@ -92,6 +111,70 @@ export const Default: Story = {
           args.onChange?.(newValue);
         }}
       />
+    );
+  },
+};
+
+/**
+ * `iconPosition="left"` moves the search icon into the field's leading slot.
+ * The trailing slot then only shows the clear button once there is a value,
+ * or the spinner while `isLoading`.
+ * @summary Search field with a leading icon.
+ */
+export const LeadingIcon: Story = {
+  args: {
+    name: "search",
+    placeholder: "Search…",
+    value: "",
+    iconPosition: "left",
+    onChange: fn(),
+  },
+  render: (args) => {
+    const [value, setValue] = React.useState(args.value);
+
+    return (
+      <SearchInput
+        {...args}
+        value={value}
+        onChange={(newValue) => {
+          setValue(newValue);
+          args.onChange?.(newValue);
+        }}
+      />
+    );
+  },
+};
+
+/**
+ * `variant="borderless"` drops the field border and fill so the surrounding
+ * surface frames the search — the pattern used by the command palette, where
+ * a 40px field sits at the top of a dialog with a leading search icon.
+ * @summary Borderless search field on a surface.
+ */
+export const Borderless: Story = {
+  args: {
+    name: "search",
+    placeholder: "Search…",
+    value: "",
+    size: "md",
+    variant: "borderless",
+    iconPosition: "left",
+    onChange: fn(),
+  },
+  render: (args) => {
+    const [value, setValue] = React.useState(args.value);
+
+    return (
+      <div className="w-96 rounded-2xl bg-background p-3 shadow-xl">
+        <SearchInput
+          {...args}
+          value={value}
+          onChange={(newValue) => {
+            setValue(newValue);
+            args.onChange?.(newValue);
+          }}
+        />
+      </div>
     );
   },
 };

@@ -13,10 +13,9 @@ import uniq from "lodash/uniq";
 import type { Transaction } from "sequelize";
 
 /**
- * Check if a user can access a conversation based on space permissions.
- * Returns true if the user has read access to all required spaces.
+ * Get a user's access to a conversation, as computed by `ConversationResource.canAccess`.
  */
-export async function canUserAccessConversation(
+export async function getUserConversationAccess(
   auth: Authenticator,
   {
     userId,
