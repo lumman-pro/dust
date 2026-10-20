@@ -3,6 +3,8 @@ import { trustedFetch } from "@app/lib/egress/server";
 import type { PokeRole } from "@app/lib/poke/roles";
 import { mapAccessGroupNamesToPokeRoles } from "@app/lib/poke/roles";
 import logger from "@app/logger/logger";
+import type { Result } from "@app/types/shared/result";
+import { Err, Ok } from "@app/types/shared/result";
 import { normalizeError } from "@app/types/shared/utils/error_utils";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { z } from "zod";
@@ -128,12 +130,16 @@ export async function verifyCloudflareAccessJwt(
   }
 }
 
+/**
+ * Errors when Cloudflare Access cannot tell the user's groups (request failure or a payload
+ * without groups), so callers can tell "no role" apart from "roles unknown".
+ */
 export async function getPokeRolesForUserViaCloudflareAccess(
   accessToken: string
-): Promise<PokeRole[]> {
+): Promise<Result<PokeRole[], Error>> {
   const accessConfig = getCloudflareAccessConfig();
   if (!accessConfig) {
-    return [];
+    return new Ok([]);
   }
   const response = await trustedFetch(
     `${accessConfig.teamDomain}/cdn-cgi/access/get-identity`,
@@ -146,8 +152,6 @@ export async function getPokeRolesForUserViaCloudflareAccess(
 
   if (response.ok) {
     const data = await response.json();
-    // Roles only gate plugins: an identity without groups (e.g. IdP not sending them) must not
-    // fail poke authentication, it grants no role.
     const parsedData = CloudFlareIdentityResponseSchema.safeParse(data);
     if (!parsedData.success) {
       logger.error(
@@ -158,18 +162,22 @@ export async function getPokeRolesForUserViaCloudflareAccess(
         },
         "[poke] Cloudflare Access get-identity response is invalid"
       );
-      return [];
+      return new Err(
+        new Error("Cloudflare Access get-identity response is invalid.")
+      );
     }
 
-    return mapAccessGroupNamesToPokeRoles(
-      parsedData.data.groups.map((group) => group.name)
+    return new Ok(
+      mapAccessGroupNamesToPokeRoles(
+        parsedData.data.groups.map((group) => group.name)
+      )
     );
   } else {
     logger.error("cloudflare access get-identity request failed", {
       status: response.status,
       statusText: response.statusText,
     });
-    return [];
+    return new Err(new Error("Cloudflare Access get-identity request failed."));
   }
 }
 

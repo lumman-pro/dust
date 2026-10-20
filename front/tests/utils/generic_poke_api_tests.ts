@@ -1,6 +1,7 @@
 import { ALL_ROLES } from "@app/lib/poke/roles";
 import type { TestWorkspacePlan } from "@app/tests/utils/WorkspaceFactory";
 import type { MembershipRoleType } from "@app/types/memberships";
+import { Ok } from "@app/types/shared/result";
 import type { WorkspaceType } from "@app/types/user";
 import type { RequestMethod } from "node-mocks-http";
 import { vi } from "vitest";
@@ -78,12 +79,14 @@ export const createPokeApiMockRequest = async ({
       sub: "test-cf-access-sub",
     });
     vi.mocked(getPokeRolesForUserViaCloudflareAccess).mockResolvedValue(
-      ALL_ROLES
+      new Ok(ALL_ROLES)
     );
   } else {
     vi.mocked(resolveCloudflareAccessToken).mockReturnValue(undefined);
     vi.mocked(verifyCloudflareAccessJwt).mockResolvedValue(null);
-    vi.mocked(getPokeRolesForUserViaCloudflareAccess).mockResolvedValue([]);
+    vi.mocked(getPokeRolesForUserViaCloudflareAccess).mockResolvedValue(
+      new Ok([])
+    );
   }
 
   return result;

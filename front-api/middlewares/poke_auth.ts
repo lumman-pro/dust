@@ -77,9 +77,13 @@ export const pokeAuth = createMiddleware<PokeCtx>(async (ctx, next) => {
       "[Poke Auth] User logged in Poke via Cloudflare Access token"
     );
 
-    const pokeRoles = await getPokeRolesForUserViaCloudflareAccess(accessToken);
+    const pokeRolesRes =
+      await getPokeRolesForUserViaCloudflareAccess(accessToken);
     ctx.set("auth", auth);
-    ctx.set("pokeRoles", pokeRoles);
+    // Roles only gate plugins: when Cloudflare Access cannot tell the groups, grant no role
+    // rather than failing poke authentication.
+    ctx.set("pokeRoles", pokeRolesRes.isOk() ? pokeRolesRes.value : []);
+    ctx.set("pokeRolesUnavailable", pokeRolesRes.isErr());
     await next();
     return;
   } else if (!accessToken) {
@@ -111,6 +115,7 @@ export const pokeAuth = createMiddleware<PokeCtx>(async (ctx, next) => {
 
         ctx.set("auth", auth);
         ctx.set("pokeRoles", ALL_ROLES);
+        ctx.set("pokeRolesUnavailable", false);
         await next();
         return;
       } else {

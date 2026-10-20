@@ -10,7 +10,14 @@ import { compareStrings } from "@app/lib/i18n/format";
 import { usePublishCurrentPagePlugins } from "@app/poke/swr/currentPagePlugins";
 import { usePokeListPluginForResourceType } from "@app/poke/swr/plugins";
 import type { PluginResourceTarget } from "@app/types/poke/plugins";
-import { Button, cn, Input, Tooltip } from "@dust-tt/sparkle";
+import {
+  AlertCircle,
+  Button,
+  ContentMessage,
+  cn,
+  Input,
+  Tooltip,
+} from "@dust-tt/sparkle";
 import { useMemo, useState } from "react";
 
 interface PluginCardProps {
@@ -38,7 +45,7 @@ interface PluginListProps {
 }
 
 export function PluginList({ pluginResourceTarget }: PluginListProps) {
-  const { plugins } = usePokeListPluginForResourceType({
+  const { plugins, pokeRolesUnavailable } = usePokeListPluginForResourceType({
     pluginResourceTarget,
   });
   const [selectedPlugin, setSelectedPlugin] = useState<PluginListItem | null>(
@@ -96,6 +103,19 @@ export function PluginList({ pluginResourceTarget }: PluginListProps) {
       <div className="flex flex-1 flex-col">
         {!showRuns ? (
           <div className="flex flex-1 flex-col">
+            {pokeRolesUnavailable && (
+              <div className="px-4 pt-4">
+                <ContentMessage
+                  title="Couldn't load your poke roles"
+                  variant="warning"
+                  icon={AlertCircle}
+                  size="lg"
+                >
+                  Cloudflare Access did not return your groups, so plugins that
+                  require a role are hidden.
+                </ContentMessage>
+              </div>
+            )}
             {filteredPlugins.length === 0 ? (
               <div className="flex min-h-32 flex-1 items-center justify-center px-4 py-8 text-center text-sm text-muted-foreground">
                 {searchQuery.trim() ? (

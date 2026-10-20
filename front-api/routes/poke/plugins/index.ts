@@ -75,7 +75,10 @@ app.get(
         readonly: p.manifest.readonly,
       }));
 
-    return ctx.json({ plugins: pluginList });
+    return ctx.json({
+      plugins: pluginList,
+      pokeRolesUnavailable: ctx.get("pokeRolesUnavailable"),
+    });
   }
 );
 

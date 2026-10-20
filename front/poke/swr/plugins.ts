@@ -48,6 +48,7 @@ export function usePokeListPluginForResourceType({
 
   return {
     plugins: data?.plugins ?? emptyArray(),
+    pokeRolesUnavailable: data?.pokeRolesUnavailable ?? false,
     isLoading: !error && !data && !disabled,
     isError: error,
   };

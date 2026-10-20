@@ -28,6 +28,8 @@ export type PokeCtx = {
   Variables: {
     auth: Authenticator;
     pokeRoles: PokeRole[];
+    // True when Cloudflare Access could not tell the user's groups: `pokeRoles` is then empty.
+    pokeRolesUnavailable: boolean;
   };
 };
 
