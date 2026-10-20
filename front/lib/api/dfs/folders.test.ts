@@ -143,6 +143,59 @@ describe("getOrCreatePodFolder", () => {
     ).toBe("Q3/Q4 plan");
   });
 
+  it("gives a restricted pod's groups read and write access to its folder", async () => {
+    const { authenticator, workspace, user } = await createResourceTest({});
+    const { transport, context } = setup();
+    const pod = await SpaceFactory.project(workspace);
+    const groups = await pod.fetchGrantReferences();
+
+    const res = await getOrCreatePodFolder(authenticator, context, pod, {
+      user,
+    });
+
+    expect(res.isOk()).toBe(true);
+    // The pod's member and editor groups.
+    expect(groups).toHaveLength(2);
+    expect(transport.calls.at(-1)?.request).toEqual({
+      objectId: { value: Buffer.from(res.isOk() ? res.value : "", "hex") },
+      changes: groups.map((group) => ({
+        grant: { allow: { subject: `g:${group.groupSId}`, mode: 6 } },
+        remove: false,
+      })),
+    });
+  });
+
+  it("lets every workspace member read an open pod's folder, and only its groups write it", async () => {
+    const { authenticator, workspace, user, globalGroup } =
+      await createResourceTest({});
+    const { transport, context } = setup();
+    const pod = await SpaceFactory.project(workspace);
+    await SpaceFactory.attachGroup(pod, globalGroup, "project_viewer");
+    const groups = await pod.fetchGrantReferences();
+
+    const res = await getOrCreatePodFolder(authenticator, context, pod, {
+      user,
+    });
+
+    expect(res.isOk()).toBe(true);
+    const changes = transport.calls.at(-1)?.request.changes;
+    expect(changes).toEqual(
+      groups.map((group) => ({
+        grant: {
+          allow: {
+            subject: `g:${group.groupSId}`,
+            mode: group.groupId === globalGroup.id ? 4 : 6,
+          },
+        },
+        remove: false,
+      }))
+    );
+    expect(changes).toContainEqual({
+      grant: { allow: { subject: `g:${globalGroup.sId}`, mode: 4 } },
+      remove: false,
+    });
+  });
+
   it("uses the first editor of the pod when no user is given", async () => {
     const { authenticator, workspace } = await createResourceTest({});
     const { dfs, context } = setup();

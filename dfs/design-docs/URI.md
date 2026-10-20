@@ -168,6 +168,13 @@ create dfs://<userSId>--<user-folder-id>/.conversations/conv-<conversationSId>
 - **Access:** creating these folders requires a session with `w` on their parent folder. User and
   agent sessions only receive grants on the context folders they work in. Each context folder is
   where that context's grants attach: sharing a pod means granting access on its folder.
+  A pod folder gets an ALLOW for each group of the pod, mirroring the pod's access: `rw` for its
+  members and editors, `r` for the workspace global group on an open pod. It has no DENY, so it also
+  inherits its parent's access, i.e. its owner's. Front attaches these grants whenever it has not
+  stored the folder's ID yet, even if the folder already exists, and stores the ID only once they
+  are attached, so a failure in between is repaired by the next call. Changes to a pod's restriction
+  or attached groups are not reflected yet; membership changes need nothing, since grants name
+  groups.
 
 ## Virtual references
 

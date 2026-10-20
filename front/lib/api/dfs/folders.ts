@@ -1,4 +1,7 @@
-import { createUserSubject } from "@app/lib/api/dfs/sessions";
+import {
+  createGroupSubject,
+  createUserSubject,
+} from "@app/lib/api/dfs/sessions";
 import type { Authenticator } from "@app/lib/auth";
 import type { DfsClient } from "@app/lib/dfs/client";
 import type { DfsFileSystem } from "@app/lib/dfs/file_system";
@@ -11,7 +14,7 @@ import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { DfsUserFolderResource } from "@app/lib/resources/dfs_user_folder_resource";
 import { SpaceResource } from "@app/lib/resources/space_resource";
 import { UserResource } from "@app/lib/resources/user_resource";
-import type { DfsObjectId } from "@app/types/dfs";
+import type { DfsGrantUpdate, DfsObjectId } from "@app/types/dfs";
 import { DfsError, isDfsObjectId } from "@app/types/dfs";
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
@@ -131,6 +134,11 @@ export async function getOrCreateUserFolder(
  * The folder of the pod `space`, under the folder of `user`, or of its first editor when no user is
  * given (backfill).
  */
+/**
+ * @cc [owner:fabiencelier,label:security] pod-folder-grants
+ * The pod folder MUST get, for each group of the pod's grants, an ALLOW with `r` for a `reader`
+ * grant and `rw` for any other, mirroring the pod's own access.
+ */
 export async function getOrCreatePodFolder(
   auth: Authenticator,
   context: DfsFolderContext,
@@ -149,7 +157,6 @@ export async function getOrCreatePodFolder(
       new DfsError("invalid_input", `Pod ${space.sId} has no editor.`)
     );
   }
-  // TODO(dfs): grant access to every member of the pod.
   const userFolderId = await getOrCreateUserFolder(auth, context, owner);
   if (userFolderId.isErr()) {
     return userFolderId;
@@ -165,6 +172,15 @@ export async function getOrCreatePodFolder(
   if (folder.isErr()) {
     return folder;
   }
+  // Attached even when the folder already existed, see `pod-folder-grants`.
+  // TODO(dfs): keep the grants in sync when the pod's restriction or attached groups change.
+  const granted = await context.tenantClient.updateGrants({
+    objectId: folder.value.id,
+    changes: await getPodFolderGrants(space),
+  });
+  if (granted.isErr()) {
+    return granted;
+  }
   // A concurrent call may have stored another folder first: return the stored one.
   const stored = await space.setDfsObjectId(auth, folder.value.id);
   if (!stored) {
@@ -173,6 +189,21 @@ export async function getOrCreatePodFolder(
     );
   }
   return new Ok(stored);
+}
+
+async function getPodFolderGrants(
+  space: SpaceResource
+): Promise<DfsGrantUpdate[]> {
+  const references = await space.fetchGrantReferences();
+  return references.map((reference) => ({
+    grant: {
+      type: "allow",
+      subject: createGroupSubject(reference.groupSId),
+      // Only the workspace global group holds a `reader` grant, on open pods.
+      mode: reference.isReader() ? 0o4 : 0o6,
+    },
+    remove: false,
+  }));
 }
 
 async function getFirstEditor(
