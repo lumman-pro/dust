@@ -245,7 +245,7 @@ export async function writeSessionSource(
     case "applied":
       return new Ok("written");
     case "declined":
-      return new Ok("changed");
+      return new Ok(changed.value.reason);
     case "closed":
     case "busy":
     case "unsaved":
