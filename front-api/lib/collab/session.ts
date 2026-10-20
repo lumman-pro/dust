@@ -230,28 +230,28 @@ export async function writeSessionSource(
     agent,
   }: { file: CollabAccess; base: string; source: string; agent?: CollabAgent }
 ): Promise<Result<CollabSourceWriteResult, string>> {
-  const changed = await changeSessionSource(hocuspocus, {
+  const outcome = await applyInTurn(hocuspocus, {
     file,
     agent,
-    change: (current) =>
+    fromCurrent: (current) =>
       current === base
         ? new Ok({ source, value: undefined })
         : new Err("changed" as const),
   });
-  if (changed.isErr()) {
-    return changed;
+  if (outcome.isErr()) {
+    return outcome;
   }
-  switch (changed.value.kind) {
+  switch (outcome.value.kind) {
     case "applied":
       return new Ok("written");
     case "declined":
-      return new Ok(changed.value.reason);
+      return new Ok(outcome.value.reason);
     case "closed":
     case "busy":
     case "unsaved":
-      return new Ok(changed.value.kind);
+      return new Ok(outcome.value.kind);
     default:
-      return assertNever(changed.value);
+      return assertNever(outcome.value);
   }
 }
 
@@ -274,10 +274,10 @@ export async function editSessionSource(
     agent,
   }: { file: CollabAccess; edit: CollabSourceEdit; agent?: CollabAgent }
 ): Promise<Result<CollabSourceEditResult, string>> {
-  const changed = await changeSessionSource(hocuspocus, {
+  const outcome = await applyInTurn(hocuspocus, {
     file,
     agent,
-    change: (
+    fromCurrent: (
       current
     ): Result<{ source: string; value: number }, EditSourceFailure> => {
       const edited = editDocumentSource(current, edit);
@@ -299,14 +299,14 @@ export async function editSessionSource(
       });
     },
   });
-  if (changed.isErr()) {
-    return changed;
+  if (outcome.isErr()) {
+    return outcome;
   }
-  switch (changed.value.kind) {
+  switch (outcome.value.kind) {
     case "applied":
-      return new Ok({ result: "written", replacements: changed.value.value });
+      return new Ok({ result: "written", replacements: outcome.value.value });
     case "declined": {
-      const { reason } = changed.value;
+      const { reason } = outcome.value;
       switch (reason.kind) {
         case "edit_refused":
           return new Ok({
@@ -323,34 +323,39 @@ export async function editSessionSource(
     case "closed":
     case "busy":
     case "unsaved":
-      return new Ok({ result: changed.value.kind });
+      return new Ok({ result: outcome.value.kind });
     default:
-      return assertNever(changed.value);
+      return assertNever(outcome.value);
   }
 }
 
-/** What a change of a session's source came to: `declined` by `change`, changing nothing. */
-type SourceChangeOutcome<T, R> =
+/** What `applyInTurn` did: `declined` by `fromCurrent`, or not reached, changes nothing. */
+type TurnOutcome<T, R> =
   | { kind: "applied"; value: T }
   | { kind: "declined"; reason: R }
   | { kind: "closed" | "busy" | "unsaved" };
 
 /**
- * Applies to `file`'s live document the source `change` makes of its current one, at the
- * document's turn, as `collab-session-source-write` describes.
+ * Changes `file`'s live document in its turn, as `collab-session-source-write` describes:
+ * 1. waits for the document's turn among its writes, edits and comment commands (`busy` after
+ *    `COLLAB_SOURCE_WRITE_WAIT_MS`, then never applied);
+ * 2. checks the document is still open (`closed`) and its saves work (`unsaved`);
+ * 3. reads its current source and asks `fromCurrent` for the new one, or a reason to decline;
+ * 4. applies it in the same synchronous step, so no edit slips in between, tells editors what
+ *    the agent did, and stores the document so the save writes it.
  */
-async function changeSessionSource<T, R>(
+async function applyInTurn<T, R>(
   hocuspocus: Hocuspocus<CollabAccess>,
   {
     file,
     agent,
-    change,
+    fromCurrent,
   }: {
     file: CollabAccess;
     agent?: CollabAgent;
-    change: (current: string) => Result<{ source: string; value: T }, R>;
+    fromCurrent: (current: string) => Result<{ source: string; value: T }, R>;
   }
-): Promise<Result<SourceChangeOutcome<T, R>, string>> {
+): Promise<Result<TurnOutcome<T, R>, string>> {
   if (!file.canWrite) {
     return new Err("The file cannot be written.");
   }
@@ -370,7 +375,7 @@ async function changeSessionSource<T, R>(
   }
 
   let turn: "waiting" | "taken" | "expired" = "waiting";
-  const write = (): Result<SourceChangeOutcome<T, R>, string> => {
+  const write = (): Result<TurnOutcome<T, R>, string> => {
     if (turn === "expired") {
       return new Ok({ kind: "busy" });
     }
@@ -386,11 +391,11 @@ async function changeSessionSource<T, R>(
     if (current.isErr()) {
       return current;
     }
-    const changed = change(current.value);
-    if (changed.isErr()) {
-      return new Ok({ kind: "declined", reason: changed.error });
+    const next = fromCurrent(current.value);
+    if (next.isErr()) {
+      return new Ok({ kind: "declined", reason: next.error });
     }
-    const { source } = changed.value;
+    const { source } = next.value;
 
     // Before the change: Hocuspocus may batch the update, never a stateless message.
     const announced = agent !== undefined && source !== current.value;
@@ -462,7 +467,7 @@ async function changeSessionSource<T, R>(
       lastContext: file,
       lastTransactionOrigin: undefined,
     });
-    return new Ok({ kind: "applied", value: changed.value.value });
+    return new Ok({ kind: "applied", value: next.value.value });
   };
 
   // A comment command builds the threads across an await: the write takes its turn among them, so
