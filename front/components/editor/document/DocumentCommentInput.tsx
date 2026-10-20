@@ -11,6 +11,7 @@ import { ArrowUp, Button, cn, Edit04, Tooltip } from "@dust-tt/sparkle";
 import { useLingui } from "@lingui/react/macro";
 import type { Editor, Extensions } from "@tiptap/core";
 import { useEditor } from "@tiptap/react";
+import type { MutableRefObject } from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 interface DocumentCommentInputProps {
@@ -25,6 +26,10 @@ interface DocumentCommentInputProps {
   onCancel?: () => void;
   /** Told whether the field holds content, each time that changes. */
   onFilledChange?: (filled: boolean) => void;
+  /** The Markdown the field holds when it mounts, such as a message being edited. */
+  initialBody?: string;
+  /** Set to the field's submit, for a host that shows its own button in place of Send. */
+  submitHandleRef?: MutableRefObject<(() => void) | null>;
   author?: DfmAuthor;
   renderAuthorAvatar: DocumentProps["renderCommentAuthorAvatar"];
   /** Focuses the field while true, once it is visible. */
@@ -39,7 +44,7 @@ interface DocumentCommentInputProps {
 const NO_EXTENSIONS: Extensions = [];
 
 /** Text, a mention or a code block: line breaks and empty blocks alone are blank. */
-export const hasContent = (editor: Editor | null) => {
+const hasContent = (editor: Editor | null) => {
   let found = false;
   editor?.state.doc.descendants((node) => {
     found ||= node.isText
@@ -56,7 +61,7 @@ export const hasContent = (editor: Editor | null) => {
  * active and the host's list for it is on the page. An active suggestion with nothing to list
  * shows nothing.
  */
-export const hasOpenSuggestionList = (editor: Editor | null) =>
+const hasOpenSuggestionList = (editor: Editor | null) =>
   !!editor &&
   editor.view.dom.ownerDocument.querySelector("[data-suggestion-list]") !==
     null &&
@@ -123,6 +128,8 @@ export const DocumentCommentInput = ({
   onSubmit,
   onCancel,
   onFilledChange,
+  initialBody,
+  submitHandleRef,
   author,
   renderAuthorAvatar,
   autoFocus = false,
@@ -148,6 +155,10 @@ export const DocumentCommentInput = ({
       suggestionLabel: t`Suggested change`,
       hostExtensions: extensions,
       onSubmit: submitRef,
+    }),
+    ...(initialBody !== undefined && {
+      content: initialBody,
+      contentType: "markdown" as const,
     }),
     editorProps: {
       attributes: {
@@ -220,6 +231,9 @@ export const DocumentCommentInput = ({
     submitRef.current = () => {
       void submit();
     };
+    if (submitHandleRef) {
+      submitHandleRef.current = submitRef.current;
+    }
   });
 
   const suggest = () => {
@@ -312,16 +326,18 @@ export const DocumentCommentInput = ({
               }
             />
           )}
-          <Button
-            variant="highlight"
-            size="xs"
-            isRounded
-            icon={ArrowUp}
-            aria-label={pending ? t`Sending` : t`Send`}
-            isLoading={pending}
-            disabled={!filled}
-            onClick={() => void submit()}
-          />
+          {!submitHandleRef && (
+            <Button
+              variant="highlight"
+              size="xs"
+              isRounded
+              icon={ArrowUp}
+              aria-label={pending ? t`Sending` : t`Send`}
+              isLoading={pending}
+              disabled={!filled}
+              onClick={() => void submit()}
+            />
+          )}
         </div>
       </div>
       {error && (

@@ -98,7 +98,6 @@ const UNSUGGESTABLE_MESSAGE = msg`Suggestions can only replace text within one p
 const UNAPPLICABLE_MESSAGE = msg`This suggestion can't replace the commented text. Another comment may cover part of it.`;
 const DELETED_MESSAGE = msg`This comment was deleted.`;
 const THREAD_CHANGED_MESSAGE = msg`This thread changed while sending. Send again.`;
-const EDIT_THREAD_CHANGED_MESSAGE = msg`Someone replied, so this message can no longer be edited.`;
 
 const ED25519_BASE64URL_SIGNATURE_PLACEHOLDER = "A".repeat(86);
 
@@ -462,64 +461,46 @@ export const useDocumentComments = ({
     );
 
   /**
-   * Refuses a new message to `thread`, or a new thread `commentId`, before anyone writes it: when
-   * the codec could not write it, or the document would no longer save with it. A message the
-   * server writes is checked with a full-length signature.
+   * Refuses a new message to `thread`, a new thread `commentId`, or with `replacesLast` a message
+   * in place of `thread`'s last one, before anyone writes it: when the codec could not write it,
+   * or the document would no longer save with it. A message the server writes is checked with a
+   * full-length signature.
    */
-  const checkNewMessage = (
+  const checkMessage = (
     editor: Editor,
     writer: DfmAuthor,
     commentId: string,
     thread: DfmComment | undefined,
-    body: string
+    body: string,
+    replacesLast = false
   ): Result<void, string> => {
     const message = {
       ...localMessage(writer, body),
       signature: ED25519_BASE64URL_SIGNATURE_PLACEHOLDER,
     };
-    const added = withMessage(commentId, thread, message);
-    if (!isWritableThread(added)) {
+    const written =
+      replacesLast && thread
+        ? { ...thread, messages: [...thread.messages.slice(0, -1), message] }
+        : withMessage(commentId, thread, message);
+    if (!isWritableThread(written)) {
       return new Err(t(UNSAVABLE_MESSAGE));
     }
-    const next = previewDocument(editor, (chain) =>
-      thread
-        ? chain.replyToComment(commentId, message)
-        : chain.addComment(added)
-    );
+    const next = previewDocument(editor, (chain) => {
+      if (!thread) {
+        return chain.addComment(written);
+      }
+      return replacesLast
+        ? chain.setCommentThreads(
+            getDocumentComments(editor.state.doc).map((comment) =>
+              comment.id === commentId ? written : comment
+            )
+          )
+        : chain.replyToComment(commentId, message);
+    });
     if (!next) {
       return new Err(t(thread ? DELETED_MESSAGE : UNANCHORED_MESSAGE));
     }
     return wouldSave(next) ? new Ok(undefined) : new Err(t(UNSAVABLE_MESSAGE));
-  };
-
-  /** Refuses an edit of `thread`'s last message before anyone writes it, as `checkNewMessage`. */
-  const checkEditedMessage = (
-    editor: Editor,
-    writer: DfmAuthor,
-    thread: DfmComment,
-    body: string
-  ): Result<void, string> => {
-    const message = {
-      ...localMessage(writer, body),
-      signature: ED25519_BASE64URL_SIGNATURE_PLACEHOLDER,
-    };
-    const edited = {
-      ...thread,
-      messages: [...thread.messages.slice(0, -1), message],
-    };
-    if (!isWritableThread(edited)) {
-      return new Err(t(UNSAVABLE_MESSAGE));
-    }
-    const next = previewDocument(editor, (chain) =>
-      chain.setCommentThreads(
-        getDocumentComments(editor.state.doc).map((comment) =>
-          comment.id === thread.id ? edited : comment
-        )
-      )
-    );
-    return next && wouldSave(next)
-      ? new Ok(undefined)
-      : new Err(t(UNSAVABLE_MESSAGE));
   };
 
   const sessionCommands = (
@@ -570,22 +551,13 @@ export const useDocumentComments = ({
           body,
         }),
       // The session refuses the edit once a reply follows the message.
-      edit: async (thread, body) => {
-        const sent = await channel.send({
+      edit: (thread, body) =>
+        sendForReason({
           type: "edit",
           commentId: thread.id,
           position: thread.messages.length - 1,
           body,
-        });
-        if (sent.isErr()) {
-          return new Err(
-            sent.error === "thread_changed"
-              ? t(EDIT_THREAD_CHANGED_MESSAGE)
-              : liveErrorMessage(sent.error)
-          );
-        }
-        return new Ok(undefined);
-      },
+        }),
       setResolved: (id, resolved) =>
         sendForReason({ type: "resolve", commentId: id, resolved }),
       // A thread already gone is what a delete asks for.
@@ -776,7 +748,7 @@ export const useDocumentComments = ({
         return new Err(t(UNAVAILABLE_MESSAGE));
       }
       const id = uuidv4();
-      const checked = checkNewMessage(editor, author, id, undefined, body);
+      const checked = checkMessage(editor, author, id, undefined, body);
       if (checked.isErr()) {
         return checked;
       }
@@ -799,7 +771,7 @@ export const useDocumentComments = ({
       if (!canWrite || !editor || !author || !live || !thread) {
         return new Err(t(UNAVAILABLE_MESSAGE));
       }
-      const checked = checkNewMessage(editor, author, id, thread, body);
+      const checked = checkMessage(editor, author, id, thread, body);
       if (checked.isErr()) {
         return checked;
       }
@@ -812,9 +784,9 @@ export const useDocumentComments = ({
         return new Err(t(UNAVAILABLE_MESSAGE));
       }
       if (!isEditableMessage(author, thread, thread.messages.length - 1)) {
-        return new Err(t(EDIT_THREAD_CHANGED_MESSAGE));
+        return new Err(t(THREAD_CHANGED_MESSAGE));
       }
-      const checked = checkEditedMessage(editor, author, thread, body);
+      const checked = checkMessage(editor, author, id, thread, body, true);
       if (checked.isErr()) {
         return checked;
       }

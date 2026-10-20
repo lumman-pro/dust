@@ -101,14 +101,6 @@ msgid "Deletes the text."
 msgstr ""
 
 #: front/components/editor/document/DocumentCommentThread.tsx
-msgid "Edit comment…"
-msgstr ""
-
-#: front/components/editor/document/DocumentCommentThread.tsx
-msgid "Edit comment"
-msgstr ""
-
-#: front/components/editor/document/DocumentCommentThread.tsx
 msgid "New comment"
 msgstr ""
 
@@ -144,6 +136,14 @@ msgstr ""
 #. placeholder {0}: replies.length
 #: front/components/editor/document/DocumentCommentThread.tsx
 msgid "{0, plural, one {# reply} other {# replies}}"
+msgstr ""
+
+#: front/components/editor/document/DocumentCommentThread.tsx
+msgid "Edit comment"
+msgstr ""
+
+#: front/components/editor/document/DocumentCommentThread.tsx
+msgid "Edit comment…"
 msgstr ""
 
 #: front/components/editor/document/DocumentCommentThread.tsx
@@ -531,10 +531,6 @@ msgstr ""
 
 #: front/components/editor/document/useDocumentComments.ts
 msgid "This thread changed while sending. Send again."
-msgstr ""
-
-#: front/components/editor/document/useDocumentComments.ts
-msgid "Someone replied, so this message can no longer be edited."
 msgstr ""
 
 #: front/components/editor/document/useDocumentComments.ts

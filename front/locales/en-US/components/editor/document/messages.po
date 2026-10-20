@@ -101,14 +101,6 @@ msgid "Deletes the text."
 msgstr "Deletes the text."
 
 #: front/components/editor/document/DocumentCommentThread.tsx
-msgid "Edit comment…"
-msgstr "Edit comment…"
-
-#: front/components/editor/document/DocumentCommentThread.tsx
-msgid "Edit comment"
-msgstr "Edit comment"
-
-#: front/components/editor/document/DocumentCommentThread.tsx
 msgid "New comment"
 msgstr "New comment"
 
@@ -145,6 +137,14 @@ msgstr "Delete"
 #: front/components/editor/document/DocumentCommentThread.tsx
 msgid "{0, plural, one {# reply} other {# replies}}"
 msgstr "{0, plural, one {# reply} other {# replies}}"
+
+#: front/components/editor/document/DocumentCommentThread.tsx
+msgid "Edit comment"
+msgstr "Edit comment"
+
+#: front/components/editor/document/DocumentCommentThread.tsx
+msgid "Edit comment…"
+msgstr "Edit comment…"
 
 #: front/components/editor/document/DocumentCommentThread.tsx
 msgid "Save"
@@ -532,10 +532,6 @@ msgstr "This comment was deleted."
 #: front/components/editor/document/useDocumentComments.ts
 msgid "This thread changed while sending. Send again."
 msgstr "This thread changed while sending. Send again."
-
-#: front/components/editor/document/useDocumentComments.ts
-msgid "Someone replied, so this message can no longer be edited."
-msgstr "Someone replied, so this message can no longer be edited."
 
 #: front/components/editor/document/useDocumentComments.ts
 msgid "This text is too long or complex to suggest a change to."

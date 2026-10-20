@@ -101,14 +101,6 @@ msgid "Deletes the text."
 msgstr "Löscht den Text."
 
 #: front/components/editor/document/DocumentCommentThread.tsx
-msgid "Edit comment…"
-msgstr "Kommentar bearbeiten…"
-
-#: front/components/editor/document/DocumentCommentThread.tsx
-msgid "Edit comment"
-msgstr "Kommentar bearbeiten"
-
-#: front/components/editor/document/DocumentCommentThread.tsx
 msgid "New comment"
 msgstr "Neuer Kommentar"
 
@@ -145,6 +137,14 @@ msgstr "Löschen"
 #: front/components/editor/document/DocumentCommentThread.tsx
 msgid "{0, plural, one {# reply} other {# replies}}"
 msgstr "{0, plural, one {# Antwort} other {# Antworten}}"
+
+#: front/components/editor/document/DocumentCommentThread.tsx
+msgid "Edit comment"
+msgstr "Kommentar bearbeiten"
+
+#: front/components/editor/document/DocumentCommentThread.tsx
+msgid "Edit comment…"
+msgstr "Kommentar bearbeiten…"
 
 #: front/components/editor/document/DocumentCommentThread.tsx
 msgid "Save"
@@ -532,10 +532,6 @@ msgstr "Dieser Kommentar wurde gelöscht."
 #: front/components/editor/document/useDocumentComments.ts
 msgid "This thread changed while sending. Send again."
 msgstr "Diese Diskussion hat sich beim Senden geändert. Senden Sie Ihre Nachricht erneut."
-
-#: front/components/editor/document/useDocumentComments.ts
-msgid "Someone replied, so this message can no longer be edited."
-msgstr "Jemand hat geantwortet, daher kann diese Nachricht nicht mehr bearbeitet werden."
 
 #: front/components/editor/document/useDocumentComments.ts
 msgid "This text is too long or complex to suggest a change to."

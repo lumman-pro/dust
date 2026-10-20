@@ -1,21 +1,13 @@
-import {
-  commentInputExtensions,
-  commentMarkdown,
-} from "@app/components/editor/document/commentInputExtensions";
 import { parseInlineMarkdown } from "@app/components/editor/document/content";
-import {
-  DocumentCommentInput,
-  hasContent,
-  hasOpenSuggestionList,
-} from "@app/components/editor/document/DocumentCommentInput";
+import { DocumentCommentInput } from "@app/components/editor/document/DocumentCommentInput";
 import type { DocumentProps } from "@app/components/editor/document/types";
 import { isEditableMessage } from "@app/components/editor/document/useDocumentComments";
-import { EditorContent } from "@app/components/editor/EditorContent";
 import { formatRelativeTime } from "@app/lib/client/relative_time";
 import { formatDateTime } from "@app/lib/i18n/format";
 import type { DfmAuthor, DfmComment, DfmMessage } from "@app/lib/markdown/dfm";
 import { readMessageSuggestions } from "@app/lib/markdown/dfm";
 import type { Result } from "@app/types/shared/result";
+import { Ok } from "@app/types/shared/result";
 import {
   AlertCircle,
   Button,
@@ -35,16 +27,8 @@ import {
 import { plural } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { Extensions } from "@tiptap/core";
-import { useEditor } from "@tiptap/react";
 import type { ReactNode } from "react";
-import {
-  Fragment,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 
 export type RenderAuthorAvatar = DocumentProps["renderCommentAuthorAvatar"];
 
@@ -285,124 +269,6 @@ const MessageBody = ({
   );
 };
 
-interface MessageEdit {
-  /** The index of the message in its thread. */
-  index: number;
-  pending: boolean;
-  /** The field's trimmed Markdown. */
-  body: string;
-  /** Whether the field holds content that would save. */
-  filled: boolean;
-  /** The reason the last save was refused. */
-  error: string | null;
-}
-
-interface MessageEditFieldProps {
-  body: string;
-  pending: boolean;
-  /** The reason the last save was refused. */
-  error: string | null;
-  /**
-   * Told the field's trimmed Markdown, and whether it holds content that would save, each time
-   * its content changes.
-   */
-  onChange: (body: string, filled: boolean) => void;
-  onSave: () => void;
-  onCancel: () => void;
-  extensions?: Extensions;
-}
-
-const NO_EXTENSIONS: Extensions = [];
-
-/** The message's text in a comment field, in place of its body while editing it. */
-const MessageEditField = ({
-  body,
-  pending,
-  error,
-  onChange,
-  onSave,
-  onCancel,
-  extensions = NO_EXTENSIONS,
-}: MessageEditFieldProps) => {
-  const { t } = useLingui();
-  const saveRef = useRef(onSave);
-  const escapeClosesListRef = useRef(false);
-  useLayoutEffect(() => {
-    saveRef.current = onSave;
-  });
-
-  // Captured at mount, as in the comment input.
-  const [options] = useState(() => ({
-    extensions: commentInputExtensions({
-      placeholder: t`Edit comment…`,
-      suggestionLabel: t`Suggested change`,
-      hostExtensions: extensions,
-      onSubmit: saveRef,
-    }),
-    content: body,
-    contentType: "markdown" as const,
-    editorProps: {
-      attributes: {
-        role: "textbox",
-        "aria-label": t`Edit comment`,
-        "aria-multiline": "true",
-        class:
-          "max-h-60 min-h-6 overflow-y-auto py-0.5 text-sm leading-5 wrap-anywhere outline-none",
-      },
-    },
-  }));
-  const editor = useEditor({
-    ...options,
-    immediatelyRender: false,
-    onUpdate: ({ editor }) =>
-      onChange(commentMarkdown(editor), hasContent(editor)),
-  });
-
-  useEffect(() => {
-    editor?.commands.focus("end");
-  }, [editor]);
-
-  useLayoutEffect(() => {
-    if (editor && !editor.isDestroyed) {
-      editor.setEditable(!pending, false);
-      editor.view.dom.setAttribute("aria-busy", String(pending));
-    }
-  }, [editor, pending]);
-
-  return (
-    <div
-      role="group"
-      className={cn(COMMENT_FIELD_CLASS, "mt-1")}
-      onClick={(event) => event.stopPropagation()}
-      onKeyDownCapture={(event) => {
-        escapeClosesListRef.current =
-          event.key === "Escape" && hasOpenSuggestionList(editor);
-      }}
-      onKeyDown={(event) => {
-        if (event.key !== "Escape") {
-          return;
-        }
-        event.stopPropagation();
-        if (
-          !pending &&
-          !escapeClosesListRef.current &&
-          !event.nativeEvent.isComposing
-        ) {
-          event.preventDefault();
-          onCancel();
-        }
-      }}
-    >
-      <EditorContent editor={editor} />
-      {error && (
-        <p role="alert" className="pb-1 text-xs text-warning-500">
-          {error}
-        </p>
-      )}
-    </div>
-  );
-};
-
 interface DocumentCommentDraftCardProps {
   onSubmit: (body: string) => Promise<Result<void, string>>;
   onCancel: () => void;
@@ -620,14 +486,12 @@ interface DocumentCommentThreadProps {
 /**
  * @cc [owner:louisjc,label:product;react] document-comment-edit-own-message
  * Edit MUST be offered only when canWrite and the message is editable
- * (`document-comment-editable-message`). While a message is edited, its text MUST show in an
- * editable field in place of its body, and a Save button MUST replace its Resolve and actions
- * menu. Save MUST send the field's trimmed Markdown to onEdit, unless it is unchanged, which
- * stops editing without sending, or holds no content, which disables Save. While a save is
- * pending, the field MUST NOT change and Save MUST show progress; an accepted save MUST stop
- * editing, and a refused one MUST keep the field with the reason. Escape in the field MUST stop
- * editing without reaching the thread, unless a save is pending or it closes a shown mention
- * list.
+ * (`document-comment-editable-message`). While a message is edited, a comment field
+ * (`document-comment-input`) holding its text MUST show in place of its body, and a Save button
+ * MUST replace the message's Resolve and actions menu. Save MUST submit the field, show progress
+ * while the save is pending, and be disabled while the field holds no content. Saving MUST send
+ * the field's Markdown to onEdit unless it is unchanged. An accepted or unchanged save, or Escape
+ * with the field's onCancel, MUST stop editing; a refused one MUST keep the field with the reason.
  */
 export const DocumentCommentThread = ({
   comment,
@@ -659,37 +523,41 @@ export const DocumentCommentThread = ({
   const authorName = first.author.name;
   const folded = variant === "list" && !active;
   /** The index of the message being edited, if any. */
-  const [editing, setEditing] = useState<MessageEdit | null>(null);
-  const saveEdit = async () => {
-    if (!editing || editing.pending || !editing.filled) {
-      return;
-    }
-    if (editing.body === comment.messages[editing.index]?.body) {
+  const [editing, setEditing] = useState<{
+    index: number;
+    filled: boolean;
+    saving: boolean;
+  } | null>(null);
+  const saveEditRef = useRef<(() => void) | null>(null);
+  const saveEdit = async (previous: string, body: string) => {
+    if (body === previous) {
       setEditing(null);
-      return;
+      return new Ok(undefined);
     }
-    setEditing({ ...editing, pending: true, error: null });
-    const done = await onEdit(editing.body);
+    setEditing((current) => current && { ...current, saving: true });
+    const edited = await onEdit(body);
     setEditing((current) =>
-      done.isOk() || !current
-        ? null
-        : { ...current, pending: false, error: done.error }
+      edited.isOk() ? null : current && { ...current, saving: false }
     );
+    return edited;
   };
   const renderMessageBody = (message: DfmMessage, index: number) =>
     editing?.index === index ? (
-      <MessageEditField
-        body={message.body}
-        pending={editing.pending}
-        error={editing.error}
-        onChange={(body, filled) =>
-          setEditing(
-            (current) => current && { ...current, body, filled, error: null }
-          )
-        }
-        onSave={() => void saveEdit()}
+      <DocumentCommentInput
+        label={t`Edit comment`}
+        placeholder={t`Edit comment…`}
+        initialBody={message.body}
+        submitHandleRef={saveEditRef}
+        renderAuthorAvatar={renderAuthorAvatar}
+        onSubmit={(body) => saveEdit(message.body, body)}
         onCancel={() => setEditing(null)}
+        onFilledChange={(filled) =>
+          setEditing((current) => current && { ...current, filled })
+        }
+        autoFocus
         extensions={inputExtensions}
+        mountPortalContainer={mountPortalContainer}
+        className={cn(COMMENT_FIELD_CLASS, "mt-1")}
       />
     ) : (
       <MessageBody
@@ -711,11 +579,11 @@ export const DocumentCommentThread = ({
           size="xs"
           variant="ghost"
           label={t`Save`}
-          isLoading={editing.pending}
+          isLoading={editing.saving}
           disabled={!editing.filled}
           onClick={(event) => {
             event.stopPropagation();
-            void saveEdit();
+            saveEditRef.current?.();
           }}
         />
       );
@@ -732,14 +600,7 @@ export const DocumentCommentThread = ({
         onSetResolved={onSetResolved}
         onEdit={
           editable
-            ? () =>
-                setEditing({
-                  index,
-                  body: comment.messages[index].body,
-                  pending: false,
-                  filled: true,
-                  error: null,
-                })
+            ? () => setEditing({ index, filled: true, saving: false })
             : undefined
         }
         onDelete={onDelete}
