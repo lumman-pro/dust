@@ -95,8 +95,13 @@ the files readable through dfs anyway.
 Instead, the popover warns when you add someone who can't read some of the conversation's
 requested spaces: they'll see data from those spaces. Sharing it anyway is the sharer's call.
 
-This is a change from today, where a conversation using a restricted space is never visible to
-people outside that space.
+This is a change for standalone conversations, where today a conversation using a restricted space
+is never visible to people outside that space. But that ship has sailed with Pods: a pod
+conversation is visible to every pod member, whatever spaces its agents read from
+(`requestedSpaceIds` is forced to the pod's space).
+
+In any case, backfilling grants from participants isn't a trapdoor: it only grants people who can
+access the conversation today, and grants can be tightened later if we change our mind.
 
 ## Read path
 
