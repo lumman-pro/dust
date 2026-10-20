@@ -3,6 +3,7 @@ import type {
   GeneratedFunction,
   TestCase,
 } from "@app/tests/frames-public-functions-evals/lib/types";
+import { isString } from "@app/types/shared/utils/general";
 import { z } from "zod";
 
 const ManifestSchema = z.object({
@@ -114,7 +115,7 @@ export function validateGeneratedFrame(
   files: Map<string, string>
 ): AssertionResult {
   const functions = parseGeneratedFunctions(files);
-  if (typeof functions === "string") {
+  if (isString(functions)) {
     return { success: false, error: functions };
   }
 

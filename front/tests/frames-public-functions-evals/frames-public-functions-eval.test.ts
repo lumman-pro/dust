@@ -1,4 +1,5 @@
 import type { Authenticator } from "@app/lib/auth";
+import logger from "@app/logger/logger";
 import { validateGeneratedFrame } from "@app/tests/frames-public-functions-evals/lib/assertions";
 import {
   FILTER_CATEGORY,
@@ -14,31 +15,7 @@ import { executeFramesAuthoring } from "@app/tests/frames-public-functions-evals
 import { evaluateWithJudge } from "@app/tests/frames-public-functions-evals/lib/judge";
 import { filterTestCases } from "@app/tests/frames-public-functions-evals/lib/suite-loader";
 import { allTestSuites } from "@app/tests/frames-public-functions-evals/test-suites";
-import { beforeAll, describe, expect, it, vi } from "vitest";
-
-vi.mock("openai", async (importOriginal) => {
-  const actual = await importOriginal();
-  // @ts-expect-error actual is unknown
-  const OriginalOpenAI = actual.OpenAI;
-  class OpenAIWithBrowserSupport extends OriginalOpenAI {
-    constructor(config: ConstructorParameters<typeof OriginalOpenAI>[0]) {
-      super({ ...config, dangerouslyAllowBrowser: true });
-    }
-  }
-  return { ...(actual as object), OpenAI: OpenAIWithBrowserSupport };
-});
-
-vi.mock("@anthropic-ai/sdk", async (importOriginal) => {
-  const actual = await importOriginal();
-  // @ts-expect-error actual is unknown
-  const OriginalAnthropic = actual.default;
-  class AnthropicWithBrowserSupport extends OriginalAnthropic {
-    constructor(config: ConstructorParameters<typeof OriginalAnthropic>[0]) {
-      super({ ...config, dangerouslyAllowBrowser: true });
-    }
-  }
-  return { ...(actual as object), default: AnthropicWithBrowserSupport };
-});
+import { beforeAll, describe, expect, it } from "vitest";
 
 const testCases = RUN_FRAMES_PUBLIC_FUNCTIONS_EVAL
   ? filterTestCases(allTestSuites, {
@@ -67,8 +44,9 @@ describe.skipIf(!RUN_FRAMES_PUBLIC_FUNCTIONS_EVAL)(
             );
 
             if (VERBOSE) {
-              console.log(
-                `[${testCase.scenarioId}] Response:\n${responseText}`
+              logger.info(
+                { scenarioId: testCase.scenarioId, responseText },
+                "Frames eval response"
               );
             }
 
@@ -86,9 +64,9 @@ describe.skipIf(!RUN_FRAMES_PUBLIC_FUNCTIONS_EVAL)(
             );
 
             if (VERBOSE) {
-              console.log(
-                `[${testCase.scenarioId}] Judge:`,
-                JSON.stringify(judgeResult, null, 2)
+              logger.info(
+                { scenarioId: testCase.scenarioId, judgeResult },
+                "Frames eval judge result"
               );
             }
 
