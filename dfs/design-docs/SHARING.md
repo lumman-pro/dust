@@ -200,12 +200,11 @@ enlarge. Keeping link access would mean making everything readable, so searchabl
 2. **Pod conversations.** Rec: pod membership only. Alt: local grants for outsiders.
 3. **Migration.** Rec: narrow link access to participants. Alt: a temporary patch keeping link
    access (see [Motivation](#motivation)).
-4. **Frames.** Rec: after conversations.
-5. **API-created conversations.** Which folder and owner without a user?
-6. **Sub-conversations.** TBD: nest the folder under the parent's, or handle them in the backfill
+4. **API-created conversations.** Which folder and owner without a user?
+5. **Sub-conversations.** TBD: nest the folder under the parent's, or handle them in the backfill
    by tracing back the user and adding grants.
-7. **Session cache.** Memory or Redis? Session keys are bearer credentials.
-8. **Ownership transfer.** Move the folder under another user?
+6. **Session cache.** Memory or Redis? Session keys are bearer credentials.
+7. **Ownership transfer.** Move the folder under another user?
 
 ## Maybe one day
 
