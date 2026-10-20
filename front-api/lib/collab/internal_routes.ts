@@ -5,6 +5,7 @@ import {
   checkCollabReadAccess,
 } from "@app/lib/api/collab/access";
 import config from "@app/lib/api/config";
+import { EDIT_TOO_LARGE_MESSAGE } from "@app/lib/api/documents/agent_edit_source";
 import { WRITE_CANONICAL_FILE_CONTENT_MAX_BYTES } from "@app/lib/api/files/file_system_ops";
 import { Authenticator } from "@app/lib/auth";
 import { toSessionName } from "@app/types/collab";
@@ -26,7 +27,6 @@ import {
   editSessionSource,
   readSessionSource,
   showAgentActivity,
-  TOO_LARGE_TO_EDIT_LIVE_MESSAGE,
   writeSessionSource,
 } from "@front-api/lib/collab/session";
 import { createHono } from "@front-api/lib/hono";
@@ -60,8 +60,8 @@ function isAuthorized(authorization: string | undefined): boolean {
  * document, readable or not, MUST answer 403 when the request has no user, and a write MUST carry
  * one. A write whose source is larger than `WRITE_CANONICAL_FILE_CONTENT_MAX_BYTES` MUST be refused
  * before it reaches the session, since no save could write it. An edit MUST be checked as a write
- * is, its replacement text in place of the source, and the session refuses an edited source over
- * that size itself (`collab-session-source-edit`).
+ * is, its replacement text in place of the source, answering `edit_refused` with `too_large` as
+ * the session does for an edited source over that size (`collab-session-source-edit`).
  */
 export function createInternalRoutes(hocuspocus: Hocuspocus<CollabAccess>) {
   const app = createHono();
@@ -155,7 +155,7 @@ export function createInternalRoutes(hocuspocus: Hocuspocus<CollabAccess>) {
       ) {
         return ctx.json<CollabSourceWriteResponse>({
           result: "refused",
-          message: TOO_LARGE_TO_EDIT_LIVE_MESSAGE,
+          message: "This document would be too large to edit live.",
         });
       }
 
@@ -193,8 +193,9 @@ export function createInternalRoutes(hocuspocus: Hocuspocus<CollabAccess>) {
         WRITE_CANONICAL_FILE_CONTENT_MAX_BYTES
       ) {
         return ctx.json<CollabSourceEditResponse>({
-          result: "refused",
-          message: TOO_LARGE_TO_EDIT_LIVE_MESSAGE,
+          result: "edit_refused",
+          code: "too_large",
+          message: EDIT_TOO_LARGE_MESSAGE,
         });
       }
 

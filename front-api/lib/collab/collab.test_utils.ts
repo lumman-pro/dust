@@ -6,6 +6,8 @@ import type { DfmComment } from "@app/lib/markdown/dfm";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
 import { BODY_FRAGMENT_NAME } from "@app/types/collab";
 import { Ok } from "@app/types/shared/result";
+import { getSession } from "@front-api/lib/collab/session";
+import type { Hocuspocus } from "@hocuspocus/server";
 import { vi } from "vitest";
 import * as Y from "yjs";
 
@@ -62,4 +64,17 @@ export function saveNextRevision() {
         source: "written",
       })
   );
+}
+
+/** Gives an open document's session a file revision, which the test storage lacks and saves need. */
+export function giveSessionRevision(
+  hocuspocus: Hocuspocus<CollabAccess>,
+  name: string
+) {
+  const document = hocuspocus.documents.get(name);
+  const session = document && getSession(document);
+  if (!session) {
+    throw new Error("The document is not open.");
+  }
+  session.lastSave = { ...session.lastSave, revision: "1" };
 }

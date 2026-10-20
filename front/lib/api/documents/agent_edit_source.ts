@@ -8,12 +8,14 @@ import type {
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
 
-// The codes are defined with the collab server's answers, which carry them.
-export type DfmAgentDocumentErrorCode = CollabEditRefusalCode;
+/** Why an edit is refused when its document would exceed the size a save can write. */
+export const EDIT_TOO_LARGE_MESSAGE =
+  "The edit would make the document too large. Make a smaller change.";
 
 export class DfmAgentDocumentError extends Error {
   constructor(
-    readonly code: DfmAgentDocumentErrorCode,
+    // The codes are defined with the collab server's answers, which carry them.
+    readonly code: CollabEditRefusalCode,
     message: string
   ) {
     super(message);
@@ -99,10 +101,7 @@ function replaceInBody({
     WRITE_CANONICAL_FILE_CONTENT_MAX_BYTES
   ) {
     return new Err(
-      new DfmAgentDocumentError(
-        "too_large",
-        "The edit would make the document too large. Make a smaller change."
-      )
+      new DfmAgentDocumentError("too_large", EDIT_TOO_LARGE_MESSAGE)
     );
   }
 
@@ -193,12 +192,13 @@ export function editDocumentSource(
   if (edited.isErr()) {
     return new Err({ kind: "edit_refused", error: edited.error });
   }
-  const serialized = serializeDfm(edited.value.document);
+  const { document: editedDocument, value } = edited.value;
+  const serialized = serializeDfm(editedDocument);
   if (serialized.isErr()) {
     return new Err({ kind: "failed", message: serialized.error.message });
   }
   return new Ok({
     source: serialized.value,
-    replacements: edited.value.value.replacements,
+    replacements: value.replacements,
   });
 }

@@ -7,7 +7,11 @@ import {
 } from "@app/lib/api/collab/session_file";
 import { replaceYDocContent, yDocToDfm } from "@app/lib/api/collab/ydoc";
 import type { EditSourceFailure } from "@app/lib/api/documents/agent_edit_source";
-import { editDocumentSource } from "@app/lib/api/documents/agent_edit_source";
+import {
+  DfmAgentDocumentError,
+  EDIT_TOO_LARGE_MESSAGE,
+  editDocumentSource,
+} from "@app/lib/api/documents/agent_edit_source";
 import { WRITE_CANONICAL_FILE_CONTENT_MAX_BYTES } from "@app/lib/api/files/file_system_ops";
 import type { DfmComment } from "@app/lib/markdown/dfm";
 import { setTimeoutAsync } from "@app/lib/utils/async_utils";
@@ -108,10 +112,6 @@ const agentEditMessage = (
     agent,
     inserted,
   } satisfies AgentEditMessage);
-
-/** Why front refuses a source no save could write, before or at its turn. */
-export const TOO_LARGE_TO_EDIT_LIVE_MESSAGE =
-  "This document would be too large to edit live.";
 
 const sessions = new WeakMap<Document, CollabSession>();
 const writesStopped = new WeakSet<Hocuspocus<CollabAccess>>();
@@ -261,9 +261,10 @@ export async function writeSessionSource(
  * `closed`, `busy` and `unsaved` answers and announcements, but MUST NOT compare with a `base`:
  * at its turn, the source `readSessionSource` would return MUST be changed with
  * `editDocumentSource`, so changes made since the agent read the document are kept. An edit that
- * does not match that source MUST answer
- * `edit_refused` with its reason, and one whose result the codec refuses, or that would be larger
- * than `WRITE_CANONICAL_FILE_CONTENT_MAX_BYTES`, MUST fail; both change nothing.
+ * does not match that source, or whose result would be larger than
+ * `WRITE_CANONICAL_FILE_CONTENT_MAX_BYTES`, MUST answer `edit_refused` with its reason
+ * (`too_large` for the size), and one whose result the codec refuses MUST fail; both change
+ * nothing.
  */
 export async function editSessionSource(
   hocuspocus: Hocuspocus<CollabAccess>,
@@ -288,8 +289,8 @@ export async function editSessionSource(
         WRITE_CANONICAL_FILE_CONTENT_MAX_BYTES
       ) {
         return new Err({
-          kind: "failed",
-          message: TOO_LARGE_TO_EDIT_LIVE_MESSAGE,
+          kind: "edit_refused",
+          error: new DfmAgentDocumentError("too_large", EDIT_TOO_LARGE_MESSAGE),
         });
       }
       return new Ok({

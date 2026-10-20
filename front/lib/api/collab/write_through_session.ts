@@ -165,6 +165,7 @@ export async function editThroughCollabSession<E extends Error>(
   }
 ): Promise<Result<CollabSessionEdit, CollabSessionWriteError | E>> {
   // Without a session, the read answers at once, before any access check: most edits find none.
+  // With one, it sends the whole source for nothing; a cheaper "is it open" answer would avoid it.
   const live = await readCollabSource(auth, filePath, agent);
   if (live.isErr()) {
     return new Err(

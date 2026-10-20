@@ -15,9 +15,9 @@ import {
   COLLAB_SOURCE_WRITE_PATH,
 } from "@app/types/collab_internal";
 import { Err } from "@app/types/shared/result";
+import { giveSessionRevision } from "@front-api/lib/collab/collab.test_utils";
 import { createCollabHocuspocus } from "@front-api/lib/collab/hocuspocus";
 import { createInternalRoutes } from "@front-api/lib/collab/internal_routes";
-import { getSession } from "@front-api/lib/collab/session";
 import { createHono } from "@front-api/lib/hono";
 import { unhandledErrorHandler } from "@front-api/middlewares/utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -281,13 +281,7 @@ describe("createInternalRoutes", () => {
 
   it("applies an edit to the open document's current source", async () => {
     const { hocuspocus, name, request } = await openNotes();
-    // The test storage has no revisions, which the session needs to save safely.
-    const document = hocuspocus.documents.get(name);
-    const session = document && getSession(document);
-    if (!session) {
-      throw new Error("The document is not open.");
-    }
-    session.lastSave = { ...session.lastSave, revision: "1" };
+    giveSessionRevision(hocuspocus, name);
 
     const response = await post(
       COLLAB_SOURCE_EDIT_PATH,
@@ -340,8 +334,6 @@ describe("createInternalRoutes", () => {
     expect(await response.json()).toMatchObject({
       error: { type: "file_read_only" },
     });
-    vi.restoreAllMocks();
-    vi.spyOn(config, "getCollabServerInternalSecret").mockReturnValue(SECRET);
     const after = await post(
       COLLAB_SOURCE_READ_PATH,
       request,

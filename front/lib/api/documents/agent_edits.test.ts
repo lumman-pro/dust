@@ -1,4 +1,5 @@
 import { Readable } from "node:stream";
+import { editCollabSource, readCollabSource } from "@app/lib/api/collab/client";
 import {
   editAgentDocument,
   readAgentDocument,
@@ -14,6 +15,12 @@ import { parseDfm } from "@app/lib/markdown/dfm";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
 import { Err, Ok } from "@app/types/shared/result";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock(import("@app/lib/api/collab/client"), async (importOriginal) => ({
+  ...(await importOriginal()),
+  editCollabSource: vi.fn(),
+  readCollabSource: vi.fn(),
+}));
 
 vi.mock(
   import("@app/lib/api/files/file_system_ops"),
@@ -65,6 +72,7 @@ describe("readAgentDocument", () => {
       throw fileSystem.error;
     }
     dustFs = fileSystem.value;
+    vi.mocked(readCollabSource).mockResolvedValue(new Ok({ open: false }));
   });
 
   it("returns the full source, anchors and threads included", async () => {
@@ -104,6 +112,50 @@ describe("editAgentDocument", () => {
       throw fileSystem.error;
     }
     dustFs = fileSystem.value;
+    vi.mocked(readCollabSource).mockResolvedValue(new Ok({ open: false }));
+  });
+
+  /** A live session holding the document, which the file system lets the agent write. */
+  function openSession() {
+    vi.mocked(readCollabSource).mockResolvedValueOnce(
+      new Ok({ open: true, source: SOURCE })
+    );
+    vi.spyOn(DustFileSystem.prototype, "checkWriteAccess").mockReturnValue(
+      new Ok(undefined)
+    );
+    vi.spyOn(DustFileSystem.prototype, "stat").mockResolvedValue(
+      new Ok({ contentType: "text/markdown", sizeBytes: SOURCE.length })
+    );
+  }
+
+  it("reports the live session's refusal with the code it sent, writing no file", async () => {
+    openSession();
+    vi.mocked(editCollabSource).mockResolvedValue(
+      new Ok({
+        result: "edit_refused",
+        code: "string_not_found",
+        message: "The text to replace was not found.",
+      })
+    );
+
+    const result = await edit("Ship it", "Ship");
+
+    expect(result.isErr() && result.error.code).toBe("string_not_found");
+    expect(writeCanonicalFileContent).not.toHaveBeenCalled();
+  });
+
+  it("writes the file when the live session closed before applying the edit", async () => {
+    openSession();
+    vi.mocked(editCollabSource).mockResolvedValue(new Ok({ result: "closed" }));
+    vi.mocked(readCanonicalFileContent).mockResolvedValue(stored(SOURCE, "7"));
+    vi.mocked(writeCanonicalFileContent).mockResolvedValue(
+      new Ok({ created: false, revision: "8" })
+    );
+
+    const result = await edit("Ship it", "Ship");
+
+    expect(result.isOk() && result.value.replacements).toBe(1);
+    expect(written(0).revision).toBe("7");
   });
 
   const edit = (oldString: string, newString: string, expected = 1) =>
