@@ -18,8 +18,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  Edit04,
   Icon,
-  Pencil01,
   ReverseLeft,
   Tooltip,
   Trash01,
@@ -386,7 +386,7 @@ const ThreadActions = ({
           >
             {onEdit && (
               <DropdownMenuItem
-                icon={Pencil01}
+                icon={Edit04}
                 label={t`Edit`}
                 disabled={busy}
                 onClick={onEdit}
