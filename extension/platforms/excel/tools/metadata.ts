@@ -32,8 +32,6 @@ const WRITE_WORKBOOK_TOOL_DESCRIPTION = `Writes to the Excel workbook that the u
 
 Each write is an Office.js Excel expression that starts with \`workbook\` and ends with a method that changes the workbook, as in \`... .insert('Down')\`. To change the properties of an object, call \`set(...)\` with the properties as one object, as in \`... .set({ values: [[1, 2]] })\`. An assignment with \`=\` is not allowed. The arguments must be written in the expression: no variable, no computation.
 
-To write a large table, use several writes, one for a group of rows: about 20 rows of 4 columns fit in one expression.
-
 The writes run in the order given, in one sync. A write that fails stops the call, and the writes after it do not run.
 
 Use ${READ_WORKBOOK_TOOL_NAME} to see the sheets, the used range and the current content before a write, and to check the result after it.

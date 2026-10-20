@@ -11,14 +11,17 @@ import { normalizeError } from "@extension/shared/lib/utils";
 
 type WorkbookWrite = { expression: string };
 
+// One write after the checks: the steps of its expression.
+type CheckedWrite = { steps: Step[] };
+
 /**
  * Phase 1, outside Excel.run: parses and checks every write, and gives the steps of each one.
  * Nothing touches Excel yet.
  */
 function parseAndCheckWrites(
   writes: WorkbookWrite[]
-): Result<Step[][], string> {
-  const parsed: Step[][] = [];
+): Result<CheckedWrite[], string> {
+  const checked: CheckedWrite[] = [];
   for (const [index, { expression }] of writes.entries()) {
     const steps = parseExpression(expression);
     if (steps.isErr()) {
@@ -28,9 +31,9 @@ function parseAndCheckWrites(
     if (check.isErr()) {
       return new Err(`Write ${index}: ${check.error}`);
     }
-    parsed.push(steps.value);
+    checked.push({ steps: steps.value });
   }
-  return new Ok(parsed);
+  return new Ok(checked);
 }
 
 /**
@@ -40,9 +43,9 @@ function parseAndCheckWrites(
  */
 function queueWrites(
   workbook: Excel.Workbook,
-  writes: Step[][]
+  checked: CheckedWrite[]
 ): Result<undefined, string> {
-  for (const [index, steps] of writes.entries()) {
+  for (const [index, { steps }] of checked.entries()) {
     const resolved = resolveSteps(workbook, steps);
     if (resolved.isErr()) {
       return new Err(`Write ${index}: ${resolved.error}`);
@@ -56,14 +59,14 @@ export async function writeWorkbookTool({
 }: {
   writes: WorkbookWrite[];
 }): Promise<ToolHandlerResult> {
-  const parsed = parseAndCheckWrites(writes);
-  if (parsed.isErr()) {
-    return new Err(new MCPError(parsed.error));
+  const checked = parseAndCheckWrites(writes);
+  if (checked.isErr()) {
+    return new Err(new MCPError(checked.error));
   }
 
   try {
     const result = await Excel.run(async (context) => {
-      const queued = queueWrites(context.workbook, parsed.value);
+      const queued = queueWrites(context.workbook, checked.value);
       if (queued.isErr()) {
         return new Err(queued.error);
       }
