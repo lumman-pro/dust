@@ -4,14 +4,13 @@ import type { InternalMCPServerNameType } from "@app/lib/actions/mcp_internal_ac
 import {
   AVAILABLE_INTERNAL_MCP_SERVER_NAMES,
   getInternalMCPServerToolDisplayLabels,
+  validateToolInputs,
 } from "@app/lib/actions/mcp_internal_actions/constants";
 import { DEFAULT_REMOTE_MCP_SERVERS } from "@app/lib/actions/mcp_internal_actions/remote_servers";
 import {
   isDataSourceFilesystemFindInputType,
   isGenerateImageInputType,
   isSearchInputTypeWithTags,
-  isWebbrowseInputType,
-  isWebsearchInputType,
 } from "@app/lib/actions/mcp_internal_actions/types";
 import type { ToolDisplayLabels } from "@app/lib/api/mcp";
 import { formatNumber } from "@app/lib/i18n/format";
@@ -135,14 +134,20 @@ function getDynamicToolDisplayLabels({
   switch (internalMCPServerName) {
     case "web_search_&_browse":
     case "http_client":
-      if (toolName === "websearch" && isWebsearchInputType(inputs)) {
+      if (
+        toolName === "websearch" &&
+        validateToolInputs(internalMCPServerName, toolName, inputs)
+      ) {
         const q = truncateQuery(inputs.query);
         return {
           running: `Searching “${q}”`,
           done: `Search “${q}”`,
         };
       }
-      if (toolName === "webbrowser" && isWebbrowseInputType(inputs)) {
+      if (
+        toolName === "webbrowser" &&
+        validateToolInputs(internalMCPServerName, toolName, inputs)
+      ) {
         if (inputs.urls.length === 1) {
           const url = shortenUrl(inputs.urls[0]);
           return {
