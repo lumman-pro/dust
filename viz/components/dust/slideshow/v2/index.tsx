@@ -144,10 +144,11 @@ function getSlideIndex(currentPage: number | string, total: number): number {
  */
 /**
  * @cc [owner:tdraier,label:product] slideshow-controlled-page
- * When `currentPage` is set, a 1-based page number or its string, it MUST alone select the shown
- * slide, clamped to the last slide, an invalid value selecting the first; navigation MUST NOT
- * change the shown slide by itself. Without it, navigation MUST change the shown slide.
- * Navigation to another slide MUST call `onPageChange` with its 1-based page, and nothing else MUST.
+ * In interactive mode, when `currentPage` is set, a 1-based page number or its string, it MUST
+ * alone select the shown slide, clamped to the last slide, an invalid value selecting the first;
+ * navigation MUST NOT change the shown slide by itself. Without it, navigation MUST change the
+ * shown slide. Navigation to another slide MUST call `onPageChange` with its 1-based page, and
+ * nothing else MUST. PDF mode MUST render every slide regardless of `currentPage`.
  */
 export function Slideshow({
   children,
