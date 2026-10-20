@@ -43,7 +43,7 @@ type QuestionLayout = "list" | "yes_no" | "chips";
  * hold, and as the default list otherwise, including when it has no `format` at all (stored before
  * the field existed) or one this client does not know:
  * - `yes_no`: single select with exactly 2 options, as two buttons.
- * - `chips`: no option has a description, as wrapping pills.
+ * - `chips`: no option has a description (a blank one counts as none), as wrapping pills.
  */
 function getQuestionLayout(question: UserQuestion): QuestionLayout {
   switch (question.format) {
@@ -54,7 +54,7 @@ function getQuestionLayout(question: UserQuestion): QuestionLayout {
         ? "yes_no"
         : "list";
     case "chips":
-      return question.options.every((option) => !option.description)
+      return question.options.every((option) => !option.description?.trim())
         ? "chips"
         : "list";
     default:
