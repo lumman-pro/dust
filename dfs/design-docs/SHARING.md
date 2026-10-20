@@ -28,7 +28,8 @@ that we will need to bite the bullet at some point so there is no need for a tem
 
 - In: standalone conversations, the share popover.
 - Out for v1: Frames (they keep their tables), sharing outside the workspace, per-conversation
-  grants in pods (pod conversations follow pod membership), access requests (see [Later](#later)).
+  grants in pods (pod conversations follow pod membership), access requests (see
+  [Maybe one day](#maybe-one-day)).
 
 ## Model
 
@@ -199,50 +200,23 @@ enlarge. Keeping link access would mean making everything readable, so searchabl
 8. **Session cache.** Memory or Redis? Session keys are bearer credentials.
 9. **Ownership transfer.** Move the folder under another user?
 
-## Later
+## Maybe one day
 
 ### Access requests
 
-For v1, users without access get the no-access message and sort it out with whoever shared the
-link. If that's not enough, we add requests.
+Not planned. Links get shared outside Dust (mostly Slack), so asking for access already happens
+there, in the thread where the link was posted, with the person who shared it. Request flows like
+Google Drive's are rarely used for the same reason: the request goes to the owner rather than the
+sharer, without context, through a slower channel.
 
-They'd live in front's Postgres. Dfs has no notion of workflow state, the requester has no rights
-on the object, and xattrs are readable and writable by whoever has access.
+If we ever build it:
 
-`access_requests`, following `membership_upgrade_requests`:
-
-```text
-access_requests {
-  id, sId, workspaceId, createdAt, updatedAt
-  conversationId?: FK conversation       // Exactly one of conversationId and fileId is set.
-  fileId?: FK file                       // Reserved for Frames.
-  requesterUserId: FK user
-  requestedPermission: "read" | "write"
-  message?: string                       // At most 1,024 characters.
-  status: "pending" | "approved" | "denied" | "canceled"
-  resolvedByUserId?: FK user             // SET NULL on delete.
-  resolvedAt?: Date
-  grantedPermission?: "read" | "write"   // Can be lower than requested.
-}
-```
-
-Indexes: partial unique `(workspaceId, conversationId, requesterUserId) WHERE status = 'pending'`
-(same for `fileId`), `(workspaceId, conversationId, status)`, `(workspaceId, requesterUserId,
-status)`. Requests are deleted with their conversation or file.
-
-- **Request:** the no-access page gets a "Request access" button, with an optional message and a
-  level. Idempotent, and shares the existing per-user limit (30 per day). Shows "pending" on
-  revisit, with cancel.
-- **Notify:** the managers, through a new Novu workflow (in-app and email, `transactionId` per
-  request and manager). The link opens the popover on its pending requests.
-- **Resolve:** managers get a pending requests section in the popover (Approve as View or
-  Participate, or Deny), and `GET .../sharing` returns them.
-- **Approve:** check the approver manages the conversation and the requester passes the ceiling,
-  call `UpdateGrants`, then `pending → approved` (first resolver wins), upsert the participant and
-  notify the requester. The grant goes first and re-attaching it is a no-op, so retries are safe.
-  A pending request whose requester already has access is closed on read. Sharing directly with
-  a requester approves their request.
-- **Deny:** silent. They can ask again within the rate limit.
-- **Pod conversations:** pod editors resolve, and approving adds the requester to the pod.
-
-Audit events: `conversation.access_requested`, `conversation.access_request_resolved`.
+- An `access_requests` table in front's Postgres (dfs has no workflow state, and the requester has
+  no rights on the object), modeled on `membership_upgrade_requests`: requester, conversation,
+  requested level, optional message, `pending | approved | denied | canceled`, resolver. At most
+  one pending request per user and conversation.
+- A "Request access" button on the no-access page, a Novu notification to the managers, and a
+  pending requests section in the popover.
+- Approving checks that the approver manages the conversation and that the requester passes the
+  ceiling, attaches the grant, then marks the request approved. For pod conversations, approving
+  adds the requester to the pod.
