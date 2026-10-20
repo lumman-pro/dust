@@ -182,6 +182,32 @@ describe("framesSkill.fetchInstructions", () => {
     expect(instructions).not.toContain("--replaces");
   });
 
+  it("teaches functions for public link visitors only when public functions are enabled", async () => {
+    const { authenticator: auth } = await createResourceTest({});
+    await FeatureFlagFactory.basic(auth, "frames_v2");
+    await FeatureFlagFactory.basic(auth, "frames_v2_functions");
+    const { authenticator: publicAuth } = await createResourceTest({});
+    await FeatureFlagFactory.basic(publicAuth, "frames_v2");
+    await FeatureFlagFactory.basic(publicAuth, "frames_v2_functions");
+    await FeatureFlagFactory.basic(publicAuth, "frames_v2_public_functions");
+
+    const withoutPublicFunctions = await framesSkill.fetchInstructions(auth, {
+      spaceIds: [],
+    });
+    const withPublicFunctions = await framesSkill.fetchInstructions(
+      publicAuth,
+      { spaceIds: [] }
+    );
+
+    expect(withoutPublicFunctions).not.toContain(
+      "## Functions for visitors of a public link"
+    );
+    expect(withPublicFunctions).toContain(
+      "## Functions for visitors of a public link"
+    );
+    expect(withPublicFunctions).toContain("currentUser()?.canWriteFrameSource");
+  });
+
   it("teaches the computer-first flow when the Computer is enabled", async () => {
     const { authenticator: auth } = await createResourceTest({});
 

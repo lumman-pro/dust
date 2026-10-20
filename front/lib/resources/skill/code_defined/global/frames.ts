@@ -2,6 +2,7 @@ import {
   buildInteractiveContentInstructions,
   INTERACTIVE_CONTENT_INSTRUCTIONS,
 } from "@app/lib/api/actions/servers/interactive_content/instructions";
+import { workspaceServesPublicFunctions } from "@app/lib/api/sandbox_functions/workspace_user";
 import type { Authenticator } from "@app/lib/auth";
 import { getFeatureFlags, hasFeatureFlag } from "@app/lib/auth";
 import { FRAME_SKILL_FILES } from "@app/lib/resources/skill/code_defined/global/frames/files";
@@ -14,7 +15,9 @@ import { isFramesV2FunctionsEnabled } from "@app/types/shared/feature_flags";
 /**
  * @cc [owner:davidebbo,label:product] frame-functions-disclosure
  * Under frames_v2, function, database and persistent-file authoring guidance MUST be included
- * only when Frame functions are enabled (see isFramesV2FunctionsEnabled).
+ * only when Frame functions are enabled (see isFramesV2FunctionsEnabled). Guidance for functions
+ * served to visitors of a public link MUST be included only when the workspace serves public Frame
+ * functions to visitors (see workspaceServesPublicFunctions).
  */
 export const framesSkill = {
   sId: "frames",
@@ -49,6 +52,10 @@ export const framesSkill = {
     if (flags.includes("frames_v2")) {
       return buildFramesV2Instructions({
         hasFunctions: isFramesV2FunctionsEnabled(flags),
+        hasPublicFunctions: await workspaceServesPublicFunctions({
+          workspace: auth.getNonNullableWorkspace(),
+          plan: auth.plan(),
+        }),
         isPod,
       });
     }

@@ -310,12 +310,12 @@ Frame UI calls are available only to authenticated members of the owning workspa
 viewers must get a typed authorization error. A function policy can impose a stricter requirement.
 
 Use \`currentUser()\` from \`@dust/pod\` for the trusted caller. It returns
-\`{ sId, firstName, lastName, fullName, image, isPodMember, isPodEditor }\`, or \`null\` under the
-optional policy when there is no user. Never accept a caller \`userId\` as function input: the caller
-can forge it. The frontend's \`useUserIdentity\` hook also returns \`canWriteFrameSource\`; use that flag to
-show source-write-only UI, but enforce every such operation with \`frame_author_required\` (the
-server-side equivalent of \`canWriteFrameSource\`) because client-side conditions are not access
-control.
+\`{ sId, firstName, lastName, fullName, image, isPodMember, isPodEditor, canWriteFrameSource }\`, or
+\`null\` under the optional policy when there is no user. Never accept a caller \`userId\` as
+function input: the caller can forge it. The frontend's \`useUserIdentity\` hook returns
+\`canWriteFrameSource\`; use that flag to show source-write-only UI, but enforce every such
+operation with \`frame_author_required\` (the server-side equivalent of \`canWriteFrameSource\`)
+because client-side conditions are not access control.
 
 ## Storing files in a Frame
 
@@ -407,6 +407,38 @@ for every call. Function failures are
 
 ${NO_BROWSER_DOWNLOADS}`;
 
+const PUBLIC_FUNCTIONS_AUTHORING = `\
+## Functions for visitors of a public link
+
+A Frame shared publicly can serve some of its functions to visitors outside the workspace, an
+exception to the members-only rule above. A visitor verifies an email on the share page, then may
+call only the functions declared \`userIdentity: "public"\`. The \`optional\` policy does not open a
+function to visitors. Workspace members opening the link keep calling every function their
+membership allows. Sharing a Frame with functions publicly requires at least one public function.
+
+A public function:
+
+- must declare \`"executionMode": "fast"\` in its manifest entry. Publishing refuses a \`public\`
+  function left on the \`durable\` default, so it cannot call Dust tools.
+- must not read \`DSEC_*\` secrets. Publishing refuses one that references them.
+- sees \`currentUser()\` return \`null\` for a visitor. Check it before using any caller data.
+- returns only data any link holder may see. Never put private rows or fields in its response or
+  in the UI source, which every visitor downloads.
+- serves data that needs a Dust tool or a secret from storage: a function with another policy
+  fetches it into the Frame database, and the public function reads the stored rows. Visitors
+  cannot trigger that refresh.
+
+Prefer one access policy per function: split "list public entries" from "edit entries" into two
+functions with their own policies. When one public read must return more to some callers, decide
+from \`currentUser()\`, never from input the caller sends. A non-null user is a workspace member,
+and \`currentUser()?.canWriteFrameSource\` is true for someone who can edit the Frame.
+
+In the UI, a visitor's call to a non-public function fails with \`user_authentication_required\`.
+Hide member-only controls when \`useUserIdentity()\` reports \`isAuthenticated: false\`, and show a
+message for that error. A visitor's call that runs longer than the share page waits fails, yet may
+still complete on the server. Never retry a failed call automatically: a retry can run it twice.
+`;
+
 const MIGRATING_LEGACY_FRAME = `\
 ## Migrating a legacy Frame
 
@@ -469,9 +501,11 @@ Edit existing Pod Frames in place.
  */
 export const buildFramesV2Instructions = ({
   hasFunctions,
+  hasPublicFunctions,
   isPod,
 }: {
   hasFunctions: boolean;
+  hasPublicFunctions: boolean;
   isPod: boolean;
 }) => `\
 # Frames v2
@@ -641,7 +675,7 @@ recipients. It returns the stable Frame ID, current share scope, and existing sh
 link exists, ask the user to configure sharing in the Dust UI.
 
 ${hasFunctions ? FUNCTIONS_SOURCE_LAYOUT : CLIENT_ONLY_SOURCE_LAYOUT}
-${hasFunctions ? FUNCTIONS_AUTHORING : `${NO_BROWSER_DOWNLOADS}\n`}
+${hasFunctions ? FUNCTIONS_AUTHORING : `${NO_BROWSER_DOWNLOADS}\n`}${hasPublicFunctions ? `\n${PUBLIC_FUNCTIONS_AUTHORING}` : ""}
 ## Check the Frame UI
 
 For a v2 Frame, run the attached linter on its folder before publishing:
