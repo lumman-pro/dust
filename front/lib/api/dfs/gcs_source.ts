@@ -1,5 +1,5 @@
 import { once } from "node:events";
-import { addAbortSignal, Readable } from "node:stream";
+import { addAbortSignal, pipeline, Readable, Transform } from "node:stream";
 import type {
   GcsReplicationMetadata,
   GcsReplicationSource,
@@ -32,12 +32,21 @@ type GcsSourceRead =
  * @cc [owner:flvndvd,label:concurrency] gcs-replication-read-lock
  * The caller MUST hold the source lock from before this read through the DFS commit. A `live`
  * result only opens the transfer: the caller MUST consume or destroy its stream, and MUST NOT
- * mark an import complete unless the entire stream and all DFS writes succeed.
+ * mark newly copied bytes complete unless the entire stream and all DFS writes succeed. If an
+ * existing completion marker proves the bytes are already imported, it MAY destroy the stream
+ * without consuming it and reuse those bytes.
  */
 /**
  * @cc [owner:flvndvd,label:product] gcs-replication-stored-bytes
  * The returned stream MUST preserve the bytes stored in GCS, including gzip compression.
  * Content MUST NOT be decompressed during transfer to DFS.
+ */
+/**
+ * @cc [owner:flvndvd,label:error-handling] gcs-replication-transfer-integrity
+ * A fully consumed stream MUST fail if its byte count differs from metadata.size or its CRC32C
+ * differs from metadata.crc32c when provided. These failures MUST be emitted as stream errors,
+ * since the read returns before the transfer finishes. Destroying the stream without consuming
+ * it MUST cancel the HTTP transfer and MUST NOT imply successful validation.
  */
 export async function readGcsReplicationSource(
   source: Pick<GcsReplicationSource, "bucket" | "objectName">,
@@ -106,7 +115,34 @@ export async function readGcsReplicationSource(
         callback(error);
       },
     }).wrap(stream);
-    return new Ok({ status: "live", metadata, stream: contentStream });
+    const crc32c = file.crc32cGenerator();
+    let receivedBytes = BigInt(0);
+    const verifiedStream = new Transform({
+      transform: (chunk: Buffer, _encoding, callback) => {
+        receivedBytes += BigInt(chunk.length);
+        crc32c.update(chunk);
+        callback(null, chunk);
+      },
+      flush: (callback) => {
+        if (receivedBytes !== BigInt(metadata.size)) {
+          callback(
+            new Error("GCS content length does not match its metadata.")
+          );
+        } else if (
+          metadata.crc32c !== undefined &&
+          crc32c.toString() !== metadata.crc32c
+        ) {
+          callback(
+            new Error("GCS content CRC32C does not match its metadata.")
+          );
+        } else {
+          callback();
+        }
+      },
+    });
+    // pipeline forwards errors and destroys the HTTP stream if the consumer stops early.
+    pipeline(contentStream, verifiedStream, () => {});
+    return new Ok({ status: "live", metadata, stream: verifiedStream });
   } catch (error) {
     stream.destroy();
     return new Err(normalizeError(error));

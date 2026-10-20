@@ -6,10 +6,10 @@ GCS remains the source of truth until a file switches to DFS. Replication is asy
 
 ## Scope
 
-| GCS source | DFS destination |
-| --- | --- |
-| `w/{workspaceId}/pods/{podId}/files/{path}` | `users/{userSId}/pods/{podName}/{path}` under the tenant root. |
-| `w/{workspaceId}/conversations/{conversationId}/files/{path}` | The conversation's DFS directory. |
+| GCS source                                                    | DFS destination                                                |
+| ------------------------------------------------------------- | -------------------------------------------------------------- |
+| `w/{workspaceId}/pods/{podId}/files/{path}`                   | `users/{userSId}/pods/{podName}/{path}` under the tenant root. |
+| `w/{workspaceId}/conversations/{conversationId}/files/{path}` | The conversation's DFS directory.                              |
 
 Import every file in these folders, including original uploads, processed copies and Frame files. Acknowledge events for other paths without importing them. Canonical uploads under `files/w/...` remain in GCS; their mount copies are imported.
 
@@ -26,11 +26,11 @@ await bucket.copyFile(srcOriginalPath, mountFilePath);
 
 It also copies the processed version when `getProcessedMountFilePath()` returns a path. Each successful GCS copy emits a finalize event for the destination. [GCS event types](https://docs.cloud.google.com/storage/docs/pubsub-notifications#event_types).
 
-| Entry point | Behavior |
-| --- | --- |
-| [`markAsReady()`](../../front/lib/resources/file_resource.ts#L990) | Resolves and copies the mount file when processing marks an upload ready. |
-| [`setUseCaseMetadata()`](../../front/lib/resources/file_resource.ts#L1781) | Resolves and copies the mount file when the file is attached, including an upload that was already ready. |
-| [`resolveAndSetMountFilePath()`](../../front/lib/resources/file_resource.ts#L1811) | Selects the conversation or pod path, claims it, then calls `copyMountFiles()`. |
+| Entry point                                                                        | Behavior                                                                                                  |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| [`markAsReady()`](../../front/lib/resources/file_resource.ts#L990)                 | Resolves and copies the mount file when processing marks an upload ready.                                 |
+| [`setUseCaseMetadata()`](../../front/lib/resources/file_resource.ts#L1781)         | Resolves and copies the mount file when the file is attached, including an upload that was already ready. |
+| [`resolveAndSetMountFilePath()`](../../front/lib/resources/file_resource.ts#L1811) | Selects the conversation or pod path, claims it, then calls `copyMountFiles()`.                           |
 
 [`maybeUpsertFileAttachment()`](../../front/lib/api/files/attachments.ts#L20) binds an unattached conversation upload through `setUseCaseMetadata()`. [`toFileContentFragment()`](../../front/lib/api/assistant/conversation/content_fragment.ts#L91) creates a conversation `FileResource` for inline content; processing then calls [`markAsReady()`](../../front/lib/api/files/processing/index.ts#L637). Content-node references without a file are outside this replication scope.
 
@@ -119,11 +119,11 @@ A GCS precondition only protects the read. Without the lock, worker A can fetch 
 
 Handle read results as follows:
 
-| Result | Action |
-| --- | --- |
-| `412` or `404` on the conditional content read | Retry from current metadata. Do not apply the earlier metadata or partial bytes. |
-| `404` on the live metadata read | Delete the mapped replica under the source lock while GCS remains authoritative. If no replica exists, complete. |
-| Access error, throttling, service error or interrupted transfer | Fail the activity attempt for Temporal to retry. Never treat it as deletion. |
+| Result                                                          | Action                                                                                                           |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `412` or `404` on the conditional content read                  | Retry from current metadata. Do not apply the earlier metadata or partial bytes.                                 |
+| `404` on the live metadata read                                 | Delete the mapped replica under the source lock while GCS remains authoritative. If no replica exists, complete. |
+| Access error, throttling, service error or interrupted transfer | Fail the activity attempt for Temporal to retry. Never treat it as deletion.                                     |
 
 Delete/archive events must check the live object because a replacement also emits an event for the displaced generation. A stale delete must not remove a newer replica. [GCS event types](https://docs.cloud.google.com/storage/docs/pubsub-notifications#event_types).
 
@@ -140,7 +140,11 @@ front.gcs_sync = {
 }
 ```
 
-The marker records a complete import. After checking the live source, matching all four fields allows a skip. A matching source and generation with a different metageneration allows reuse of complete bytes. A missing marker requires a full rewrite. Clear it before content or attribute changes, including retries of the same generation.
+Store this JSON as UTF-8 bytes in the file's `front.gcs_sync` xattr. The marker records a complete import. After checking the live source, matching all four fields allows a skip. A matching source and generation with a different metageneration allows reuse of complete bytes. Also compare the DFS file size with the live GCS size before reusing bytes. A missing marker requires a full rewrite. Clear it before content or attribute changes, including retries of the same generation.
+
+Copy the stored bytes without decompression. Verify the transferred size and CRC32C when GCS supplies it. Store the content encoding in `front.gcs_content_encoding`, and apply the MIME type and GCS update time to the DFS file. Preserve other xattrs. A malformed completion marker or one naming another source fails the import for investigation.
+
+DFS `Apply` returns per-operation errors and can commit other operations in the batch. Clear the marker in its own checked request. After the transfer succeeds, set the attributes and completion marker in one `Update` operation, which validates the whole patch before writing. Do not put that final update in a batch with writes that can fail independently.
 
 Keep generation and metageneration values lossless and compare generations for equality. Generation numbers are not guaranteed to increase; taking their numeric maximum cannot reject stale events. Metageneration increases only within one generation. [Generation semantics](https://docs.cloud.google.com/storage/docs/metadata#generation-number).
 
@@ -190,11 +194,11 @@ When someone visits a shared conversation, Front first checks conversation acces
 
 Use Front's current access checks:
 
-| Conversation | Required access |
-| --- | --- |
-| Pod conversation (`spaceId` set) | The pod exists and the caller can read it. Extra requested spaces and standalone URL restrictions do not apply. |
+| Conversation                                            | Required access                                                                                                            |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Pod conversation (`spaceId` set)                        | The pod exists and the caller can read it. Extra requested spaces and standalone URL restrictions do not apply.            |
 | Standalone conversation (`spaceId` null, `depth === 0`) | The caller can read every requested space. Private-by-default URLs in `participants_only` mode also require participation. |
-| Sub-conversation without a pod | Required-space checks still apply; the private-by-default URL restriction does not. |
+| Sub-conversation without a pod                          | Required-space checks still apply; the private-by-default URL restriction does not.                                        |
 
 Missing or inaccessible resources deny access. An invitation does not bypass requested-space checks. Preserve existing support-user and auth-method exceptions without widening ordinary callers' permissions. [Conversation access](../../front/lib/resources/conversation_resource.ts#L1406).
 
@@ -232,3 +236,33 @@ Check these cases before enabling replication:
 - Failed mount copies, dead-lettered handoffs, failed workflows and missed deletes are recovered. Mount-copy repair preserves live edits.
 - Tenant isolation, owner grants, pod permissions and conversation sharing match Front's checks. Failed or cross-workspace lookups cannot create completed imports.
 - The switch to DFS waits for the importer and prevents pending GCS events from changing DFS-owned files.
+
+## Implementation status
+
+Checked against DFS on `main` at `acdc44a2e8` and the Front worker branch.
+
+### Available
+
+| Piece              | Existing implementation                                                                                                             | Use for replication                                                                                                                                                          |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| File operations    | [`DfsClient`](../../front/lib/dfs/client.ts), [`DfsFileSystem`](../../front/lib/dfs/file_system.ts)                                 | Stat with metadata, streamed writes to an existing ID, truncation and removal. Writes are split below the 4 MiB RPC limit.                                                   |
+| Xattrs             | [`UpdateOperation`](../protocol/proto/dfs.proto), [`apply_update`](../server/src/storage/resources/object/apply.rs)                 | Add or remove individual keys without replacing unrelated xattrs. The total key/value budget is 32 KiB. One update validates its entire patch before writing.                |
+| Tenant credentials | [`DfsTenantResource`](../../front/lib/resources/dfs_tenant_resource.ts), [`getDfsTenantClient`](../../front/lib/api/dfs/clients.ts) | Fetch the authenticated workspace's tenant key from OAuth and share one gRPC transport per process.                                                                          |
+| Folder IDs         | [`getOrCreate*Folder`](../../front/lib/api/dfs/folders.ts)                                                                          | Stored IDs for users, pods and conversations. Reuse the stored folder after a rename or move.                                                                                |
+| GCS reads          | [`readGcsReplicationSource`](../../front/lib/api/dfs/gcs_source.ts)                                                                 | Read live metadata, open media with both preconditions, preserve gzip bytes, validate size and CRC32C.                                                                       |
+| File import        | [`importGcsSourceToDfsFile`](../../front/lib/api/dfs/gcs_import.ts)                                                                 | Import into a prepared, mapped file. Skip complete copies, update metadata, rewrite incomplete copies and delete on live metadata 404. Preserve grants and unrelated xattrs. |
+| Event processing   | [`gcs_worker.ts`](../../front/lib/api/dfs/gcs_worker.ts), [`dfs_gcs_replication`](../../front/temporal/dfs_gcs_replication)         | Validate events and workspace flags, acknowledge after Temporal handoff, serialize attempts and retry failures.                                                              |
+
+The file import function requires an existing target ID and parent ID. It does not resolve or create the target, acquire a lease or establish grants. It is not bound to the Temporal activity. Its caller must provide those guarantees before it can run in production.
+
+### Missing before activation
+
+1. **DFS leases and fencing.** No acquire, renew or release API exists. `Apply` and `UpdateGrants` accept no lease token or mutation precondition. Implement the source lease in DFS and validate it in the same transaction as every mutation. Redis locks and cancellation checks between requests cannot enforce this.
+2. **Source mapping and creation recovery.** Front stores folder IDs but no `(workspace, bucket, objectName)` to file ID mapping. Persist the file ID, its parent and whether GCS or DFS owns the content. Define recovery across a crash between reserving an ID, creating the file and storing the mapping. DFS requires a creation UUIDv7 no more than five minutes old, so a stale reservation cannot simply be retried forever. The completion xattr is not a reverse index and is absent during an incomplete import. `Search` returns `UNSUPPORTED` today. DFS transaction receipts only cover retries within one server invocation, not a later Temporal attempt.
+3. **Folder identity and grants.** `podFolderName()` still rewrites the pod name. Existing folder creation can reuse a different pod's same-name directory. User-folder recovery skips initial grants when the directory already exists, including after an earlier grant failure. Pod member grants are still a TODO. Fix these before using the helpers for imports, preserve the actual pod name, and handle renames independently of GCS events.
+4. **Importer session authorization.** DFS supports the `superuser` subject. The `createDfsSuperuserSession()` helper added on `main` restricts its use to user and pod context-folder creation through its `superuser-session-uses` contract. This conflicts with the replication session described above. Resolve that contract for an internal importer session before binding the activity. An ordinary user session does not guarantee access to all replicated files.
+5. **Request cancellation.** The GCS transfer accepts cancellation. The DFS transport has a 30-second deadline but no `AbortSignal` or call cancellation. The import function checks cancellation before and after mutations, including each content chunk. Add cancellation to the client/transport while keeping server fencing as the protection against requests already admitted.
+6. **Activity and deployment wiring.** Bind the importer only after target resolution and fencing exist. Register the Temporal worker, add the Pub/Sub consumer entrypoint, and provision subscriber identity, subscriptions and deployment configuration in `dust-infra`.
+7. **Ownership switch and repair.** Implement the GCS-to-DFS ownership transition under the same lease. Add backfill and repair over live GCS objects and stored mappings, plus recovery for mount copies that never reached GCS. A disabled workspace flag can discard events, so enabling it needs a backfill.
+
+The importer tests use the real GCS SDK against a local HTTP server, the existing DFS filesystem helper and the in-memory DFS implementation. They cover content and metadata updates, xattrs, deletion, cancellation and retry behavior. They do not validate the DFS server, initial grants, destination creation or fencing. The separate live GCS/Pub/Sub/Temporal test exercised delivery and GCS reads without DFS mutations.

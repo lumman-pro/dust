@@ -28,7 +28,6 @@ interface FakeNode {
   data: Buffer;
   // Undefined once cleared with an empty MIME type.
   mimeType: string | undefined;
-  // Set at creation only.
   xattrs: Record<string, Uint8Array>;
   children: Map<string, DfsObjectId>;
   attrVersion: bigint;
@@ -110,7 +109,7 @@ export class InMemoryDfs implements DfsFileSystemClient {
       parentId,
       name,
       kind,
-      xattrs,
+      xattrs: { ...xattrs },
       data: Buffer.alloc(0),
       mimeType:
         mimeType === ""
@@ -211,11 +210,12 @@ export class InMemoryDfs implements DfsFileSystemClient {
     parentId: DfsObjectId,
     name: string,
     data: string,
-    mimeType?: string
+    mimeType?: string,
+    xattrs: Record<string, Uint8Array> = {}
   ): DfsObjectId {
     const parent = this.directory(parentId);
     const id = newDfsObjectId();
-    const node = this.newNode(id, parent.id, name, "file", mimeType);
+    const node = this.newNode(id, parent.id, name, "file", mimeType, xattrs);
     node.data = Buffer.from(data);
     this.nodes.set(id, node);
     parent.children.set(name, id);
@@ -396,6 +396,13 @@ export class InMemoryDfs implements DfsFileSystemClient {
         }
         if (op.mimeType !== undefined) {
           node.mimeType = op.mimeType === "" ? undefined : op.mimeType;
+        }
+        for (const { name, value } of op.xattrs ?? []) {
+          if (value === undefined) {
+            delete node.xattrs[name];
+          } else {
+            node.xattrs[name] = value;
+          }
         }
         if (op.size !== undefined) {
           const resized = Buffer.alloc(op.size);
