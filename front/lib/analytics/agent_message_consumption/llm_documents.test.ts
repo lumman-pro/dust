@@ -1,6 +1,5 @@
 import { buildLlmConsumptionDocuments } from "@app/lib/analytics/agent_message_consumption/llm_documents";
 import { loadAgentMessageConsumptionAnalyticsInput } from "@app/lib/analytics/agent_message_consumption/load";
-import { buildLatestMessageConsumptionAllocation } from "@app/lib/api/assistant/agent_message_consumption_attribution/allocation";
 import { AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION } from "@app/lib/api/assistant/agent_message_consumption_attribution/attribution_builder";
 import { AgentMessageModel } from "@app/lib/models/agent/conversation";
 import { AgentMessageConsumptionItemResource } from "@app/lib/resources/agent_message_consumption_item_resource";
@@ -119,22 +118,7 @@ describe("buildLlmConsumptionDocuments", () => {
     if (!input) {
       throw new Error("Consumption analytics input was not loaded");
     }
-    const allocationResult = buildLatestMessageConsumptionAllocation({
-      actions: input.actions,
-      billedCredits: 5,
-      dustRunIds: input.dustRunIds,
-      items: input.items,
-      runs: input.runs,
-      usages: input.usages,
-    });
-    if (allocationResult.isErr()) {
-      throw new Error(
-        `Consumption allocation was not built: ${allocationResult.error.code}`
-      );
-    }
-    const allocation = allocationResult.value;
-
-    expect(buildLlmConsumptionDocuments(input, allocation)).toEqual([
+    expect(buildLlmConsumptionDocuments(input)).toEqual([
       expect.objectContaining({
         agent_message_id: agentMessage.sId,
         completed_at: completedAt.toISOString(),
