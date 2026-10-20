@@ -5,20 +5,21 @@ need to become private to their creator by default, with a "Share" button in the
 header that reads and updates the grants, and users who hit a conversation they can't access get
 a clear message telling them to ask for it.
 
-Builds on top of [API.md](API.md), [URI.md](URI.md) and [DOUBLE_WRITE.md](DOUBLE_WRITE.md). Open
-decisions are at the end; the doc assumes we take the recommended option for each of them.
+Builds on top of the dfs design docs [API.md](../../dfs/design-docs/API.md),
+[URI.md](../../dfs/design-docs/URI.md) and [DOUBLE_WRITE.md](../../dfs/design-docs/DOUBLE_WRITE.md).
+Open decisions are at the end; the doc assumes we take the recommended option for each of them.
 
 ## Motivation
 
 We're moving content to dfs, which will be the single source of truth for access: front, sandboxes,
 search and browsing all rely on the same grants; dfs is authoritative and front a consumer.
 
-Dfs will add search ([SEARCH.md](SEARCH.md)) and browsing (`List`, `/shared`) over everything a
-user can read. Today any workspace member with a conversation's link can open it. That's fine only
-because there's no way to discover a conversation you weren't given the URL to. With search and
-browsing, "readable by the workspace" becomes "searchable by the workspace", and you shouldn't be
-able to discover other people's conversations. So access has to be explicit: private by default,
-opened by a grant.
+Dfs will add search ([SEARCH.md](../../dfs/design-docs/SEARCH.md)) and browsing (`List`,
+`/shared`) over everything a user can read. Today any workspace member with a conversation's link
+can open it. That's fine only because there's no way to discover a conversation you weren't given
+the URL to. With search and browsing, "readable by the workspace" becomes "searchable by the
+workspace", and you shouldn't be able to discover other people's conversations. So access has to
+be explicit: private by default, opened by a grant.
 
 From a purely tactical POV we could devise a system that makes the change seamless for a while
 (update the grants in dfs in a way that allows sharing URLs directly); but my take on that is
@@ -187,10 +188,10 @@ to grant `u:<userId> rw`.
 5. Remove `urlAccessMode`, `privateConversationUrlsByDefault` and their UI.
 
 Step 2 narrows access: non-participants who used the link lose access and get the no-access
-message.
-This matches [DOUBLE_WRITE.md](DOUBLE_WRITE.md#authorization-contract): preserve or narrow, never
-enlarge. Keeping link access would mean making everything readable, so searchable, by everyone
-(see [Motivation](#motivation)).
+message. This matches
+[DOUBLE_WRITE.md](../../dfs/design-docs/DOUBLE_WRITE.md#authorization-contract): preserve or
+narrow, never enlarge. Keeping link access would mean making everything readable, so searchable,
+by everyone (see [Motivation](#motivation)).
 
 ## Open decisions
 
