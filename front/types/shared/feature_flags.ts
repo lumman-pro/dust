@@ -376,6 +376,12 @@ export const WHITELISTABLE_FEATURES_CONFIG = {
     stage: "dust_only",
     owner: "frankaloia",
   },
+  dust_file_system: {
+    description:
+      "Mirror Pods and their permissions in the Dust File System (dfs): each Pod gets a folder whose grants follow the Pod's access",
+    stage: "dust_only",
+    owner: "fabiencelier",
+  },
   user_memory: {
     description:
       "Enable the user_memory internal MCP server: agents can store and retrieve per-user memory in a user-scoped filesystem.",

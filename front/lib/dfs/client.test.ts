@@ -2,7 +2,7 @@
 import { DfsClient } from "@app/lib/dfs/client";
 import { MAX_UINT64 } from "@app/lib/dfs/codec";
 import { newDfsObjectId } from "@app/lib/dfs/object_id";
-import type { DfsMethod } from "@app/lib/dfs/proto";
+import type { DfsMethod, DfsWireMessage } from "@app/lib/dfs/proto";
 import { DfsWireFactory } from "@app/tests/utils/dfs/DfsWireFactory";
 import type { FakeDfsAnswer } from "@app/tests/utils/dfs/FakeDfsTransport";
 import { FakeDfsTransport } from "@app/tests/utils/dfs/FakeDfsTransport";
@@ -495,6 +495,31 @@ describe("DfsClient", () => {
       ],
       partial: false,
     });
+  });
+
+  it("lists every grant across pages", async () => {
+    const pages = [
+      { grants: [{ allow: { subject: "g:eng", mode: 0o6 } }], nextAfter: "c1" },
+      { grants: [{ deny: { mode: 0o6 } }] },
+    ];
+    const requests: DfsWireMessage[] = [];
+    const client = new DfsClient(
+      {
+        call: async (_method, request) => {
+          requests.push(request);
+          return new Ok(pages[requests.length - 1]);
+        },
+      },
+      SESSION_KEY
+    );
+
+    const res = await client.listAllGrants({ objectId: ROOT_ID });
+
+    expect(res.isOk() && res.value).toEqual([
+      { type: "allow", subject: "g:eng", mode: 0o6 },
+      { type: "deny", mode: 0o6 },
+    ]);
+    expect(requests.map((request) => request.after)).toEqual([undefined, "c1"]);
   });
 
   it("encodes and decodes allow and deny grants", async () => {

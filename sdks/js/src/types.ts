@@ -882,6 +882,7 @@ const WhitelistableFeaturesSchema = FlexibleEnumSchema<
   | "disable_run_logs"
   | "dummy_feature_for_flag_testing"
   | "dust_agent_sonnet_5_default"
+  | "dust_file_system"
   | "dust_internal_dangerous_in_cluster_mcp_servers"
   | "dust_internal_global_agents"
   | "dust_lean_agent"
