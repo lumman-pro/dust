@@ -36,10 +36,10 @@ that we will need to bite the bullet at some point so there is no need for a tem
 - Dfs grants on the conversation folder are the authority. Front stores no copy.
 - Front is the only writer, since `UpdateGrants` needs the tenant key. It checks the actor's own
   permission through dfs first.
-- Front still enforces the data ceiling (`requestedSpaceIds`), see [Data ceiling](#data-ceiling).
+- Spaces (`requestedSpaceIds`) no longer gate access: sharing warns instead, see
+  [Spaces](#spaces).
 - `conversation_participant` no longer grants access. It stays for the sidebar, unread state and
-  notifications, will be used to backfill, and indexes user grants: every user grant has a
-  participant row.
+  notifications, and will be used to backfill.
 
 ### Permissions
 
@@ -86,37 +86,34 @@ folder under the parent's so they inherit its grants (the parent is reachable th
 first message, `agenticOriginMessageId`), or handle them in the backfill by tracing back the user
 and adding grants.
 
-## Data ceiling
+## Spaces
 
-`requestedSpaceIds` requires reading every listed space. Dfs grants are OR-only and can't express
-that. A grant to someone who can't read one of these spaces would expose the conversation's files
-through dfs (`/shared`, search), even if front blocks the page. So front:
+Grants are the only check: `requestedSpaceIds` no longer gates access, in front or in dfs. Dfs
+grants can't express "must read every requested space", and checking it in front only would leave
+the files readable through dfs anyway.
 
-1. **Read:** requires dfs `r` and `canReadRequestedSpaces`.
-2. **Grant:** only grants users who pass the ceiling. The popover says why someone can't be added.
-3. **Reconcile:** when the ceiling grows or someone loses a space, a Temporal job removes the
-   grants that now exceed it. Participant rows bound the scan. Today's code already evicts
-   participants when the ceiling grows.
+Instead, the popover warns when you add someone who can't read some of the conversation's
+requested spaces: they'll see data from those spaces. Sharing it anyway is the sharer's call.
 
-Pod conversations keep their ceiling: read on the pod.
+This is a change from today, where a conversation using a restricted space is never visible to
+people outside that space.
 
 ## Read path
 
 - Front checks access with a dfs session holding the user's subjects (`getDfsSessionSubjects`),
   cached per user and subject set.
 - `baseFetchWithAuthorization` loads the rows, batch `Stat`s their folders (up to 4,096), drops
-  the ones without `r`, then applies the ceiling. The resource exposes `read` or `write`.
+  the ones without `r`. The resource exposes `read` or `write`.
 - No caching of `Stat` across requests: removing a grant applies on the next request.
 - Fail closed: a dfs error is an error, never "not found" or "allowed".
 - Shadow mode first (log diffs with today's check), then enforce per workspace behind a FF.
 
 `canAccess` results:
 
-| Result                           | When                          | UI                         |
-| -------------------------------- | ----------------------------- | -------------------------- |
-| `conversation_not_found`         | No such conversation.         | "Conversation not found".  |
-| `conversation_access_restricted` | Fails the ceiling.            | Today's restricted page.   |
-| `conversation_not_shared`        | Passes the ceiling, no grant. | No-access message (below). |
+| Result                    | When                  | UI                         |
+| ------------------------- | --------------------- | -------------------------- |
+| `conversation_not_found`  | No such conversation. | "Conversation not found".  |
+| `conversation_not_shared` | No grant.             | No-access message (below). |
 
 The no-access message is something like "You don't have access to this conversation. Ask the
 person who shared the link to add you." Only workspace members reach it, and it shows no title,
@@ -136,8 +133,8 @@ owner or participants.
 A "Share" button in `ConversationTitle`, built like `ShareFramePopover`:
 
 - People with access: the owner, user grants, and pod members for pod conversations.
-- Add people: workspace members, as View or Participate. Those failing the ceiling show as
-  unavailable.
+- Add people: workspace members, as View or Participate, with the [spaces](#spaces) warning when
+  it applies.
 - Copy link.
 
 Read-only for non-managers.
@@ -160,7 +157,7 @@ PATCH /api/w/:wId/assistant/conversations/:cId/sharing
 ```
 
 `GET` is `ListGrants` plus the owner and pod from front. `PATCH` checks the caller manages the
-conversation, validates subjects (active member, ceiling) and sends one `UpdateGrants`. Adding
+conversation, validates subjects (active members) and sends one `UpdateGrants`. Adding
 someone upserts their participant row (`subscribed`) and notifies them. Removing someone deletes
 the row. Audit event: `conversation.sharing_updated`.
 
@@ -171,7 +168,8 @@ to grant `u:<userId> rw`.
 ## Migration
 
 1. Provision folders for every conversation (owned by its creator) and the pod folder grants.
-2. Backfill `u:<userId> rw` for participants.
+2. Backfill `u:<userId> rw` for participants who can access the conversation today (`canAccess`),
+   so that participants who lost a space don't get access back.
 3. New conversations get a folder at creation, and approved mention invites write grants.
 4. Shadow mode.
 5. Enforce per workspace, shipping the popover at the same time.
@@ -187,18 +185,15 @@ enlarge. Keeping link access would mean making everything readable, so searchabl
 
 1. **Who manages.** Rec: owner and explicit `u:` rw. Alt: any `rw` (including through pod groups),
    or owner only.
-2. **Pod conversations.** Rec: pod membership only. Alt: local grants for outsiders, which needs a
-   ceiling for pod data.
-3. **Data ceiling.** Rec: refuse grants above it, reconcile async. Alt: grant anyway and gate in
-   front only, leaving restricted files readable through dfs.
-4. **Migration.** Rec: narrow link access to participants. Alt: a temporary patch keeping link
+2. **Pod conversations.** Rec: pod membership only. Alt: local grants for outsiders.
+3. **Migration.** Rec: narrow link access to participants. Alt: a temporary patch keeping link
    access (see [Motivation](#motivation)).
-5. **Frames.** Rec: after conversations.
-6. **API-created conversations.** Which folder and owner without a user?
-7. **Sub-conversations.** TBD: nest the folder under the parent's, or handle them in the backfill
+4. **Frames.** Rec: after conversations.
+5. **API-created conversations.** Which folder and owner without a user?
+6. **Sub-conversations.** TBD: nest the folder under the parent's, or handle them in the backfill
    by tracing back the user and adding grants.
-8. **Session cache.** Memory or Redis? Session keys are bearer credentials.
-9. **Ownership transfer.** Move the folder under another user?
+7. **Session cache.** Memory or Redis? Session keys are bearer credentials.
+8. **Ownership transfer.** Move the folder under another user?
 
 ## Maybe one day
 
@@ -218,6 +213,6 @@ If we ever build it:
   one pending request per user and conversation.
 - A "Request access" button on the no-access page, a Novu notification to the managers, and a
   pending requests section in the popover.
-- Approving checks that the approver manages the conversation and that the requester passes the
-  ceiling, attaches the grant, then marks the request approved. For pod conversations, approving
+- Approving checks that the approver manages the conversation, attaches the grant, then marks the
+  request approved. For pod conversations, approving
   adds the requester to the pod.
