@@ -1,6 +1,5 @@
 import type { ServerMetadata } from "@app/lib/actions/mcp_internal_actions/tool_definition";
 import { getPrefixedToolName } from "@app/lib/actions/tool_name_utils";
-import { AshbyCreateReferralInputSchema } from "@app/lib/api/actions/servers/ashby/types";
 import { z } from "zod";
 
 const DEFAULT_SEARCH_LIMIT = 20;
@@ -162,7 +161,22 @@ export const ASHBY_TOOLS_METADATA = [
       "The credited user is resolved automatically from the authenticated user. " +
       "Field values must be provided as {title, value} pairs where title is " +
       `the human-readable field title exactly as returned by ${ashbyToolName(GET_REFERRAL_FORM_TOOL_NAME)}.`,
-    schema: AshbyCreateReferralInputSchema.shape,
+    schema: {
+      fieldSubmissions: z
+        .array(
+          z.object({
+            title: z
+              .string()
+              .describe(
+                "The human-readable field title (e.g. 'Candidate Name')."
+              ),
+            value: z
+              .union([z.string(), z.number(), z.boolean()])
+              .describe("The value for this field."),
+          })
+        )
+        .describe("Array of field values keyed by their human-readable title."),
+    },
     stake: "high",
     displayLabels: {
       running: "Creating referral on Ashby",

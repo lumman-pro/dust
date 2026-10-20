@@ -16,10 +16,6 @@ import {
   UPDATE_JOB_POSTING_TOOL_NAME,
 } from "@app/lib/api/actions/servers/ashby/metadata";
 import {
-  isAshbyCreateReferralInput,
-  isAshbyUpdateJobPostingInput,
-} from "@app/lib/api/actions/servers/ashby/types";
-import {
   EDIT_INFORMATION_TOOL_NAME,
   POD_MANAGER_SERVER_NAME,
   UPDATE_MEMBERS_TOOL_NAME,
@@ -156,7 +152,11 @@ export function ToolValidationDetails({
   if (
     blockedAction.metadata.mcpServerName === ASHBY_SERVER_NAME &&
     blockedAction.metadata.toolName === CREATE_REFERRAL_TOOL_NAME &&
-    isAshbyCreateReferralInput(blockedAction.inputs)
+    validateToolInputs(
+      ASHBY_SERVER_NAME,
+      CREATE_REFERRAL_TOOL_NAME,
+      blockedAction.inputs
+    )
   ) {
     return (
       <AshbyReferralDetails
@@ -169,7 +169,11 @@ export function ToolValidationDetails({
   if (
     blockedAction.metadata.mcpServerName === ASHBY_SERVER_NAME &&
     blockedAction.metadata.toolName === UPDATE_JOB_POSTING_TOOL_NAME &&
-    isAshbyUpdateJobPostingInput(blockedAction.inputs)
+    validateToolInputs(
+      ASHBY_SERVER_NAME,
+      UPDATE_JOB_POSTING_TOOL_NAME,
+      blockedAction.inputs
+    )
   ) {
     return <AshbyJobPostingUpdateDetails {...blockedAction.inputs} />;
   }
