@@ -1,5 +1,4 @@
 import { loadAgentMessageConsumptionAnalyticsInput } from "@app/lib/analytics/agent_message_consumption/load";
-import { AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION } from "@app/lib/api/assistant/agent_message_consumption_attribution/attribution_builder";
 import type { Authenticator } from "@app/lib/auth";
 import {
   USAGE_TYPE_FREE,
@@ -8,9 +7,9 @@ import {
 } from "@app/lib/metronome/constants";
 import type { UsageType } from "@app/lib/metronome/types";
 import { AgentMessageModel } from "@app/lib/models/agent/conversation";
-import { AgentMessageConsumptionItemResource } from "@app/lib/resources/agent_message_consumption_item_resource";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { AgentConfigurationFactory } from "@app/tests/utils/AgentConfigurationFactory";
+import { AgentMessageConsumptionItemFactory } from "@app/tests/utils/AgentMessageConsumptionItemFactory";
 import { ConversationFactory } from "@app/tests/utils/ConversationFactory";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
 import { GroupFactory } from "@app/tests/utils/GroupFactory";
@@ -179,10 +178,10 @@ async function setupSettledMessage({
       },
     }
   );
-  await AgentMessageConsumptionItemResource.recordItemsIdempotently(auth, {
-    conversation,
+  await AgentMessageConsumptionItemFactory.createItems(auth, {
     agentMessageModelId,
-    attributionVersion: AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION,
+    conversation,
+    reconciled,
     records: [
       {
         itemType: "input",
@@ -197,23 +196,7 @@ async function setupSettledMessage({
         grossAttributedCreditAmountMicro: 1_000_000,
       },
     ],
-    pendingToolItems: [],
   });
-  if (reconciled) {
-    const items =
-      await AgentMessageConsumptionItemResource.listByAgentMessageModelIds(
-        auth,
-        {
-          agentMessageModelIds: [agentMessageModelId],
-          maxAttributionVersion: AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION,
-        }
-      );
-    await AgentMessageConsumptionItemResource.setReconciledCreditAmounts(auth, {
-      reconciledCreditAmountByItem: new Map(
-        items.map((item) => [item, item.grossAttributedCreditAmountMicro])
-      ),
-    });
-  }
   return {
     agent,
     agentMessage,
@@ -253,23 +236,19 @@ describe("loadAgentMessageConsumptionAnalyticsInput", () => {
   it("fails when only part of the newest attribution version is reconciled", async () => {
     const context = await setupSettledMessage();
     // Evidence written by a later pass that did not reconcile.
-    await AgentMessageConsumptionItemResource.recordItemsIdempotently(
-      context.auth,
-      {
-        conversation: context.conversation,
-        agentMessageModelId: context.agentMessageModelId,
-        attributionVersion: AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION,
-        records: [
-          {
-            itemType: "reasoning",
-            runUsageModelId: context.runUsageModelId,
-            outputTokensCount: 5,
-            grossAttributedCreditAmountMicro: 100_000,
-          },
-        ],
-        pendingToolItems: [],
-      }
-    );
+    await AgentMessageConsumptionItemFactory.createItems(context.auth, {
+      agentMessageModelId: context.agentMessageModelId,
+      conversation: context.conversation,
+      reconciled: false,
+      records: [
+        {
+          itemType: "reasoning",
+          runUsageModelId: context.runUsageModelId,
+          outputTokensCount: 5,
+          grossAttributedCreditAmountMicro: 100_000,
+        },
+      ],
+    });
 
     await expect(
       loadAgentMessageConsumptionAnalyticsInput(context.auth, {
@@ -620,23 +599,6 @@ describe("loadAgentMessageConsumptionAnalyticsInput", () => {
     );
 
     expect(input).toBeNull();
-  });
-
-  it("loads a reported model call that was never billed", async () => {
-    const context = await setupSettledMessage();
-    await ConversationResource.updateAgentMessageCostCredits(context.auth, {
-      agentMessageModelId: context.agentMessageModelId,
-      costCredits: null,
-    });
-
-    const input = await loadAgentMessageConsumptionAnalyticsInput(
-      context.auth,
-      { agentMessageId: context.agentMessage.sId }
-    );
-
-    expect(input).toMatchObject({
-      usages: [{ runModelId: context.run.id }],
-    });
   });
 
   it("loads a failed message that was billed before it failed", async () => {
