@@ -519,6 +519,14 @@ msgid "This comment can't be saved in this document. Try shortening or simplifyi
 msgstr ""
 
 #: front/components/editor/document/useDocumentComments.ts
+msgid "This document can't be saved right now. Undo the last edit to try again."
+msgstr ""
+
+#: front/components/editor/document/useDocumentComments.ts
+msgid "This suggestion can't be saved in this document."
+msgstr ""
+
+#: front/components/editor/document/useDocumentComments.ts
 msgid "Suggestions can only replace text within one paragraph."
 msgstr ""
 
@@ -536,10 +544,6 @@ msgstr ""
 
 #: front/components/editor/document/useDocumentComments.ts
 msgid "This text is too long or complex to suggest a change to."
-msgstr ""
-
-#: front/components/editor/document/useDocumentComments.ts
-msgid "This suggestion can't be saved in this document."
 msgstr ""
 
 #: front/components/editor/document/useDocumentComments.ts

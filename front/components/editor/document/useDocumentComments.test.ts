@@ -678,10 +678,42 @@ describe("useDocumentComments", () => {
         expect(
           (await result.current.comments.submitDraft("Too bold?")).isErr()
         ).toBe(true);
-        expect(
-          (await result.current.comments.reply("c1", "Not at all.")).isErr()
-        ).toBe(true);
+        const replied = await result.current.comments.reply(
+          "c1",
+          "Not at all."
+        );
+        expect(replied.isErr() && replied.error).toBe(
+          "This comment can't be saved in this document. Try shortening or simplifying it."
+        );
       });
+      expect(send).not.toHaveBeenCalled();
+    });
+
+    it("blames the document, not the comment, when the document already fails to save", async () => {
+      const { channel, send } = liveChannel(() => new Ok(null));
+      const { result } = await renderCommentedEditor(SOURCE, {
+        live: channel,
+        isSavable: () => false,
+      });
+      const editor = result.current.document.editor;
+      if (!editor) {
+        throw new Error("Editor did not mount.");
+      }
+
+      act(() => {
+        select(editor, "Hi");
+        result.current.comments.startDraft();
+      });
+      let submitted: Result<void, string> | undefined;
+      let replied: Result<void, string> | undefined;
+      await act(async () => {
+        submitted = await result.current.comments.submitDraft("Too bold?");
+        replied = await result.current.comments.reply("c1", "Not at all.");
+      });
+      const message =
+        "This document can't be saved right now. Undo the last edit to try again.";
+      expect(submitted?.isErr() && submitted.error).toBe(message);
+      expect(replied?.isErr() && replied.error).toBe(message);
       expect(send).not.toHaveBeenCalled();
     });
 

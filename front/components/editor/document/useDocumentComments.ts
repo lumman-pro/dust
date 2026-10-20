@@ -29,6 +29,7 @@ import type {
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
 import { assertNeverAndIgnore } from "@app/types/shared/utils/assert_never";
+import type { MessageDescriptor } from "@lingui/core";
 import { msg } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
 import type { ChainedCommands, Editor, JSONContent } from "@tiptap/core";
@@ -84,6 +85,7 @@ const EMPTY_STATE: EditorCommentsState = {
 const UNAVAILABLE_MESSAGE = msg`Commenting is unavailable.`;
 const UNANCHORED_MESSAGE = msg`The selected text can no longer take a comment. Select other text to comment.`;
 const UNSAVABLE_MESSAGE = msg`This comment can't be saved in this document. Try shortening or simplifying it.`;
+const DOCUMENT_UNSAVABLE_MESSAGE = msg`This document can't be saved right now. Undo the last edit to try again.`;
 
 const jumpToComment = (editor: Editor, id: string) => {
   editor.commands.setActiveComment(id);
@@ -94,6 +96,7 @@ const jumpToComment = (editor: Editor, id: string) => {
 const getDraftQuote = (doc: Node, draft: DocumentCommentDraft) =>
   doc.textBetween(draft.from, draft.to, " ");
 
+const UNSUGGESTED_MESSAGE = msg`This suggestion can't be saved in this document.`;
 const UNSUGGESTABLE_MESSAGE = msg`Suggestions can only replace text within one paragraph.`;
 const UNAPPLICABLE_MESSAGE = msg`This suggestion can't replace the commented text. Another comment may cover part of it.`;
 const DELETED_MESSAGE = msg`This comment was deleted.`;
@@ -437,6 +440,10 @@ export const useDocumentComments = ({
       )
     );
 
+  // A document that already fails to save refuses every change, through no fault of the change.
+  const unsavableMessage = (editor: Editor, message: MessageDescriptor) =>
+    t(wouldSave(editor.state.doc) ? message : DOCUMENT_UNSAVABLE_MESSAGE);
+
   /**
    * Refuses a new message to `thread`, or a new thread `commentId`, before anyone writes it: when
    * the codec could not write it, or the document would no longer save with it. A message the
@@ -465,7 +472,9 @@ export const useDocumentComments = ({
     if (!next) {
       return new Err(t(thread ? DELETED_MESSAGE : UNANCHORED_MESSAGE));
     }
-    return wouldSave(next) ? new Ok(undefined) : new Err(t(UNSAVABLE_MESSAGE));
+    return wouldSave(next)
+      ? new Ok(undefined)
+      : new Err(unsavableMessage(editor, UNSAVABLE_MESSAGE));
   };
 
   const sessionCommands = (
@@ -549,7 +558,7 @@ export const useDocumentComments = ({
       return new Err(t(UNANCHORED_MESSAGE));
     }
     if (!wouldSave(next)) {
-      return new Err(t(UNSAVABLE_MESSAGE));
+      return new Err(unsavableMessage(editor, UNSAVABLE_MESSAGE));
     }
     editor.chain().addComment(comment).focus().setTextSelection(draft.to).run();
     return new Ok(undefined);
@@ -798,7 +807,7 @@ export const useDocumentComments = ({
         );
       }
       if (!wouldSave(next)) {
-        return new Err(t`This suggestion can't be saved in this document.`);
+        return new Err(unsavableMessage(editor, UNSUGGESTED_MESSAGE));
       }
       // Two transactions: the text change is undoable, the resolution stays out of history.
       const before = editor.state.doc;
