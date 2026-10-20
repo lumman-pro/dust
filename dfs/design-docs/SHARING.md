@@ -129,8 +129,7 @@ owner or participants.
 
 Technically this allows resource enumeration: telling "not found" apart from "no access" lets a
 member check whether a conversation ID exists. Not an issue: it's intra-workspace, no data
-leaks at all, sIds are random (10 base62 characters) so guessing is impractical, and it's the model
-Google Drive and other mainstream platforms apply.
+leaks at all, and it's the model Google Drive and other mainstream platforms apply.
 
 | Actor                             | Dfs session                                                           |
 | --------------------------------- | --------------------------------------------------------------------- |
