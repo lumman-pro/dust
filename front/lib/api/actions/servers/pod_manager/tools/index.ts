@@ -20,6 +20,7 @@ import {
   getPodMemberAndEditorIds,
   getWritablePodContext,
   makeSuccessResponse,
+  partitionMembersToAdd,
   partitionMembersToRemove,
   resolvePodUserRolesById,
   withErrorHandling,
@@ -35,7 +36,6 @@ import {
   SET_PINNED_FRAME_TOOL_NAME,
   UPDATE_MEMBERS_TOOL_NAME,
 } from "@app/lib/api/actions/servers/pod_manager/metadata";
-import { partitionMembersToAdd } from "@app/lib/api/actions/servers/pod_manager/types";
 import { searchFunction } from "@app/lib/api/actions/servers/search/tools";
 import { resolveAgentIdByName } from "@app/lib/api/agents/search";
 import {
@@ -58,7 +58,10 @@ import {
 import { validatePodFileTabs } from "@app/lib/api/projects/file_tabs";
 import { listPodsForScope } from "@app/lib/api/projects/list";
 import { validatePinnedFramePath } from "@app/lib/api/projects/pinned_frame";
-import { createSpaceAndGroup } from "@app/lib/api/spaces";
+import {
+  createSpaceAndGroup,
+  updateSpacePermissions,
+} from "@app/lib/api/spaces";
 import { getConversationUserTimezone } from "@app/lib/api/timezone";
 import type { Authenticator } from "@app/lib/auth";
 import { notifyPodMembersAdded } from "@app/lib/notifications/triggers/pod-added-as-member";
@@ -320,11 +323,15 @@ export function createProjectManagerTools(
               auth,
               pod
             );
-            const updatePermissionsRes = await pod.updatePermissions(auth, {
-              isRestricted: newIsRestricted,
-              memberIds,
-              editorIds,
-            });
+            const updatePermissionsRes = await updateSpacePermissions(
+              auth,
+              pod,
+              {
+                isRestricted: newIsRestricted,
+                memberIds,
+                editorIds,
+              }
+            );
             if (updatePermissionsRes.isErr()) {
               return new Err(
                 new MCPError(updatePermissionsRes.error.message, {

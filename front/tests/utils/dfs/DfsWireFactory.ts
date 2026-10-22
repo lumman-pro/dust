@@ -38,4 +38,12 @@ export class DfsWireFactory {
       ...overrides,
     };
   }
+
+  static lockState(id: string, overrides: DfsWireMessage = {}): DfsWireMessage {
+    return {
+      lockId: Buffer.from(id, "hex"),
+      expiresAt: "1700000060000",
+      ...overrides,
+    };
+  }
 }

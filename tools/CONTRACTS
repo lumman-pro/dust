@@ -1,0 +1,8 @@
+@cc [owner:id13,label:cli] dfs-startup-opt-in
+The mprocs and process-compose launchers MUST NOT require or check the native FoundationDB
+client during default startup. DFS processes MUST be disabled by default. The client check
+MUST run when a developer explicitly starts DFS.
+
+@cc [owner:id13,label:error-handling] fdb-probe-api-initialization
+The FoundationDB client probe MUST successfully select the required API version before calling
+`fdb_get_client_version`. Unsupported API versions MUST fail the check without calling it.

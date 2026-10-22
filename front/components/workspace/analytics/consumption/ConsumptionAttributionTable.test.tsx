@@ -324,7 +324,7 @@ describe("ConsumptionAttributionTable", () => {
     );
 
     expect(
-      screen.getByRole("columnheader", { name: "Active / total members" })
+      screen.getByRole("columnheader", { name: "Active users" })
     ).toBeInTheDocument();
     expect(
       screen.getByRole("columnheader", { name: "Vs workspace avg" })
@@ -379,7 +379,7 @@ describe("ConsumptionAttributionTable", () => {
     // than visibility.
     expect(screen.getByRole("columnheader", { name: "Messages" })).toHaveClass(
       "w-0",
-      "@sm:w-auto"
+      "@sm:w-32"
     );
     expect(screen.getByText("1,234")).toBeInTheDocument();
 

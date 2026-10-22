@@ -381,6 +381,7 @@ export async function getOutputFromLLMStream(
   let generation = "";
   let nativeChainOfThought = "";
   let stopReason: string | undefined = undefined;
+  let servedModel: string | undefined = undefined;
   const publishedToolCallStartKeys = new Set<string>();
 
   try {
@@ -645,6 +646,10 @@ export async function getOutputFromLLMStream(
       }
 
       if (event.type === "token_usage") {
+        if (event.content.servedModel !== undefined) {
+          servedModel = event.content.servedModel;
+        }
+
         // Update reasoning token count on the last reasoning item
         const reasoningTokens = event.content.reasoningTokens ?? 0;
         if (reasoningTokens > 0) {
@@ -697,5 +702,6 @@ export async function getOutputFromLLMStream(
     dustRunId: llm.getTraceId(),
     timeToFirstEvent,
     stopReason,
+    servedModel,
   });
 }

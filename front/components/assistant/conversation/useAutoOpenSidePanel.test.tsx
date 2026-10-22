@@ -6,7 +6,13 @@ import { frameV2ContentType } from "@app/types/files";
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { openPanel, surface, panelState, dismissedFileIds } = vi.hoisted(() => {
+const {
+  openPanel,
+  surface,
+  panelState,
+  dismissedFileIds,
+  filesPanelDismissed,
+} = vi.hoisted(() => {
   const surface: { clientType: ClientType; isMobile: boolean } = {
     clientType: "web",
     isMobile: false,
@@ -16,7 +22,14 @@ const { openPanel, surface, panelState, dismissedFileIds } = vi.hoisted(() => {
     data: null,
   };
   const dismissedFileIds = new Set<string>();
-  return { openPanel: vi.fn(), surface, panelState, dismissedFileIds };
+  const filesPanelDismissed = { value: false };
+  return {
+    openPanel: vi.fn(),
+    surface,
+    panelState,
+    dismissedFileIds,
+    filesPanelDismissed,
+  };
 });
 
 vi.mock(
@@ -28,6 +41,7 @@ vi.mock(
       openPanel,
       wasAutoOpenDismissedForFileId: (fileId: string) =>
         dismissedFileIds.has(fileId),
+      wasFilesPanelAutoOpenDismissed: () => filesPanelDismissed.value,
     }),
   })
 );
@@ -67,6 +81,7 @@ describe("useAutoOpenSidePanel", () => {
     panelState.currentPanel = null;
     panelState.data = null;
     dismissedFileIds.clear();
+    filesPanelDismissed.value = false;
   });
 
   it("opens the files panel for a generated file on the desktop web app", async () => {
@@ -74,6 +89,16 @@ describe("useAutoOpenSidePanel", () => {
 
     await waitFor(() => {
       expect(openPanel).toHaveBeenCalledWith({ type: "files" });
+    });
+  });
+
+  it("does not auto-open the files panel after the user closed it this session", async () => {
+    filesPanelDismissed.value = true;
+
+    renderWithRegularFile();
+
+    await waitFor(() => {
+      expect(openPanel).not.toHaveBeenCalled();
     });
   });
 
@@ -120,6 +145,7 @@ describe("useAutoOpenSidePanel", () => {
         type: "interactive_content",
         fileId: frame.fileId,
         timestamp: "1710000000000",
+        openedFrom: { source: "agent", uiElement: "side_panel_auto_open" },
       });
     });
   });
@@ -150,6 +176,7 @@ describe("useAutoOpenSidePanel", () => {
         type: "interactive_content",
         fileId: frame.fileId,
         timestamp: "1710000000999",
+        openedFrom: { source: "agent", uiElement: "side_panel_auto_open" },
       });
     });
   });
@@ -206,6 +233,7 @@ describe("useAutoOpenSidePanel", () => {
         type: "interactive_content",
         fileId: frame.fileId,
         timestamp: "1710000000999",
+        openedFrom: { source: "agent", uiElement: "side_panel_auto_open" },
       });
     });
   });
@@ -246,6 +274,7 @@ describe("useAutoOpenSidePanel", () => {
         type: "interactive_content",
         fileId: "fil_frame",
         timestamp: "pub-1",
+        openedFrom: { source: "agent", uiElement: "side_panel_auto_open" },
       });
     });
   });
@@ -323,6 +352,7 @@ describe("useAutoOpenSidePanel", () => {
         type: "interactive_content",
         fileId: "fil_frame",
         timestamp: "1710000000000",
+        openedFrom: { source: "agent", uiElement: "side_panel_auto_open" },
       });
     });
   });

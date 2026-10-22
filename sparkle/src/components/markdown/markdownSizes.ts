@@ -8,3 +8,10 @@ export const markdownHeaderClasses = {
 };
 
 export const markdownParagraphSize = "text-base leading-relaxed";
+
+export const markdownTableClasses = {
+  frame: "rounded-2xl border border-border-dark",
+  cell: "border-border-dark px-4 py-3 align-top not-first:border-l",
+  headerCell:
+    "bg-muted-background text-left text-xs font-semibold text-muted-foreground",
+};

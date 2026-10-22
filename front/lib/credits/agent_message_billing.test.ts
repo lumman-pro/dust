@@ -1,5 +1,8 @@
 import type { AgentMessageBillingRunUsage } from "@app/lib/credits/agent_message_billing";
-import { buildAgentMessageBillingPlan } from "@app/lib/credits/agent_message_billing";
+import {
+  buildAgentMessageBillingPlan,
+  DUST_CLIENT_SIDE_TOOL_PRICING_DATE,
+} from "@app/lib/credits/agent_message_billing";
 import { describe, expect, it } from "vitest";
 
 function usage(
@@ -211,6 +214,66 @@ describe("buildAgentMessageBillingPlan", () => {
         ratedCredits: 3,
         billedCredits: 0,
         billingDisposition: "unbillable_status",
+      }),
+    ]);
+  });
+
+  it("prices Dust's own client-side tool calls as declared from the pricing date, third-party ones as external", () => {
+    const plan = buildAgentMessageBillingPlan({
+      actions: [
+        {
+          toolName: "read_workbook",
+          createdAt: DUST_CLIENT_SIDE_TOOL_PRICING_DATE.getTime(),
+          mcpServerId: "mcp-client-side:excel_add_in_client",
+          internalMCPServerName: null,
+          status: "succeeded",
+        },
+        {
+          toolName: "read_workbook",
+          createdAt: DUST_CLIENT_SIDE_TOOL_PRICING_DATE.getTime() - 1,
+          mcpServerId: "mcp-client-side:excel_add_in_client",
+          internalMCPServerName: null,
+          status: "succeeded",
+        },
+        {
+          toolName: "write_workbook",
+          mcpServerId: "mcp-client-side:excel_add_in_client",
+          declaredBilling: { toolCostCategory: "advanced", freeUsage: false },
+          internalMCPServerName: null,
+          status: "succeeded",
+        },
+        {
+          toolName: "create_ticket",
+          mcpServerId: "mcp-client-side:my_ticketing_app",
+          declaredBilling: { toolCostCategory: "basic", freeUsage: true },
+          internalMCPServerName: null,
+          status: "succeeded",
+        },
+      ],
+      contextOrigin: "web",
+      runUsages: [],
+    });
+
+    expect(plan.tools).toEqual([
+      expect.objectContaining({
+        ratedCredits: 1,
+        billedCredits: 0,
+        billingDisposition: "free_tool",
+      }),
+      expect.objectContaining({
+        ratedCredits: 3,
+        billedCredits: 3,
+        billingDisposition: "billed",
+      }),
+      expect.objectContaining({
+        ratedCredits: 3,
+        billedCredits: 3,
+        billingDisposition: "billed",
+      }),
+      expect.objectContaining({
+        ratedCredits: 3,
+        billedCredits: 3,
+        billingDisposition: "billed",
       }),
     ]);
   });

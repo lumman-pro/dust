@@ -568,6 +568,12 @@ export function renderUserMessage(
     }
   }
 
+  if (m.context.hostSelection) {
+    metadataItems.push(
+      `- Selection when sent: ${sanitizeDustSystemValue(m.context.hostSelection)}`
+    );
+  }
+
   const systemContext = [];
   if (metadataItems.length > 0) {
     systemContext.push(`${metadataItems.join("\n")}`);

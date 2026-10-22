@@ -8,6 +8,7 @@ import { rateLimiter } from "@app/lib/utils/rate_limiter";
 import { createPublicApiMockRequest } from "@app/tests/utils/generic_public_api_tests";
 import { GroupFactory } from "@app/tests/utils/GroupFactory";
 import { KeyFactory } from "@app/tests/utils/KeyFactory";
+import { SpaceFactory } from "@app/tests/utils/SpaceFactory";
 import type { AgentMessageConsumptionAnalyticsData } from "@app/types/assistant/analytics";
 import { Err, Ok } from "@app/types/shared/result";
 import { honoApp } from "@front-api/app";
@@ -334,6 +335,54 @@ describe("POST /api/v1/w/[wId]/analytics/consumption/export", () => {
     expect(response.status).toBe(200);
     const parsed = JSON.parse((await response.text()).trim());
     expect(parsed.userGroupIds).toBe(`${other.sId}; ${target.sId}`);
+  });
+
+  it("reports the space name of a restricted pod to an admin API key", async () => {
+    const { workspace, globalGroup } = await createGroupScopedKey();
+    const adminKey = await KeyFactory.admin(globalGroup);
+    const pod = await SpaceFactory.project(workspace, undefined, {
+      name: "Pod Alpha",
+    });
+    mockEsSuccess({ ...MOCK_ES_DOC, space_id: pod.sId });
+
+    const response = await consumptionExportRequest({
+      workspace,
+      key: adminKey,
+      body: {
+        startDate: "2024-06-01T00:00:00Z",
+        endDate: "2024-06-15T00:00:00Z",
+        format: "ndjson",
+      },
+    });
+
+    expect(response.status).toBe(200);
+    const parsed = JSON.parse((await response.text()).trim());
+    expect(parsed.spaceId).toBe(pod.sId);
+    expect(parsed.spaceName).toBe("Pod Alpha");
+  });
+
+  it("hides the name of a restricted pod from a user API key without access to it", async () => {
+    const { workspace, key, target } = await createGroupScopedKey();
+    const pod = await SpaceFactory.project(workspace, undefined, {
+      name: "Pod Alpha",
+    });
+    mockEsSuccess({ ...docWithUserGroups([target.sId]), space_id: pod.sId });
+
+    const response = await consumptionExportRequest({
+      workspace,
+      key,
+      body: {
+        startDate: "2024-06-01T00:00:00Z",
+        endDate: "2024-06-15T00:00:00Z",
+        format: "ndjson",
+        filter: { groups: [target.sId] },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    const parsed = JSON.parse((await response.text()).trim());
+    expect(parsed.spaceId).toBe(pod.sId);
+    expect(parsed.spaceName).toBe("");
   });
 
   it("returns 403 for a user API key without a group filter, or with an empty group id", async () => {

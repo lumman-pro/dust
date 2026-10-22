@@ -1,10 +1,13 @@
 import type { InternalAllowedIconType } from "@app/components/resources/resources_icons";
+import type { AuthorizationInfo } from "@app/lib/actions/mcp_metadata_extraction";
 import type { ToolDisplayLabels } from "@app/lib/api/mcp";
 import type {
   HostDerivedOAuthConfig,
   MCPOAuthUseCase,
+  OAuthProvider,
 } from "@app/types/oauth/lib";
 import type { WhitelistableFeature } from "@app/types/shared/feature_flags";
+import { assertNever } from "@app/types/shared/utils/assert_never";
 
 export type DefaultRemoteMCPServerConfig = {
   id: number;
@@ -14,7 +17,16 @@ export type DefaultRemoteMCPServerConfig = {
   icon: InternalAllowedIconType;
   documentationUrl?: string;
   connectionInstructions?: string;
-  authMethod: "bearer" | "oauth-dynamic" | "oauth-static" | null;
+  authMethod:
+    | "bearer"
+    | "oauth-dynamic"
+    | "oauth-static"
+    | "oauth-static-dust-app"
+    | null;
+  // Static OAuth through Dust's own OAuth app: the provider registered in Dust that holds the
+  // app's credentials in Dust's environment. Required when `authMethod` is
+  // "oauth-static-dust-app", unset otherwise.
+  oauthProvider?: OAuthProvider;
   supportedOAuthUseCases?: MCPOAuthUseCase[];
   scope?: string;
   // Overrides the `client_uri` sent at Dynamic Client Registration, for servers that allowlist
@@ -7588,7 +7600,832 @@ export const DEFAULT_REMOTE_MCP_SERVERS: DefaultRemoteMCPServerConfig[] = [
     },
   },
   {
+    id: 10061,
+    name: "Grafana",
+    description:
+      "Grafana Cloud tools for metrics, logs, traces, dashboards, and incidents.",
+    url: "https://mcp.grafana.com/mcp",
+    icon: "GrafanaLogo",
+    documentationUrl:
+      "https://grafana.com/docs/grafana-cloud/ai-tools/mcp-servers/cloud-mcp/",
+    connectionInstructions:
+      "Sign in to Grafana Cloud and authorize your stack. You need the Assistant Cloud MCP User role, and Grafana Assistant must be enabled for your stack. Choose only the access your agents need. Raw SQL queries can modify data. Connecting counts toward Grafana Assistant billing.",
+    authMethod: "oauth-dynamic",
+    toolStakes: {
+      add_activity_to_incident: "high",
+      agento11y_manage_agents: "low",
+      agento11y_manage_conversations: "low",
+      agento11y_manage_eval_collections: "high",
+      agento11y_manage_eval_rules: "high",
+      agento11y_manage_evaluators: "high",
+      agento11y_manage_experiments: "high",
+      agento11y_manage_generations: "low",
+      agento11y_manage_test_suites: "high",
+      alerting_manage_routing: "high",
+      alerting_manage_rules: "high",
+      alerting_routing_write: "high",
+      alerting_rules_read: "never_ask",
+      alerting_rules_write: "high",
+      alerting_silences_read: "low",
+      alerting_silences_write: "high",
+      analyze_loki_labels: "never_ask",
+      ask_assistant: "high",
+      check_datasources_health: "never_ask",
+      create_annotation: "low",
+      create_datasource: "high",
+      create_folder: "low",
+      create_incident: "high",
+      create_investigation: "high",
+      create_snapshot: "high",
+      delete_annotation: "high",
+      delete_snapshot: "high",
+      describe_clickhouse_table: "never_ask",
+      describe_infrastructure: "never_ask",
+      describe_sql_table: "never_ask",
+      diff_tempo_traces: "low",
+      generate_deeplink: "never_ask",
+      get_alert_group: "low",
+      get_annotation_tags: "never_ask",
+      get_annotations: "low",
+      get_assertions: "never_ask",
+      get_current_oncall_users: "low",
+      get_dashboard_by_uid: "low",
+      get_dashboard_panel_queries: "low",
+      get_dashboard_property: "low",
+      get_dashboard_summary: "low",
+      get_datasource: "low",
+      get_doc: "never_ask",
+      get_incident: "low",
+      get_investigation: "low",
+      get_investigation_thread: "low",
+      get_oncall_shift: "low",
+      get_panel_image: "low",
+      get_plugin: "never_ask",
+      get_query_examples: "never_ask",
+      get_resource_description: "never_ask",
+      get_resource_permissions: "low",
+      get_role_assignments: "low",
+      get_role_details: "low",
+      get_snapshot: "low",
+      get_tempo_trace: "low",
+      get_tempo_traceql_docs: "never_ask",
+      grafana_api_request: "high",
+      install_plugin: "high",
+      list_alert_groups: "low",
+      list_all_roles: "low",
+      list_clickhouse_tables: "never_ask",
+      list_cloudwatch_dimension_values: "never_ask",
+      list_cloudwatch_dimensions: "never_ask",
+      list_cloudwatch_metrics: "never_ask",
+      list_cloudwatch_namespaces: "never_ask",
+      list_dashboard_versions: "low",
+      list_datasources: "never_ask",
+      list_graphite_metrics: "never_ask",
+      list_graphite_tags: "never_ask",
+      list_incident_custom_fields: "never_ask",
+      list_incidents: "low",
+      list_investigation_evidence: "never_ask",
+      list_investigation_profiles: "never_ask",
+      list_investigations: "low",
+      list_loki_label_names: "never_ask",
+      list_loki_label_values: "never_ask",
+      list_oncall_schedules: "low",
+      list_oncall_teams: "low",
+      list_oncall_users: "low",
+      list_prometheus_label_names: "never_ask",
+      list_prometheus_label_values: "never_ask",
+      list_prometheus_metric_metadata: "never_ask",
+      list_prometheus_metric_names: "never_ask",
+      list_pyroscope_label_names: "never_ask",
+      list_pyroscope_label_values: "never_ask",
+      list_pyroscope_profile_types: "never_ask",
+      list_snapshots: "low",
+      list_sql_databases: "low",
+      list_sql_tables: "low",
+      list_team_roles: "low",
+      list_teams: "low",
+      list_tempo_attribute_names: "never_ask",
+      list_tempo_attribute_values: "never_ask",
+      list_user_roles: "low",
+      list_users_by_org: "low",
+      query_clickhouse: "high",
+      query_cloudwatch: "low",
+      query_elasticsearch: "low",
+      query_graphite: "low",
+      query_graphite_density: "low",
+      query_influxdb: "high",
+      query_loki_logs: "low",
+      query_loki_patterns: "low",
+      query_loki_stats: "low",
+      query_prometheus: "low",
+      query_prometheus_histogram: "low",
+      query_pyroscope: "low",
+      query_quickwit: "low",
+      query_sql: "high",
+      query_tempo_metrics: "low",
+      run_panel_query: "low",
+      search_dashboards: "never_ask",
+      search_docs: "never_ask",
+      search_folders: "never_ask",
+      search_plugin_information: "never_ask",
+      search_tempo_traces: "low",
+      suggest_loki_alloy_label_config: "never_ask",
+      update_alert_group: "high",
+      update_annotation: "low",
+      update_dashboard: "high",
+      update_datasource: "high",
+      update_incident: "high",
+      user_info: "never_ask",
+    },
+    toolDisplayLabels: {
+      add_activity_to_incident: {
+        running: "Adding activity to incident on Grafana",
+        done: "Added activity to incident on Grafana",
+      },
+      agento11y_manage_agents: {
+        running: "Loading agent observability agents on Grafana",
+        done: "Loaded agent observability agents on Grafana",
+      },
+      agento11y_manage_conversations: {
+        running: "Loading agent observability conversations on Grafana",
+        done: "Loaded agent observability conversations on Grafana",
+      },
+      agento11y_manage_eval_collections: {
+        running: "Managing agent observability eval collections on Grafana",
+        done: "Managed agent observability eval collections on Grafana",
+      },
+      agento11y_manage_eval_rules: {
+        running: "Managing agent observability eval rules on Grafana",
+        done: "Managed agent observability eval rules on Grafana",
+      },
+      agento11y_manage_evaluators: {
+        running: "Managing agent observability evaluators on Grafana",
+        done: "Managed agent observability evaluators on Grafana",
+      },
+      agento11y_manage_experiments: {
+        running: "Managing agent observability experiments on Grafana",
+        done: "Managed agent observability experiments on Grafana",
+      },
+      agento11y_manage_generations: {
+        running: "Loading agent observability generations on Grafana",
+        done: "Loaded agent observability generations on Grafana",
+      },
+      agento11y_manage_test_suites: {
+        running: "Managing agent observability test suites on Grafana",
+        done: "Managed agent observability test suites on Grafana",
+      },
+      alerting_manage_routing: {
+        running: "Managing alerting routing on Grafana",
+        done: "Managed alerting routing on Grafana",
+      },
+      alerting_manage_rules: {
+        running: "Managing alerting rules on Grafana",
+        done: "Managed alerting rules on Grafana",
+      },
+      alerting_routing_write: {
+        running: "Updating alert routing on Grafana",
+        done: "Updated alert routing on Grafana",
+      },
+      alerting_rules_read: {
+        running: "Loading alert rules on Grafana",
+        done: "Loaded alert rules on Grafana",
+      },
+      alerting_rules_write: {
+        running: "Updating alert rules on Grafana",
+        done: "Updated alert rules on Grafana",
+      },
+      alerting_silences_read: {
+        running: "Loading alert silences on Grafana",
+        done: "Loaded alert silences on Grafana",
+      },
+      alerting_silences_write: {
+        running: "Updating alert silences on Grafana",
+        done: "Updated alert silences on Grafana",
+      },
+      analyze_loki_labels: {
+        running: "Analyzing Loki labels on Grafana",
+        done: "Analyzed Loki labels on Grafana",
+      },
+      ask_assistant: {
+        running: "Querying Grafana Assistant",
+        done: "Queried Grafana Assistant",
+      },
+      check_datasources_health: {
+        running: "Checking data sources health on Grafana",
+        done: "Checked data sources health on Grafana",
+      },
+      create_annotation: {
+        running: "Creating annotation on Grafana",
+        done: "Created annotation on Grafana",
+      },
+      create_datasource: {
+        running: "Creating data source on Grafana",
+        done: "Created data source on Grafana",
+      },
+      create_folder: {
+        running: "Creating folder on Grafana",
+        done: "Created folder on Grafana",
+      },
+      create_incident: {
+        running: "Creating incident on Grafana",
+        done: "Created incident on Grafana",
+      },
+      create_investigation: {
+        running: "Creating investigation on Grafana",
+        done: "Created investigation on Grafana",
+      },
+      create_snapshot: {
+        running: "Creating snapshot on Grafana",
+        done: "Created snapshot on Grafana",
+      },
+      delete_annotation: {
+        running: "Deleting annotation on Grafana",
+        done: "Deleted annotation on Grafana",
+      },
+      delete_snapshot: {
+        running: "Deleting snapshot on Grafana",
+        done: "Deleted snapshot on Grafana",
+      },
+      describe_clickhouse_table: {
+        running: "Describing ClickHouse table on Grafana",
+        done: "Described ClickHouse table on Grafana",
+      },
+      describe_infrastructure: {
+        running: "Describing infrastructure on Grafana",
+        done: "Described infrastructure on Grafana",
+      },
+      describe_sql_table: {
+        running: "Describing SQL table on Grafana",
+        done: "Described SQL table on Grafana",
+      },
+      diff_tempo_traces: {
+        running: "Comparing Tempo traces on Grafana",
+        done: "Compared Tempo traces on Grafana",
+      },
+      generate_deeplink: {
+        running: "Generating deeplink on Grafana",
+        done: "Generated deeplink on Grafana",
+      },
+      get_alert_group: {
+        running: "Loading alert group on Grafana",
+        done: "Loaded alert group on Grafana",
+      },
+      get_annotation_tags: {
+        running: "Loading annotation tags on Grafana",
+        done: "Loaded annotation tags on Grafana",
+      },
+      get_annotations: {
+        running: "Loading annotations on Grafana",
+        done: "Loaded annotations on Grafana",
+      },
+      get_assertions: {
+        running: "Loading assertions on Grafana",
+        done: "Loaded assertions on Grafana",
+      },
+      get_current_oncall_users: {
+        running: "Loading current on-call users on Grafana",
+        done: "Loaded current on-call users on Grafana",
+      },
+      get_dashboard_by_uid: {
+        running: "Loading dashboard by UID on Grafana",
+        done: "Loaded dashboard by UID on Grafana",
+      },
+      get_dashboard_panel_queries: {
+        running: "Loading dashboard panel queries on Grafana",
+        done: "Loaded dashboard panel queries on Grafana",
+      },
+      get_dashboard_property: {
+        running: "Loading dashboard property on Grafana",
+        done: "Loaded dashboard property on Grafana",
+      },
+      get_dashboard_summary: {
+        running: "Loading dashboard summary on Grafana",
+        done: "Loaded dashboard summary on Grafana",
+      },
+      get_datasource: {
+        running: "Loading data source on Grafana",
+        done: "Loaded data source on Grafana",
+      },
+      get_doc: {
+        running: "Loading doc on Grafana",
+        done: "Loaded doc on Grafana",
+      },
+      get_incident: {
+        running: "Loading incident on Grafana",
+        done: "Loaded incident on Grafana",
+      },
+      get_investigation: {
+        running: "Loading investigation on Grafana",
+        done: "Loaded investigation on Grafana",
+      },
+      get_investigation_thread: {
+        running: "Loading investigation thread on Grafana",
+        done: "Loaded investigation thread on Grafana",
+      },
+      get_oncall_shift: {
+        running: "Loading on-call shift on Grafana",
+        done: "Loaded on-call shift on Grafana",
+      },
+      get_panel_image: {
+        running: "Loading panel image on Grafana",
+        done: "Loaded panel image on Grafana",
+      },
+      get_plugin: {
+        running: "Loading plugin on Grafana",
+        done: "Loaded plugin on Grafana",
+      },
+      get_query_examples: {
+        running: "Loading query examples on Grafana",
+        done: "Loaded query examples on Grafana",
+      },
+      get_resource_description: {
+        running: "Loading resource description on Grafana",
+        done: "Loaded resource description on Grafana",
+      },
+      get_resource_permissions: {
+        running: "Loading resource permissions on Grafana",
+        done: "Loaded resource permissions on Grafana",
+      },
+      get_role_assignments: {
+        running: "Loading role assignments on Grafana",
+        done: "Loaded role assignments on Grafana",
+      },
+      get_role_details: {
+        running: "Loading role details on Grafana",
+        done: "Loaded role details on Grafana",
+      },
+      get_snapshot: {
+        running: "Loading snapshot on Grafana",
+        done: "Loaded snapshot on Grafana",
+      },
+      get_tempo_trace: {
+        running: "Loading Tempo trace on Grafana",
+        done: "Loaded Tempo trace on Grafana",
+      },
+      get_tempo_traceql_docs: {
+        running: "Loading Tempo TraceQL docs on Grafana",
+        done: "Loaded Tempo TraceQL docs on Grafana",
+      },
+      grafana_api_request: {
+        running: "Sending an API request on Grafana",
+        done: "Sent an API request on Grafana",
+      },
+      install_plugin: {
+        running: "Installing plugin on Grafana",
+        done: "Installed plugin on Grafana",
+      },
+      list_alert_groups: {
+        running: "Listing alert groups on Grafana",
+        done: "Listed alert groups on Grafana",
+      },
+      list_all_roles: {
+        running: "Listing all roles on Grafana",
+        done: "Listed all roles on Grafana",
+      },
+      list_clickhouse_tables: {
+        running: "Listing ClickHouse tables on Grafana",
+        done: "Listed ClickHouse tables on Grafana",
+      },
+      list_cloudwatch_dimension_values: {
+        running: "Listing CloudWatch dimension values on Grafana",
+        done: "Listed CloudWatch dimension values on Grafana",
+      },
+      list_cloudwatch_dimensions: {
+        running: "Listing CloudWatch dimensions on Grafana",
+        done: "Listed CloudWatch dimensions on Grafana",
+      },
+      list_cloudwatch_metrics: {
+        running: "Listing CloudWatch metrics on Grafana",
+        done: "Listed CloudWatch metrics on Grafana",
+      },
+      list_cloudwatch_namespaces: {
+        running: "Listing CloudWatch namespaces on Grafana",
+        done: "Listed CloudWatch namespaces on Grafana",
+      },
+      list_dashboard_versions: {
+        running: "Listing dashboard versions on Grafana",
+        done: "Listed dashboard versions on Grafana",
+      },
+      list_datasources: {
+        running: "Listing data sources on Grafana",
+        done: "Listed data sources on Grafana",
+      },
+      list_graphite_metrics: {
+        running: "Listing Graphite metrics on Grafana",
+        done: "Listed Graphite metrics on Grafana",
+      },
+      list_graphite_tags: {
+        running: "Listing Graphite tags on Grafana",
+        done: "Listed Graphite tags on Grafana",
+      },
+      list_incident_custom_fields: {
+        running: "Listing incident custom fields on Grafana",
+        done: "Listed incident custom fields on Grafana",
+      },
+      list_incidents: {
+        running: "Listing incidents on Grafana",
+        done: "Listed incidents on Grafana",
+      },
+      list_investigation_evidence: {
+        running: "Listing investigation evidence on Grafana",
+        done: "Listed investigation evidence on Grafana",
+      },
+      list_investigation_profiles: {
+        running: "Listing investigation profiles on Grafana",
+        done: "Listed investigation profiles on Grafana",
+      },
+      list_investigations: {
+        running: "Listing investigations on Grafana",
+        done: "Listed investigations on Grafana",
+      },
+      list_loki_label_names: {
+        running: "Listing Loki label names on Grafana",
+        done: "Listed Loki label names on Grafana",
+      },
+      list_loki_label_values: {
+        running: "Listing Loki label values on Grafana",
+        done: "Listed Loki label values on Grafana",
+      },
+      list_oncall_schedules: {
+        running: "Listing on-call schedules on Grafana",
+        done: "Listed on-call schedules on Grafana",
+      },
+      list_oncall_teams: {
+        running: "Listing on-call teams on Grafana",
+        done: "Listed on-call teams on Grafana",
+      },
+      list_oncall_users: {
+        running: "Listing on-call users on Grafana",
+        done: "Listed on-call users on Grafana",
+      },
+      list_prometheus_label_names: {
+        running: "Listing Prometheus label names on Grafana",
+        done: "Listed Prometheus label names on Grafana",
+      },
+      list_prometheus_label_values: {
+        running: "Listing Prometheus label values on Grafana",
+        done: "Listed Prometheus label values on Grafana",
+      },
+      list_prometheus_metric_metadata: {
+        running: "Listing Prometheus metric metadata on Grafana",
+        done: "Listed Prometheus metric metadata on Grafana",
+      },
+      list_prometheus_metric_names: {
+        running: "Listing Prometheus metric names on Grafana",
+        done: "Listed Prometheus metric names on Grafana",
+      },
+      list_pyroscope_label_names: {
+        running: "Listing Pyroscope label names on Grafana",
+        done: "Listed Pyroscope label names on Grafana",
+      },
+      list_pyroscope_label_values: {
+        running: "Listing Pyroscope label values on Grafana",
+        done: "Listed Pyroscope label values on Grafana",
+      },
+      list_pyroscope_profile_types: {
+        running: "Listing Pyroscope profile types on Grafana",
+        done: "Listed Pyroscope profile types on Grafana",
+      },
+      list_snapshots: {
+        running: "Listing snapshots on Grafana",
+        done: "Listed snapshots on Grafana",
+      },
+      list_sql_databases: {
+        running: "Listing SQL databases on Grafana",
+        done: "Listed SQL databases on Grafana",
+      },
+      list_sql_tables: {
+        running: "Listing SQL tables on Grafana",
+        done: "Listed SQL tables on Grafana",
+      },
+      list_team_roles: {
+        running: "Listing team roles on Grafana",
+        done: "Listed team roles on Grafana",
+      },
+      list_teams: {
+        running: "Listing teams on Grafana",
+        done: "Listed teams on Grafana",
+      },
+      list_tempo_attribute_names: {
+        running: "Listing Tempo attribute names on Grafana",
+        done: "Listed Tempo attribute names on Grafana",
+      },
+      list_tempo_attribute_values: {
+        running: "Listing Tempo attribute values on Grafana",
+        done: "Listed Tempo attribute values on Grafana",
+      },
+      list_user_roles: {
+        running: "Listing user roles on Grafana",
+        done: "Listed user roles on Grafana",
+      },
+      list_users_by_org: {
+        running: "Listing users by org on Grafana",
+        done: "Listed users by org on Grafana",
+      },
+      query_clickhouse: {
+        running: "Querying ClickHouse on Grafana",
+        done: "Queried ClickHouse on Grafana",
+      },
+      query_cloudwatch: {
+        running: "Querying CloudWatch on Grafana",
+        done: "Queried CloudWatch on Grafana",
+      },
+      query_elasticsearch: {
+        running: "Querying Elasticsearch on Grafana",
+        done: "Queried Elasticsearch on Grafana",
+      },
+      query_graphite: {
+        running: "Querying Graphite on Grafana",
+        done: "Queried Graphite on Grafana",
+      },
+      query_graphite_density: {
+        running: "Querying Graphite density on Grafana",
+        done: "Queried Graphite density on Grafana",
+      },
+      query_influxdb: {
+        running: "Querying InfluxDB on Grafana",
+        done: "Queried InfluxDB on Grafana",
+      },
+      query_loki_logs: {
+        running: "Querying Loki logs on Grafana",
+        done: "Queried Loki logs on Grafana",
+      },
+      query_loki_patterns: {
+        running: "Querying Loki patterns on Grafana",
+        done: "Queried Loki patterns on Grafana",
+      },
+      query_loki_stats: {
+        running: "Querying Loki stats on Grafana",
+        done: "Queried Loki stats on Grafana",
+      },
+      query_prometheus: {
+        running: "Querying Prometheus on Grafana",
+        done: "Queried Prometheus on Grafana",
+      },
+      query_prometheus_histogram: {
+        running: "Querying Prometheus histogram on Grafana",
+        done: "Queried Prometheus histogram on Grafana",
+      },
+      query_pyroscope: {
+        running: "Querying Pyroscope on Grafana",
+        done: "Queried Pyroscope on Grafana",
+      },
+      query_quickwit: {
+        running: "Querying Quickwit on Grafana",
+        done: "Queried Quickwit on Grafana",
+      },
+      query_sql: {
+        running: "Querying SQL on Grafana",
+        done: "Queried SQL on Grafana",
+      },
+      query_tempo_metrics: {
+        running: "Querying Tempo metrics on Grafana",
+        done: "Queried Tempo metrics on Grafana",
+      },
+      run_panel_query: {
+        running: "Running panel query on Grafana",
+        done: "Ran panel query on Grafana",
+      },
+      search_dashboards: {
+        running: "Searching dashboards on Grafana",
+        done: "Searched dashboards on Grafana",
+      },
+      search_docs: {
+        running: "Searching docs on Grafana",
+        done: "Searched docs on Grafana",
+      },
+      search_folders: {
+        running: "Searching folders on Grafana",
+        done: "Searched folders on Grafana",
+      },
+      search_plugin_information: {
+        running: "Searching plugin information on Grafana",
+        done: "Searched plugin information on Grafana",
+      },
+      search_tempo_traces: {
+        running: "Searching Tempo traces on Grafana",
+        done: "Searched Tempo traces on Grafana",
+      },
+      suggest_loki_alloy_label_config: {
+        running: "Suggesting Loki Alloy label configuration on Grafana",
+        done: "Suggested Loki Alloy label configuration on Grafana",
+      },
+      update_alert_group: {
+        running: "Updating alert group on Grafana",
+        done: "Updated alert group on Grafana",
+      },
+      update_annotation: {
+        running: "Updating annotation on Grafana",
+        done: "Updated annotation on Grafana",
+      },
+      update_dashboard: {
+        running: "Updating dashboard on Grafana",
+        done: "Updated dashboard on Grafana",
+      },
+      update_datasource: {
+        running: "Updating data source on Grafana",
+        done: "Updated data source on Grafana",
+      },
+      update_incident: {
+        running: "Updating incident on Grafana",
+        done: "Updated incident on Grafana",
+      },
+      user_info: {
+        running: "Loading user information on Grafana",
+        done: "Loaded user information on Grafana",
+      },
+    },
+  },
+  {
     id: 10059,
+    name: "Dropbox",
+    description:
+      "Dropbox tools for browsing, searching and reading files, and for creating, moving, sharing and restoring files and folders.",
+    url: "https://mcp.dropbox.com/mcp",
+    icon: "DropboxLogo",
+    documentationUrl:
+      "https://help.dropbox.com/integrations/connect-dropbox-mcp-server",
+    connectionInstructions:
+      "Dropbox uses OAuth. You will be prompted to sign in with your Dropbox account. The MCP can only access the files and folders you can already see in Dropbox.",
+    authMethod: "oauth-static-dust-app",
+    oauthProvider: "dropbox",
+    supportedOAuthUseCases: ["personal_actions", "platform_actions"],
+    toolStakes: {
+      list_folder: "never_ask",
+      get_file_metadata: "never_ask",
+      get_file_content: "never_ask",
+      get_usage_and_quota: "never_ask",
+      search: "never_ask",
+      who_am_i: "never_ask",
+      check_job_status: "never_ask",
+      list_shared_links: "never_ask",
+      get_shared_link_metadata: "never_ask",
+      list_file_requests: "never_ask",
+      get_file_request: "never_ask",
+      list_file_revisions: "never_ask",
+      list_restore_events: "never_ask",
+      list_dropbox_operations: "never_ask",
+      get_dropbox_operation: "never_ask",
+      run_read_dropbox_operation: "never_ask",
+
+      create_folder: "low",
+      create_file: "low",
+      copy: "low",
+
+      move: "high",
+      delete: "high",
+      restore_file_revision: "high",
+      restore_folder: "high",
+      run_write_dropbox_operation: "high",
+      // Shared links, file requests and download links expose content outside of Dropbox.
+      create_shared_link: "high",
+      create_file_request: "high",
+      download_link: "high",
+    },
+    toolDisplayLabels: {
+      list_folder: {
+        running: "Listing a Dropbox folder",
+        done: "Listed a Dropbox folder",
+      },
+      get_file_metadata: {
+        running: "Reading file metadata on Dropbox",
+        done: "Read file metadata on Dropbox",
+      },
+      get_file_content: {
+        running: "Reading a file on Dropbox",
+        done: "Read a file on Dropbox",
+      },
+      get_usage_and_quota: {
+        running: "Checking storage usage on Dropbox",
+        done: "Checked storage usage on Dropbox",
+      },
+      search: {
+        running: "Searching on Dropbox",
+        done: "Searched on Dropbox",
+      },
+      who_am_i: {
+        running: "Checking identity on Dropbox",
+        done: "Checked identity on Dropbox",
+      },
+      check_job_status: {
+        running: "Checking a job status on Dropbox",
+        done: "Checked a job status on Dropbox",
+      },
+      list_shared_links: {
+        running: "Listing shared links on Dropbox",
+        done: "Listed shared links on Dropbox",
+      },
+      get_shared_link_metadata: {
+        running: "Reading a shared link on Dropbox",
+        done: "Read a shared link on Dropbox",
+      },
+      list_file_requests: {
+        running: "Listing file requests on Dropbox",
+        done: "Listed file requests on Dropbox",
+      },
+      get_file_request: {
+        running: "Reading a file request on Dropbox",
+        done: "Read a file request on Dropbox",
+      },
+      list_file_revisions: {
+        running: "Listing file revisions on Dropbox",
+        done: "Listed file revisions on Dropbox",
+      },
+      list_restore_events: {
+        running: "Listing activity on Dropbox",
+        done: "Listed activity on Dropbox",
+      },
+      list_dropbox_operations: {
+        running: "Listing Dropbox operations",
+        done: "Listed Dropbox operations",
+      },
+      get_dropbox_operation: {
+        running: "Reading a Dropbox operation",
+        done: "Read a Dropbox operation",
+      },
+      run_read_dropbox_operation: {
+        running: "Running a read operation on Dropbox",
+        done: "Ran a read operation on Dropbox",
+      },
+      create_folder: {
+        running: "Creating a folder on Dropbox",
+        done: "Created a folder on Dropbox",
+      },
+      create_file: {
+        running: "Creating a file on Dropbox",
+        done: "Created a file on Dropbox",
+      },
+      copy: {
+        running: "Copying on Dropbox",
+        done: "Copied on Dropbox",
+      },
+      move: {
+        running: "Moving on Dropbox",
+        done: "Moved on Dropbox",
+      },
+      delete: {
+        running: "Deleting on Dropbox",
+        done: "Deleted on Dropbox",
+      },
+      restore_file_revision: {
+        running: "Restoring a file revision on Dropbox",
+        done: "Restored a file revision on Dropbox",
+      },
+      restore_folder: {
+        running: "Restoring a folder on Dropbox",
+        done: "Restored a folder on Dropbox",
+      },
+      run_write_dropbox_operation: {
+        running: "Running a write operation on Dropbox",
+        done: "Ran a write operation on Dropbox",
+      },
+      create_shared_link: {
+        running: "Creating a shared link on Dropbox",
+        done: "Created a shared link on Dropbox",
+      },
+      create_file_request: {
+        running: "Creating a file request on Dropbox",
+        done: "Created a file request on Dropbox",
+      },
+      download_link: {
+        running: "Creating a download link on Dropbox",
+        done: "Created a download link on Dropbox",
+      },
+    },
+  },
+  {
+    id: 10060,
+    name: "Mobbin",
+    description:
+      "Mobbin tools to search real-world UI design references: app screens, multi-step user flows, and website sections.",
+    url: "https://api.mobbin.com/mcp",
+    icon: "MobbinLogo",
+    documentationUrl: "https://docs.mobbin.com/mcp",
+    connectionInstructions:
+      "Mobbin uses OAuth with dynamic client registration. Sign in with your Mobbin account to connect.",
+    authMethod: "oauth-dynamic",
+    toolStakes: {
+      search_screens: "never_ask",
+      search_flows: "never_ask",
+      search_sections: "never_ask",
+    },
+    toolDisplayLabels: {
+      search_screens: {
+        running: "Searching screens on Mobbin",
+        done: "Searched screens on Mobbin",
+      },
+      search_flows: {
+        running: "Searching flows on Mobbin",
+        done: "Searched flows on Mobbin",
+      },
+      search_sections: {
+        running: "Searching sections on Mobbin",
+        done: "Searched sections on Mobbin",
+      },
+    },
+  },
+  {
+    id: 10064,
     name: "Multi Mail",
     description:
       "Multi Mail tools to search, read, draft, send and organise mail across several Gmail, Outlook.com, Microsoft 365, iCloud and Fastmail mailboxes at once, including attachments, labels, filters and the vacation responder.",
@@ -7776,3 +8613,41 @@ export const getDefaultRemoteMCPServerByName = (
     DEFAULT_REMOTE_MCP_SERVERS.find((server) => server.name === name) || null
   );
 };
+
+/**
+ * @cc [owner:LeandreLeBizec,label:mcp] preset-authorization-by-auth-method
+ * The returned authorization MUST follow the preset's `authMethod`:
+ * - "oauth-dynamic": provider `mcp`, with the preset's `scope`;
+ * - "oauth-static": provider `mcp_static`;
+ * - "oauth-static-dust-app": provider `oauthProvider`, or `null` when `oauthProvider` is missing;
+ * - "bearer" or `null`: `null`.
+ * `supported_use_cases` MUST be the preset's `supportedOAuthUseCases`, or empty when unset.
+ */
+export function getDefaultRemoteMCPServerAuthorization(
+  config: DefaultRemoteMCPServerConfig
+): AuthorizationInfo | null {
+  const supportedUseCases = config.supportedOAuthUseCases ?? [];
+
+  switch (config.authMethod) {
+    case "oauth-dynamic":
+      return {
+        provider: "mcp",
+        supported_use_cases: supportedUseCases,
+        scope: config.scope,
+      };
+    case "oauth-static":
+      return { provider: "mcp_static", supported_use_cases: supportedUseCases };
+    case "oauth-static-dust-app":
+      return config.oauthProvider
+        ? {
+            provider: config.oauthProvider,
+            supported_use_cases: supportedUseCases,
+          }
+        : null;
+    case "bearer":
+    case null:
+      return null;
+    default:
+      return assertNever(config.authMethod);
+  }
+}

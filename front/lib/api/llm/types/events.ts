@@ -137,6 +137,18 @@ export interface TokenUsage {
   uncachedInputTokens?: number;
   // Processing tier the provider reports having billed this response at.
   serviceTier?: ServiceTier;
+  // The model that answered, when the provider switched to another model (for
+  // example after an Anthropic refusal). Absent when the requested model answered.
+  servedModel?: string;
+  // Token usage of each model the provider tried, in order. Only set when the
+  // provider switched models. Each attempt is billed at its own model's rates.
+  usageIterations?: ModelTokenUsage[];
+}
+
+export interface ModelTokenUsage {
+  // Null when the provider does not name the model (the requested one).
+  model: string | null;
+  usage: TokenUsage;
 }
 
 export interface TokenUsageEvent {

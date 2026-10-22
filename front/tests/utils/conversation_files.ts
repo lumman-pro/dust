@@ -11,12 +11,13 @@ import { fileStorageMock } from "@app/tests/utils/mocks/file_storage";
 export async function writeConversationFile(
   auth: Authenticator,
   name: string,
-  text: string
+  text: string,
+  contentType = "text/markdown"
 ) {
   fileStorageMock.enableVersioning();
   // The storage mock does not keep the type a file was written with.
   fileStorageMock.setFileMetadata(() => ({
-    contentType: "text/markdown",
+    contentType,
     size: "0",
   }));
   const conversation = await ConversationFactory.createPlain(auth);
@@ -30,7 +31,7 @@ export async function writeConversationFile(
     dustFs.value,
     path,
     new TextEncoder().encode(text),
-    "text/markdown"
+    contentType
   );
   if (written.isErr()) {
     throw written.error;

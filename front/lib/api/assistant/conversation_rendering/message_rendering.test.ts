@@ -152,6 +152,7 @@ describe("renderAllMessages", () => {
             costCredits: null,
             resolvedModel: null,
             modelResolutionMethod: null,
+            fallbackModelId: null,
           } satisfies AgentMessageType,
         ];
       }

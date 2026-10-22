@@ -47,7 +47,7 @@ interface FrameToolbarProps {
   podActions?: FrameToolbarPodActions | null;
   /** Conversation-only actions (e.g. save-to-pod) rendered after the shared cluster. */
   trailing?: ReactNode;
-  /** Conversation-only status (e.g. the pending-draft chip), rendered after the Beta chip. */
+  /** Status (e.g. the draft-mode chip on Pod surfaces), rendered after the Beta chip. */
   status?: ReactNode;
 }
 

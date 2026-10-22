@@ -1,5 +1,6 @@
 import type { InternalMCPServerNameType } from "@app/lib/actions/mcp_internal_actions/constants";
 import type { ToolExecutionStatus } from "@app/lib/actions/statuses";
+import type { ToolBillingInfo } from "@app/lib/api/mcp";
 import {
   buildAgentMessageBillingPlan,
   isFreeOrigin,
@@ -23,7 +24,6 @@ export {
   FREE_ORIGINS,
   getToolBillingInfo,
   isFreeOrigin,
-  isToolCostCategory,
   TOOL_COST_CATEGORY_AWU_WEIGHTS,
 } from "@app/lib/credits/agent_message_billing";
 
@@ -114,8 +114,10 @@ export function toolAwuFromActions(
 // ---------------------------------------------------------------------------
 
 interface ToolAction {
+  createdAt?: number;
   toolName: string;
   mcpServerId: string | null;
+  declaredBilling?: ToolBillingInfo | null;
   internalMCPServerName: InternalMCPServerNameType | null;
   status: ToolExecutionStatus;
   // The billing plan needs every chronological action in the message to apply

@@ -595,6 +595,11 @@ async function streamAgentAnswerToSlack(
             i18n,
             toolName: event.metadata.toolName,
             id: JSON.stringify(blockId),
+            // Saving an approval needs a Dust user, so only offer it to users matched by email,
+            // and only for the stakes the web app lets users always allow.
+            canAlwaysApprove:
+              (event.stake === "low" || event.stake === "medium") &&
+              slackChatBotMessage.slackEmail !== "unknown",
           }),
         });
         if (postResult.isErr()) {

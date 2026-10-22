@@ -524,6 +524,79 @@ describe("VisualizationActionIframe", () => {
   });
 
   it.each([
+    ["member", scopedUserIdentity],
+    ["visitor", undefined],
+  ])(
+    "routes a %s call on a share page to the share's public route",
+    async (_viewer, identity) => {
+      mocks.clientFetch.mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            invocation: { functionId: "sfn_function", sId: "sfi_invocation" },
+            outcome: { status: "succeeded", result: { ok: true } },
+          }),
+          { status: 201, headers: { "Content-Type": "application/json" } }
+        )
+      );
+
+      const { iframe } = renderShareFrame(identity);
+
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          source: iframe.contentWindow,
+          data: {
+            command: "callFunction",
+            identifier: "viz-fil_frame",
+            messageUniqueId: "message-1",
+            params: { functionIdOrSlug: "list-todos" },
+          },
+        })
+      );
+
+      await waitFor(() => {
+        expect(mocks.clientFetch).toHaveBeenCalledWith(
+          "/api/v1/public/frames/shr_token/functions/list-todos/invocations",
+          expect.objectContaining({ method: "POST" })
+        );
+      });
+    }
+  );
+
+  it("settles a visitor call without an outcome as not supported", async () => {
+    mocks.clientFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          invocation: { functionId: "sfn_function", sId: "sfi_invocation" },
+        }),
+        { status: 201, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const { iframe, postMessage } = renderShareFrame(undefined);
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        source: iframe.contentWindow,
+        data: {
+          command: "callFunction",
+          identifier: "viz-fil_frame",
+          messageUniqueId: "message-1",
+          params: { functionIdOrSlug: "list-todos" },
+        },
+      })
+    );
+
+    await waitFor(() => {
+      expect(postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: expect.objectContaining({ code: "not_supported" }),
+        }),
+        { targetOrigin: "*" }
+      );
+    });
+  });
+
+  it.each([
     ["latest" as const, { target: "latest" }],
     [undefined, {}],
   ])(
@@ -587,6 +660,35 @@ describe("VisualizationActionIframe", () => {
     }
   );
 });
+
+const renderShareFrame = (
+  identity: ScopedWorkspaceUserIdentity | undefined
+) => {
+  const { container } = render(
+    createElement(VisualizationActionIframe, {
+      agentConfigurationId: null,
+      canInvokeFunctions: identity !== undefined,
+      conversationId: null,
+      frameId: "fil_frame",
+      scopedUserIdentity: identity,
+      shareToken: "shr_token",
+      viewer: null,
+      visualization: VisualizationFactory.buildPublic({
+        identifier: "viz-fil_frame",
+      }),
+      vizUrl: "https://viz.dust.tt",
+      workspaceId: "w_current",
+    })
+  );
+  const iframe = container.querySelector("iframe");
+  if (!iframe?.contentWindow) {
+    throw new Error("Expected the visualization iframe to be mounted.");
+  }
+  const postMessage = vi
+    .spyOn(iframe.contentWindow, "postMessage")
+    .mockImplementation(() => {});
+  return { iframe, postMessage };
+};
 
 const renderFileFrame = (
   visualization?: VisualizationActionIframeProps["visualization"],

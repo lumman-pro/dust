@@ -108,12 +108,34 @@ msgid "Download"
 msgstr "Download"
 
 #: front/components/assistant/conversation/files_panel/FilePreviewPanel.tsx
+msgid "Markdown"
+msgstr "Markdown"
+
+#: front/components/assistant/conversation/files_panel/FilePreviewPanel.tsx
+msgid "Markdown with comments"
+msgstr "Markdown with comments"
+
+#: front/components/assistant/conversation/files_panel/FilePreviewPanel.tsx
+msgid "PDF"
+msgstr "PDF"
+
+#: front/components/assistant/conversation/files_panel/FilePreviewPanel.tsx
 msgid "Exit full screen mode"
 msgstr "Exit full screen mode"
 
 #: front/components/assistant/conversation/files_panel/FilePreviewPanel.tsx
 msgid "Go to full screen mode"
 msgstr "Go to full screen mode"
+
+#: front/components/assistant/conversation/files_panel/FilePreviewPanel.tsx
+msgctxt "file view mode label beside the file name"
+msgid "[source]"
+msgstr "[source]"
+
+#: front/components/assistant/conversation/files_panel/FilePreviewPanel.tsx
+msgctxt "file view mode label beside the file name"
+msgid "[read-only]"
+msgstr "[read-only]"
 
 #: front/components/assistant/conversation/files_panel/FilesTab.tsx
 msgid "Conversation attachments & generated content will appear here."

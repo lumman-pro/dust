@@ -11,7 +11,8 @@ import {
 import { onAgentActivity, onAgentEdit } from "@app/lib/client/collab/agents";
 import { caretColor } from "@app/lib/client/collab/messages";
 import datadogLogger from "@app/logger/datadogLogger";
-import type { AgentActivity, CollabAgent } from "@app/types/collab";
+import type { CollabAgent, DocumentActivity } from "@app/types/collab";
+import { isDocumentActivity } from "@app/types/collab";
 import { normalizeError } from "@app/types/shared/utils/error_utils";
 import type { HocuspocusProvider } from "@hocuspocus/provider";
 import { Extension } from "@tiptap/core";
@@ -23,7 +24,7 @@ import type { EditorView } from "@tiptap/pm/view";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { ProsemirrorBinding, ySyncPluginKey } from "@tiptap/y-tiptap";
 
-const ACTIVITY_SHOWN_MS: Record<AgentActivity, number> = {
+const ACTIVITY_SHOWN_MS: Record<DocumentActivity, number> = {
   reading: 20_000,
   editing: 3_100,
 };
@@ -331,7 +332,8 @@ const caretDecorations = (
  * MUST show the caret again where it last was, and none MUST show before an edit in this editor.
  * Carets and the text being typed MUST follow later changes of the document and MUST only add
  * decorations, never change the document, the selection or undo history. An agent MUST disappear
- * its `ACTIVITY_SHOWN_MS` time after a read, or after an edit's typing ends: the caret fades out
+ * its `ACTIVITY_SHOWN_MS` time after a read, or after an edit's typing ends, whatever it announces
+ * meanwhile besides reading and editing: the caret fades out
  * (`collab-caret-leaving`) and is gone `LEAVING_MS` later.
  */
 /**
@@ -644,7 +646,10 @@ export const agentCarets = (provider: HocuspocusProvider, userId: string) =>
         const stopActivity = onAgentActivity(
           provider,
           ({ agent, activity }) => {
-            if (!agentCaretsOf(this.editor.state).has(agentCaretKey(agent))) {
+            if (
+              !isDocumentActivity(activity) ||
+              !agentCaretsOf(this.editor.state).has(agentCaretKey(agent))
+            ) {
               return;
             }
             leaveAfter(agentCaretKey(agent), ACTIVITY_SHOWN_MS[activity]);

@@ -875,23 +875,24 @@ const WhitelistableFeaturesSchema = FlexibleEnumSchema<
   | "group_limits"
   | "claude_fable_5_feature"
   | "deepseek_feature"
+  | "dfs_gcs_replication"
   | "exa_people_and_company"
   | "disable_formatting_prompt"
-  | "disable_frames_v2"
   | "disable_gpt_6_astra"
   | "disable_run_logs"
   | "dummy_feature_for_flag_testing"
   | "dust_agent_sonnet_5_default"
+  | "dust_file_system"
   | "dust_internal_dangerous_in_cluster_mcp_servers"
   | "dust_internal_global_agents"
   | "dust_lean_agent"
   | "dust_pod_goal"
   | "figma_mcp"
   | "fireworks_new_model_feature"
-  | "frames_v2"
   | "frames_v2_drafts"
   | "frames_v2_functions"
   | "frames_v2_public_functions"
+  | "frames_v2_schedules"
   | "google_sheets_tool"
   | "gpt_5_6_terra_long_context"
   | "http_client_tool"
@@ -900,7 +901,6 @@ const WhitelistableFeaturesSchema = FlexibleEnumSchema<
   | "labs_mcp_actions_dashboard"
   | "legacy_dust_apps"
   | "legacy_trigger_limits"
-  | "localisation_de-DE"
   | "message_export_from_consumption_index"
   | "netsuite_mcp"
   | "noop_model_feature"
@@ -3488,6 +3488,7 @@ export const PublicVizContentResponseBodySchema = z.object({
   contentType: z.string(),
   metadata: z.record(z.unknown()).optional(),
   isAuthenticatedMember: z.boolean().optional(),
+  canInvokePublicFunctions: z.boolean().optional(),
 });
 
 export type PublicVizContentResponseBodyType = z.infer<
@@ -3684,6 +3685,7 @@ const InternalAllowedIconSchema = FlexibleEnumSchema<
   | "CursorLogo"
   | "DatabricksLogo"
   | "DriveLogo"
+  | "DropboxLogo"
   | "FathomLogo"
   | "FigmaLogo"
   | "FirefliesLogo"
@@ -3697,6 +3699,7 @@ const InternalAllowedIconSchema = FlexibleEnumSchema<
   | "GmailLogo"
   | "GongLogo"
   | "GoogleSpreadsheetLogo"
+  | "GrafanaLogo"
   | "GranolaLogo"
   | "GuruLogo"
   | "HexLogo"
@@ -3712,6 +3715,7 @@ const InternalAllowedIconSchema = FlexibleEnumSchema<
   | "MicrosoftOutlookLogo"
   | "MicrosoftTeamsLogo"
   | "MiroLogo"
+  | "MobbinLogo"
   | "ModjoLogo"
   | "MondayLogo"
   | "MultiMailLogo"

@@ -1,4 +1,4 @@
-import { AgentMCPActionResource } from "@app/lib/resources/agent_mcp_action_resource";
+import { listConversationBlockedActions } from "@app/lib/api/assistant/conversation/blocked_actions";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { workspaceApp } from "@front-api/middlewares/ctx";
 import { apiError } from "@front-api/middlewares/utils";
@@ -29,11 +29,10 @@ app.get("/", validate("param", ParamsSchema), async (ctx) => {
     });
   }
 
-  const blockedActions =
-    await AgentMCPActionResource.listBlockedActionsForConversation(
-      auth,
-      conversation
-    );
+  const blockedActions = await listConversationBlockedActions(
+    auth,
+    conversation
+  );
 
   return ctx.json({ blockedActions });
 });

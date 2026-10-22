@@ -1,19 +1,27 @@
 import {
+  checkFrameShareScopePermission,
+  checkShareScopePermission,
   generateFrameOtpChallenge,
   getFrameFunctionSharingConflict,
   sendFrameOtpEmail,
   validateFrameOtpChallenge,
 } from "@app/lib/api/share/frame_sharing";
+import { Authenticator } from "@app/lib/auth";
 import { isExternalSubscriberId } from "@app/lib/notifications/transactional_emails";
 import { notifyFrameLoginCode } from "@app/lib/notifications/triggers/frame-sharing";
 import { rateLimiter } from "@app/lib/utils/rate_limiter";
 import { FileFactory } from "@app/tests/utils/FileFactory";
-import { createTestFrameFunction } from "@app/tests/utils/FrameFunctionFactory";
+import {
+  createTestFrameFunction,
+  enablePublicFrameFunctions,
+} from "@app/tests/utils/FrameFunctionFactory";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
+import { grantWorkspacePermission } from "@app/tests/utils/permissions";
 import { SharingGrantFactory } from "@app/tests/utils/SharingGrantFactory";
 import { SpaceFactory } from "@app/tests/utils/SpaceFactory";
 import { WorkspaceFactory } from "@app/tests/utils/WorkspaceFactory";
 import { FRAME_MANIFEST_FILE } from "@app/types/api/frame_manifest";
+import type { SandboxFunctionUserIdentityPolicy } from "@app/types/api/sandbox_functions";
 import { frameV2ContentType } from "@app/types/files";
 import assert from "assert";
 import { describe, expect, it, vi } from "vitest";
@@ -298,6 +306,30 @@ describe("getFrameFunctionSharingConflict", () => {
     expect(conflict).toContain("restrict the Frame's sharing");
   });
 
+  it("returns no conflict for a public share when the workspace serves public functions", async () => {
+    const { auth, frame } = await setupFrame();
+    await enablePublicFrameFunctions(auth);
+    await frame.setShareScope(auth, "public");
+
+    expect(
+      await getFrameFunctionSharingConflict(auth, frame, DECLARES_FUNCTIONS)
+    ).toBeNull();
+  });
+
+  it("ignores external grants on a public share when the workspace serves public functions", async () => {
+    const { auth, frame } = await setupFrame();
+    await enablePublicFrameFunctions(auth);
+    await SharingGrantFactory.create(auth, frame, {
+      kind: "email",
+      value: "outsider@example.com",
+    });
+    await frame.setShareScope(auth, "public");
+
+    expect(
+      await getFrameFunctionSharingConflict(auth, frame, DECLARES_FUNCTIONS)
+    ).toBeNull();
+  });
+
   it("reports a conflict when a grant reaches an email outside the workspace", async () => {
     const { auth, frame } = await setupFrame();
     await frame.setShareScope(auth, "workspace_and_emails");
@@ -354,5 +386,125 @@ describe("getFrameFunctionSharingConflict", () => {
     expect(
       await getFrameFunctionSharingConflict(auth, frame, DECLARES_FUNCTIONS)
     ).toContain("anyone holding its link");
+  });
+});
+
+describe("checkFrameShareScopePermission", () => {
+  async function setupFrameWithFunction(
+    userIdentity: SandboxFunctionUserIdentityPolicy
+  ) {
+    const {
+      authenticator: auth,
+      user,
+      workspace,
+    } = await createResourceTest({
+      role: "admin",
+    });
+    const space = await SpaceFactory.project(workspace, user.id);
+    const { frame } = await createTestFrameFunction(auth, {
+      space,
+      userIdentity,
+      executionMode: "fast",
+    });
+
+    return { auth, frame };
+  }
+
+  it("refuses to share a Frame with functions publicly", async () => {
+    const { auth, frame } = await setupFrameWithFunction("public");
+
+    const result = await checkFrameShareScopePermission(auth, "public", frame);
+
+    expect(result.isErr()).toBe(true);
+  });
+
+  it("shares a Frame with a public function publicly when the workspace serves public functions", async () => {
+    const { auth, frame } = await setupFrameWithFunction("public");
+    await enablePublicFrameFunctions(auth);
+
+    const result = await checkFrameShareScopePermission(auth, "public", frame);
+
+    expect(result.isOk()).toBe(true);
+  });
+
+  it("refuses to share a Frame whose functions are all private publicly", async () => {
+    const { auth, frame } = await setupFrameWithFunction(
+      "workspace_user_required"
+    );
+    await enablePublicFrameFunctions(auth);
+
+    const result = await checkFrameShareScopePermission(auth, "public", frame);
+
+    assert(result.isErr(), "Expected public sharing to be refused");
+    expect(result.error.message).toContain("None of this Frame's functions");
+  });
+});
+
+describe("checkShareScopePermission", () => {
+  const PUBLISH_FRAME = {
+    grantType: "publish",
+    resourceType: "frame",
+  } as const;
+
+  it("allows a public scope with the all_scopes policy and the publish permission", async () => {
+    const { authenticator, user, workspace } = await createResourceTest({});
+    await WorkspaceFactory.setSharingPolicy(workspace, "all_scopes");
+    await grantWorkspacePermission(
+      authenticator.getNonNullableWorkspace(),
+      user,
+      PUBLISH_FRAME
+    );
+    const auth = await Authenticator.fromUserIdAndWorkspaceId(
+      user.sId,
+      workspace.sId
+    );
+
+    expect(checkShareScopePermission(auth, "public").isOk()).toBe(true);
+  });
+
+  it("refuses a public scope when the workspace policy forbids it", async () => {
+    const { authenticator, user, workspace } = await createResourceTest({});
+    await WorkspaceFactory.setSharingPolicy(workspace, "workspace_and_emails");
+    await grantWorkspacePermission(
+      authenticator.getNonNullableWorkspace(),
+      user,
+      PUBLISH_FRAME
+    );
+    const auth = await Authenticator.fromUserIdAndWorkspaceId(
+      user.sId,
+      workspace.sId
+    );
+
+    const result = checkShareScopePermission(auth, "public");
+
+    assert(result.isErr(), "Expected public sharing to be refused");
+    expect(result.error.message).toBe(
+      "Public sharing is disabled for this workspace."
+    );
+  });
+
+  it("refuses a public scope without the publish permission", async () => {
+    const { user, workspace } = await createResourceTest({});
+    await WorkspaceFactory.setSharingPolicy(workspace, "all_scopes");
+    const auth = await Authenticator.fromUserIdAndWorkspaceId(
+      user.sId,
+      workspace.sId
+    );
+
+    const result = checkShareScopePermission(auth, "public");
+
+    assert(result.isErr(), "Expected public sharing to be refused");
+    expect(result.error.message).toBe(
+      "You do not have permission to share this frame publicly."
+    );
+  });
+
+  it("allows non-public scopes without the policy or the permission", async () => {
+    const { authenticator: auth } = await createResourceTest({});
+
+    expect(checkShareScopePermission(auth, "emails_only").isOk()).toBe(true);
+    expect(checkShareScopePermission(auth, "workspace_and_emails").isOk()).toBe(
+      true
+    );
   });
 });

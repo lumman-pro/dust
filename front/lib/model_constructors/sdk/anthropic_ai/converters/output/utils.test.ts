@@ -16,6 +16,7 @@ import type {
   BetaRawMessageDeltaEvent,
   BetaRawMessageStartEvent,
   BetaRawMessageStreamEvent,
+  BetaRefusalStopDetails,
 } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import type { OutputEventConverters } from "@app/lib/model_constructors/sdk/anthropic_ai/converters/output/utils";
 import {
@@ -488,23 +489,56 @@ describe("messageDeltaUsageToTokenUsageEvent", () => {
 });
 
 describe("stopReasonToErrorEvent", () => {
-  it("maps max_tokens to a stop_error event", () => {
-    expect(stopReasonToErrorEvent(metadata, "max_tokens")).toMatchObject({
+  const cyberRefusal: BetaRefusalStopDetails = {
+    type: "refusal",
+    category: "cyber",
+    explanation: "Could enable malware development.",
+    fallback_credit_token: null,
+    fallback_has_prefill_claim: null,
+    recommended_model: null,
+  };
+
+  it("maps max_tokens to a stop_error event without refusal details", () => {
+    const event = stopReasonToErrorEvent(metadata, "max_tokens", null);
+    expect(event).toMatchObject({
       type: "error",
       content: { type: "stop_error" },
     });
+    expect(event?.content).not.toHaveProperty("refusal");
   });
 
-  it("maps refusal to a refusal_error event", () => {
-    expect(stopReasonToErrorEvent(metadata, "refusal")).toMatchObject({
+  it("maps refusal to a refusal_error event carrying the stop details", () => {
+    expect(
+      stopReasonToErrorEvent(metadata, "refusal", cyberRefusal)
+    ).toMatchObject({
       type: "error",
-      content: { type: "refusal_error" },
+      content: {
+        type: "refusal_error",
+        errorSource: "dust",
+        message:
+          "Claude safety filters prevented this response. Try starting a new conversation or rephrasing your request.",
+        refusal: {
+          category: "cyber",
+          explanation: "Could enable malware development.",
+        },
+      },
+    });
+  });
+
+  it("reports null refusal details when stop details are missing", () => {
+    expect(stopReasonToErrorEvent(metadata, "refusal", null)).toMatchObject({
+      content: {
+        type: "refusal_error",
+        refusal: { category: null, explanation: null },
+      },
     });
   });
 
   it("returns null for end_turn and other stop reasons", () => {
-    expect(stopReasonToErrorEvent(metadata, "end_turn")).toBeNull();
-    expect(stopReasonToErrorEvent(metadata, "tool_use")).toBeNull();
+    expect(stopReasonToErrorEvent(metadata, "end_turn", null)).toBeNull();
+    expect(
+      stopReasonToErrorEvent(metadata, "tool_use", cyberRefusal)
+    ).toBeNull();
   });
 });
 
@@ -1193,6 +1227,54 @@ describe("messageDeltaToEvents", () => {
     expect(forwardedUsage).toBe(usage);
   });
 
+  it("forwards refusal stop details, keeping unknown categories verbatim", () => {
+    // Parsed from a raw payload like the wire one: the category is not in the
+    // SDK union.
+    const event: BetaRawMessageDeltaEvent = JSON.parse(`{
+      "type": "message_delta",
+      "delta": {
+        "stop_reason": "refusal",
+        "stop_sequence": null,
+        "stop_details": {
+          "type": "refusal",
+          "category": "some_new_category",
+          "explanation": "New policy."
+        }
+      },
+      "usage": { "output_tokens": 5 },
+      "context_management": null
+    }`);
+    const [events] = messageDeltaToEvents(event, metadata, realConverters);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      content: {
+        type: "refusal_error",
+        refusal: { category: "some_new_category", explanation: "New policy." },
+      },
+    });
+  });
+
+  it("reports a null category and explanation when stop details lack them", () => {
+    // Raw payload: `explanation` is absent, which the SDK type does not allow.
+    const event: BetaRawMessageDeltaEvent = JSON.parse(`{
+      "type": "message_delta",
+      "delta": {
+        "stop_reason": "refusal",
+        "stop_sequence": null,
+        "stop_details": { "type": "refusal", "category": null }
+      },
+      "usage": { "output_tokens": 5 },
+      "context_management": null
+    }`);
+    const [events] = messageDeltaToEvents(event, metadata, realConverters);
+    expect(events[0]).toMatchObject({
+      content: {
+        type: "refusal_error",
+        refusal: { category: null, explanation: null },
+      },
+    });
+  });
+
   it("returns no events when stop_reason is absent", () => {
     const event = {
       type: "message_delta",
@@ -1585,6 +1667,27 @@ describe("messageToEvents", () => {
     expect(success).toMatchObject({
       content: {
         aggregated: [{ type: "text" }, { type: "tool_call" }],
+      },
+    });
+  });
+
+  it("forwards refusal stop details from the final message", () => {
+    const message = messageWith({
+      stop_reason: "refusal",
+      stop_details: {
+        type: "refusal",
+        category: "reasoning_extraction",
+        explanation: null,
+        fallback_credit_token: null,
+        fallback_has_prefill_claim: null,
+        recommended_model: null,
+      },
+    });
+    const events = messageToEvents(message, metadata, realConverters);
+    expect(events.find((e) => e.type === "error")).toMatchObject({
+      content: {
+        type: "refusal_error",
+        refusal: { category: "reasoning_extraction", explanation: null },
       },
     });
   });

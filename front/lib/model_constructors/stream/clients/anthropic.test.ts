@@ -4,7 +4,10 @@ import assert from "node:assert";
 
 import AnthropicVertex from "@anthropic-ai/vertex-sdk";
 import { MID_CONVERSATION_OUTPUT_CONFIG_BETA_HEADER } from "@app/lib/model_constructors/sdk/anthropic_ai/converters/input/utils";
-import { THINKING_BINDING_CONTROLS_BETA_HEADER } from "@app/lib/model_constructors/stream/clients/anthropic";
+import {
+  SERVER_SIDE_FALLBACK_BETA_HEADER,
+  THINKING_BINDING_CONTROLS_BETA_HEADER,
+} from "@app/lib/model_constructors/stream/clients/anthropic";
 import { AnthropicClaudeOpusFiveDotFiveEuropeAgentPlatformStream } from "@app/lib/model_constructors/stream/endpoints/anthropic_claude_opus_five_dot_five_eu_agent_platform";
 import { AnthropicClaudeOpusFiveDotFiveGlobalAnthropicStream } from "@app/lib/model_constructors/stream/endpoints/anthropic_claude_opus_five_dot_five_global_anthropic";
 import { AnthropicClaudeSonnetFiveDotFiveGlobalAnthropicStream } from "@app/lib/model_constructors/stream/endpoints/anthropic_claude_sonnet_five_dot_five_global_anthropic";
@@ -92,11 +95,14 @@ describe("AnthropicStream thinking-binding observability", () => {
       )
     );
 
-    expect(payload.betas).toEqual([THINKING_BINDING_CONTROLS_BETA_HEADER]);
+    expect(payload.betas).toEqual([
+      THINKING_BINDING_CONTROLS_BETA_HEADER,
+      SERVER_SIDE_FALLBACK_BETA_HEADER,
+    ]);
     expect(payload.thinking).not.toHaveProperty("block_binding");
   });
 
-  it("sends no betas when an endpoint overrides them away", async () => {
+  it("sends only the fallback beta when an endpoint overrides the others away", async () => {
     class WithoutBetas extends AnthropicClaudeSonnetFourDotSixGlobalAnthropicStream {
       protected readonly betas: readonly string[] = [];
     }
@@ -109,7 +115,7 @@ describe("AnthropicStream thinking-binding observability", () => {
       )
     );
 
-    expect(payload.betas).toBeUndefined();
+    expect(payload.betas).toEqual([SERVER_SIDE_FALLBACK_BETA_HEADER]);
   });
 
   it("sends the thinking-binding beta alongside the cache-diagnostics beta", async () => {
@@ -123,6 +129,7 @@ describe("AnthropicStream thinking-binding observability", () => {
     expect(payload.betas).toEqual([
       "cache-diagnosis-2026-04-07",
       THINKING_BINDING_CONTROLS_BETA_HEADER,
+      SERVER_SIDE_FALLBACK_BETA_HEADER,
     ]);
   });
 
@@ -197,7 +204,10 @@ describe("AnthropicStream per-message reasoning effort", () => {
         OPUS_FIVE_DOT_FIVE_CONFIG
       );
 
-    expect(payload.betas).toEqual([THINKING_BINDING_CONTROLS_BETA_HEADER]);
+    expect(payload.betas).toEqual([
+      THINKING_BINDING_CONTROLS_BETA_HEADER,
+      SERVER_SIDE_FALLBACK_BETA_HEADER,
+    ]);
     expect(payload.messages.map((m) => m.role)).toEqual([
       "user",
       "assistant",
@@ -227,6 +237,7 @@ describe("AnthropicStream per-message reasoning effort", () => {
     expect(withChange.betas).toEqual([
       THINKING_BINDING_CONTROLS_BETA_HEADER,
       MID_CONVERSATION_OUTPUT_CONFIG_BETA_HEADER,
+      SERVER_SIDE_FALLBACK_BETA_HEADER,
     ]);
     // Everything else, including the top-level effort, is untouched.
     expect({
@@ -270,5 +281,34 @@ describe("AnthropicStream per-message reasoning effort", () => {
     expect(withChange.betas).toEqual([
       MID_CONVERSATION_OUTPUT_CONFIG_BETA_HEADER,
     ]);
+  });
+});
+
+describe("AnthropicStream server-side fallback", () => {
+  it("always sends fallbacks and its beta on the direct Anthropic API", async () => {
+    const payload =
+      await new AnthropicClaudeOpusFiveDotFiveGlobalAnthropicStream({
+        ANTHROPIC_API_KEY: "test-key",
+      }).buildRequestPayload(EMPTY_PAYLOAD, OPUS_FIVE_DOT_FIVE_CONFIG);
+
+    expect(payload.fallbacks).toBe("default");
+    expect(payload.betas).toContain(SERVER_SIDE_FALLBACK_BETA_HEADER);
+  });
+
+  it("never sends fallbacks on the agent platform", async () => {
+    const endpoint =
+      new AnthropicClaudeOpusFiveDotFiveEuropeAgentPlatformStream({
+        AGENT_PLATFORM_PROJECT_ID: "test-project",
+      });
+
+    const payload = await endpoint.buildRequestPayload(
+      EMPTY_PAYLOAD,
+      AnthropicClaudeOpusFiveDotFiveEuropeAgentPlatformStream.configSchema.parse(
+        {}
+      )
+    );
+
+    expect(payload).not.toHaveProperty("fallbacks");
+    expect(payload).not.toHaveProperty("betas");
   });
 });

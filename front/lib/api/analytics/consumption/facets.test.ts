@@ -293,6 +293,78 @@ describe("fetchConsumptionFacets", () => {
     ).toHaveLength(2);
   });
 
+  it("lists revoked members only when they have usage in the period", async () => {
+    const { authenticator } = await createResourceTest({ role: "manager" });
+    vi.mocked(resolveDimensionLabels).mockResolvedValue(new Map());
+    vi.mocked(listConsumptionFacetCatalog).mockResolvedValue({
+      agent: [],
+      user: [
+        {
+          value: "user_revoked_with_usage",
+          label: "Revoked With Usage",
+          pictureUrl: null,
+          revoked: true,
+        },
+        {
+          value: "user_revoked_without_usage",
+          label: "Revoked Without Usage",
+          pictureUrl: null,
+          revoked: true,
+        },
+      ],
+      api_key: [],
+      group: [],
+      model: [],
+      tool: [],
+      skill: [],
+      source: [],
+      trigger: [],
+      pod: [],
+    });
+    vi.mocked(searchConsumptionAnalytics).mockImplementation(
+      async (_query, options) => {
+        const field =
+          options?.aggregations?.values?.composite?.sources?.[0]?.value?.terms
+            ?.field;
+
+        return esResponse({
+          values: {
+            buckets:
+              field === "user.id"
+                ? [
+                    {
+                      key: { value: "user_revoked_with_usage" },
+                      doc_count: 2,
+                      contextual: { doc_count: 2 },
+                    },
+                  ]
+                : [],
+          },
+        });
+      }
+    );
+
+    const result = await fetchConsumptionFacets(authenticator, {
+      period: PERIOD,
+      dimensions: ["user"],
+    });
+
+    expect(result.isOk()).toBe(true);
+    if (!result.isOk()) {
+      return;
+    }
+    expect(result.value.facets.user).toEqual([
+      {
+        value: "user_revoked_with_usage",
+        label: "Revoked With Usage",
+        pictureUrl: null,
+        revoked: true,
+        documentCount: 2,
+        disabled: false,
+      },
+    ]);
+  });
+
   it("limits concurrent dimension queries", async () => {
     const { authenticator } = await createResourceTest({ role: "manager" });
     vi.mocked(listConsumptionFacetCatalog).mockResolvedValue({

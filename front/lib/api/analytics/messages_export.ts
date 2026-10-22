@@ -2,6 +2,7 @@ import { TOOL_NAME_SEPARATOR } from "@app/lib/actions/constants";
 import { formatExportCellDateTime } from "@app/lib/api/analytics/csv_utils";
 import {
   fetchAgentMetadata,
+  fetchSpaceNames,
   fetchTagNames,
   fetchUserEmails,
 } from "@app/lib/api/analytics/enrichment";
@@ -43,6 +44,8 @@ interface AgentMessageDocument extends ElasticsearchBaseDocument {
   // Optional: docs indexed before agent_tag_ids shipped don't carry it.
   agent_tag_ids?: string[];
   conversation_id: string;
+  // Optional: docs indexed before space_id shipped don't carry it.
+  space_id?: string | null;
   // Ids of the agent messages that triggered this message through `run_agent`,
   // direct parent first. Empty or absent for user-initiated messages.
   ancestor_message_ids?: string[];
@@ -65,6 +68,8 @@ export interface MessageExportRow {
   assistantSettings: string;
   assistantTags: string;
   conversationId: string;
+  spaceId: string;
+  spaceName: string;
   parentMessageId: string;
   userId: string;
   userEmail: string;
@@ -85,6 +90,8 @@ export const MESSAGE_EXPORT_HEADERS: (keyof MessageExportRow)[] = [
   "assistantSettings",
   "assistantTags",
   "conversationId",
+  "spaceId",
+  "spaceName",
   "parentMessageId",
   "userId",
   "userEmail",
@@ -145,6 +152,7 @@ interface ConsumptionMessageBucket {
   agent_id: TermsAgg;
   agent_tag_ids: TermsAgg;
   conversation_id: TermsAgg;
+  space_id: TermsAgg;
   parent_message_id: TermsAgg;
   user_id: TermsAgg;
   context_origin: TermsAgg;
@@ -190,6 +198,13 @@ function buildConsumptionAggregations(
           terms: {
             field: "agent.tag_ids",
             size: 100, // keep at most 100 unique tag IDs per message.
+          },
+        },
+        space_id: {
+          // space_id is denormalized on every tool/llm calls: keep a single value per message.
+          terms: {
+            field: "space_id",
+            size: 1,
           },
         },
         parent_message_id: {
@@ -314,6 +329,7 @@ function consumptionBucketToDocument(
       (b) => b.key
     ),
     conversation_id: firstBucketKey(bucket.conversation_id),
+    space_id: firstBucketKey(bucket.space_id),
     ancestor_message_ids: firstBucketKey(bucket.parent_message_id)
       ? [firstBucketKey(bucket.parent_message_id)]
       : [],
@@ -391,8 +407,8 @@ async function* generateConsumptionMessageDocumentPages(
 /**
  * @cc [owner:tdraier,label:performance] page-bounded-memory
  * Each yielded page MUST be built from a single Elasticsearch page, and documents or rows of
- * previously yielded pages MUST NOT be retained. Only the agent, user, tag and server lookups MAY
- * be kept across pages. After yielding an `Err`, the generator MUST stop.
+ * previously yielded pages MUST NOT be retained. Only the agent, user, tag, server and space
+ * lookups MAY be kept across pages. After yielding an `Err`, the generator MUST stop.
  */
 export async function* generateMessageExportRows({
   auth,
@@ -427,6 +443,7 @@ export async function* generateMessageExportRows({
   const serverDisplayNames = new ExportLookupCache((names) =>
     resolveServerDisplayNames(auth, names)
   );
+  const spaceNames = new ExportLookupCache((ids) => fetchSpaceNames(auth, ids));
 
   for await (const page of documentPages) {
     if (page.isErr()) {
@@ -443,6 +460,7 @@ export async function* generateMessageExportRows({
       serverDisplayNames.load(
         docs.flatMap((d) => (d.tools_used ?? []).map((t) => t.server_name))
       ),
+      spaceNames.load(removeNulls(docs.map((d) => d.space_id))),
     ]);
 
     const rows: MessageExportRow[] = docs.map((doc) => {
@@ -457,6 +475,8 @@ export async function* generateMessageExportRows({
           (doc.agent_tag_ids ?? []).map((id) => tagNames.get(id))
         ),
         conversationId: doc.conversation_id,
+        spaceId: doc.space_id ?? "",
+        spaceName: doc.space_id ? (spaceNames.get(doc.space_id) ?? "") : "",
         parentMessageId: doc.ancestor_message_ids?.[0] ?? "",
         userId: doc.user_id,
         userEmail: userEmails.get(doc.user_id) ?? "",

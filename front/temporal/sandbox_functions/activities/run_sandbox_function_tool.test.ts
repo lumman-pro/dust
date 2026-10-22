@@ -20,16 +20,10 @@ vi.mock("@app/lib/actions/mcp_actions", async (importOriginal) => {
   };
 });
 
-vi.mock("@app/lib/api/sandbox_functions/events", async (importOriginal) => {
-  const actual =
-    await importOriginal<
-      typeof import("@app/lib/api/sandbox_functions/events")
-    >();
-  return {
-    ...actual,
-    publishSandboxFunctionInvocationEvent: vi.fn(),
-  };
-});
+vi.mock("@app/lib/api/sandbox_functions/publish_blocking_event", () => ({
+  publishSandboxFunctionBlockingEvent: vi.fn(),
+  getSandboxFunctionBlockingEventChannel: vi.fn(),
+}));
 
 // The activity reads the temporal cancellation signal and heartbeats; neither exists outside a
 // real activity context.
@@ -39,7 +33,7 @@ vi.mock("@temporalio/activity", () => ({
   },
 }));
 
-import { publishSandboxFunctionInvocationEvent } from "@app/lib/api/sandbox_functions/events";
+import { publishSandboxFunctionBlockingEvent } from "@app/lib/api/sandbox_functions/publish_blocking_event";
 
 function mockToolCallResult(result: CallToolResult) {
   vi.mocked(tryCallMCPTool).mockImplementation(async function* () {
@@ -113,7 +107,8 @@ describe("runSandboxFunctionToolActivity", () => {
         action.id
       );
     expect(refetched?.status).toBe("blocked_authentication_required");
-    expect(publishSandboxFunctionInvocationEvent).toHaveBeenCalledWith(
+    expect(publishSandboxFunctionBlockingEvent).toHaveBeenCalledWith(
+      expect.anything(),
       expect.objectContaining({
         type: "tool_personal_auth_required",
         actionId: action.sId,
@@ -122,7 +117,7 @@ describe("runSandboxFunctionToolActivity", () => {
           provider: "google_drive",
         }),
       }),
-      { invocationId: action.invocationId }
+      { invocation: expect.objectContaining({ sId: action.invocationId }) }
     );
 
     const outputWrite = fileStorageMock.saveFileCalls.find((call) =>

@@ -3,7 +3,6 @@ import { Authenticator } from "@app/lib/auth";
 import { FileResource } from "@app/lib/resources/file_resource";
 import { GroupPermissionResource } from "@app/lib/resources/group_permission_resource";
 import { ConversationFactory } from "@app/tests/utils/ConversationFactory";
-import { FeatureFlagFactory } from "@app/tests/utils/FeatureFlagFactory";
 import { FileFactory } from "@app/tests/utils/FileFactory";
 import { makeTestFrameFunction } from "@app/tests/utils/FrameFunctionFactory";
 import { createPrivateApiMockRequest } from "@app/tests/utils/generic_private_api_tests";
@@ -196,7 +195,6 @@ describe("GET /api/w/:wId/files/:fileId", () => {
       method: "GET",
       role: "user",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const conversation = await ConversationFactory.create(auth, {
       agentConfigurationId: "test-agent",
       messagesCreatedAt: [new Date()],
@@ -241,7 +239,6 @@ describe("GET /api/w/:wId/files/:fileId", () => {
       method: "GET",
       role: "user",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const conversation = await ConversationFactory.create(auth, {
       agentConfigurationId: "test-agent",
       messagesCreatedAt: [],
@@ -336,7 +333,6 @@ describe("GET /api/w/:wId/files/:fileId", () => {
       method: "GET",
       role: "user",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const conversation = await ConversationFactory.create(auth, {
       agentConfigurationId: "test-agent",
       messagesCreatedAt: [new Date()],

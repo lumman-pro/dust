@@ -17,7 +17,10 @@ describe("resolveFrameFunctionReference", () => {
     });
 
     expect(result.isOk()).toBe(true);
-    expect(result.isOk() && result.value).toBe("file_123/list-comments");
+    expect(result.isOk() && result.value).toEqual({
+      frameId: "file_123",
+      functionName: "list-comments",
+    });
   });
 
   it("rejects cross-Frame references from Frames v2", () => {

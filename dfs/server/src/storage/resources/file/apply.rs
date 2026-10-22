@@ -9,7 +9,7 @@ use crate::{
         self,
         resources::{
             keys::tenant_subspace,
-            object::{self, ObjectResource},
+            object::{self, ObjectResource, locks::LockTokens},
             session::SessionResource,
         },
     },
@@ -79,6 +79,7 @@ impl FileResource {
         tx: &Transaction,
         session: &SessionResource,
         operation: WriteOperation,
+        locks: &LockTokens,
     ) -> Result<Mutation, storage::Error<Error>> {
         // Check permissions using the same object fetched during authorization.
         let (object, mode) = ObjectResource::modes_for_session(tx, session, &[operation.object_id])
@@ -89,6 +90,8 @@ impl FileResource {
         if !mode.can_read() || !mode.can_write() {
             return Err(Error::Object(object::Error::Forbidden).into());
         }
+        let expired_locks =
+            ObjectResource::check_locks(tx, session, &[operation.object_id], locks).await?;
         let mut file = Self::try_from(object)?;
         let offset = if operation.append {
             file.object.size
@@ -148,6 +151,7 @@ impl FileResource {
             file.object.size = file.object.size.max(end);
         }
         file.object.record_content_change(tx, now_ms);
+        expired_locks.clear(tx, &session.tenant.tenant_id);
         Ok(Mutation {
             object: Some(file.object.attr(tx, mode).await?),
             related: vec![],

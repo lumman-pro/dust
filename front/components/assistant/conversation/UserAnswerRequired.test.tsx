@@ -221,6 +221,7 @@ function makeBlockedAction({
     question: {
       question: "Choose an option",
       multiSelect,
+      format: "list",
       options: [
         {
           label: "Alpha",

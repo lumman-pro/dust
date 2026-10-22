@@ -154,6 +154,58 @@ msgstr "Spitzenmodelle, deutlich teurer als Premium, für die anspruchsvollste A
 msgid "all efforts"
 msgstr "alle Aufwandsstufen"
 
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "High (always ask for confirmation)"
+msgstr "Hoch (immer Genehmigung anfordern)"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Medium (allows input-scoped confirmation save)"
+msgstr "Mittel (Genehmigung pro Eingabe speicherbar)"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Low (allows user-global confirmation save)"
+msgstr "Niedrig (Genehmigung global speicherbar)"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Never ask (automatic execution)"
+msgstr "Nie fragen (automatische Ausführung)"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgctxt "tool stake level"
+msgid "High"
+msgstr "Hoch"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgctxt "tool stake level"
+msgid "Medium"
+msgstr "Mittel"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgctxt "tool stake level"
+msgid "Low"
+msgstr "Niedrig"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgctxt "tool stake level"
+msgid "Never ask"
+msgstr "Nie fragen"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Needs explicit user approval."
+msgstr "Erfordert eine ausdrückliche Genehmigung des Mitglieds."
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Users can save confirmations for specific tool inputs."
+msgstr "Mitglieder können Genehmigungen für bestimmte Tool-Eingaben speichern."
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Users can completely disable confirmations."
+msgstr "Mitglieder können Genehmigungsabfragen vollständig deaktivieren."
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Runs automatically."
+msgstr "Wird automatisch ausgeführt."
+
 #: front/lib/client/visualization.ts
 msgid "The visualization code failed with this error:"
 msgstr "Der Visualisierungscode ist mit diesem Fehler fehlgeschlagen:"

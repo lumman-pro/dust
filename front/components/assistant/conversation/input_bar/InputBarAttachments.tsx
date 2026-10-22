@@ -1,11 +1,13 @@
 // Okay to use public API types because it's front/connectors communication.
 
 import { AttachmentCitation } from "@app/components/assistant/conversation/attachment/AttachmentCitation";
+import { FileCitationCard } from "@app/components/assistant/conversation/attachment/FileCitationCard";
 import type {
   Attachment,
   FileAttachment,
 } from "@app/components/assistant/conversation/attachment/types";
 import { attachmentToAttachmentCitation } from "@app/components/assistant/conversation/attachment/utils";
+import type { InputBarHostSelection } from "@app/components/assistant/conversation/input_bar/InputBarContext";
 import {
   getDisplayDateFromPastedFileId,
   getDisplayNameFromPastedFileId,
@@ -28,6 +30,7 @@ interface FileAttachmentsProps {
 interface InputBarAttachmentsProps {
   owner: LightWorkspaceType;
   files: FileAttachmentsProps;
+  hostSelection?: InputBarHostSelection | null;
   disable?: boolean;
 }
 
@@ -50,6 +53,7 @@ function isImageAttachment(attachment: FileAttachment): boolean {
 export function InputBarAttachments({
   owner,
   files,
+  hostSelection,
   disable = false,
 }: InputBarAttachmentsProps) {
   const { t } = useLingui();
@@ -95,27 +99,41 @@ export function InputBarAttachments({
 
   const allAttachments: Attachment[] = fileAttachments;
 
-  if (allAttachments.length === 0) {
+  if (allAttachments.length === 0 && !hostSelection) {
     return null;
   }
 
   const iconSize = getAttachmentIconSize(hasImageAttachment);
+  const variant = hasImageAttachment ? "card" : "chip";
   const citations = allAttachments.map((attachment) => (
     <AttachmentCitation
       key={attachment.id}
       attachmentCitation={attachmentToAttachmentCitation(attachment, {
         iconSize,
       })}
-      variant={hasImageAttachment ? "card" : "chip"}
+      variant={variant}
     />
   ));
+  // The selection comes first, in green to tell it apart from the files.
+  const selectionCitation = hostSelection && (
+    <FileCitationCard
+      chipColor="success"
+      icon={hostSelection.icon}
+      onRemove={disable ? undefined : hostSelection.onRemove}
+      title={hostSelection.label}
+      tooltipLabel={hostSelection.label}
+      variant={variant}
+    />
+  );
 
   return hasImageAttachment ? (
     <CitationGrid className={ATTACHMENTS_ROW_CLASS_NAME}>
+      {selectionCitation}
       {citations}
     </CitationGrid>
   ) : (
     <div className={cn("flex flex-wrap gap-2", ATTACHMENTS_ROW_CLASS_NAME)}>
+      {selectionCitation}
       {citations}
     </div>
   );

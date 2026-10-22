@@ -331,6 +331,11 @@ msgid "User approval settings"
 msgstr "Genehmigungseinstellungen"
 
 #: front/components/actions/mcp/MCPServerDetailsTools.tsx
+#: front/components/actions/mcp/ToolsList.tsx
+msgid "<0>{stakeLabel}</0>: {stakeDescription}"
+msgstr "<0>{stakeLabel}</0>: {stakeDescription}"
+
+#: front/components/actions/mcp/MCPServerDetailsTools.tsx
 msgid "Search tools"
 msgstr "Tools suchen"
 

@@ -13,6 +13,7 @@ import {
   RemoveMarkStep,
   ReplaceStep,
   StepMap,
+  Transform,
 } from "@tiptap/pm/transform";
 import type { EditorView } from "@tiptap/pm/view";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
@@ -185,7 +186,7 @@ const rangeAcceptsCommentMark = (doc: Node, from: number, to: number) => {
   return accepts;
 };
 
-interface CommentRange {
+export interface CommentRange {
   from: number;
   to: number;
 }
@@ -565,6 +566,8 @@ declare module "@tiptap/core" {
       cancelCommentDraft: () => ReturnType;
       /** Attaches the comment to the draft range and makes it the active comment. */
       addComment: (comment: DfmComment) => ReturnType;
+      /** Ends the draft on a comment the live session anchored, making it the active comment. */
+      commitCommentDraft: (comment: DfmComment) => ReturnType;
       replyToComment: (id: string, message: DfmMessage) => ReturnType;
       setCommentResolved: (id: string, resolved: boolean) => ReturnType;
       /** Removes the comment and every mark that anchors it. */
@@ -666,22 +669,68 @@ export const getCommentInlineContent = (
   return range ? inlineContentBetween(doc, range.from, range.to) : null;
 };
 
+/** From the first character between `from` and `to` a comment mark can sit on to the last, or null when none can. */
+export const getMarkableRange = (
+  doc: Node,
+  from: number,
+  to: number
+): CommentRange | null => {
+  let first: number | null = null;
+  let last: number | null = null;
+  doc.nodesBetween(from, to, (node, pos, parent) => {
+    if (canCarryCommentMark(node, parent)) {
+      first ??= Math.max(pos, from);
+      last = Math.min(pos + node.nodeSize, to);
+    }
+  });
+  return first !== null && last !== null ? { from: first, to: last } : null;
+};
+
 /** The draft's text from the first character a comment mark can sit on to the last, the text its comment would anchor. */
 export const getDraftInlineContent = (
   doc: Node,
   draft: DocumentCommentDraft
 ): JSONContent[] | null => {
-  let from: number | null = null;
-  let to: number | null = null;
-  doc.nodesBetween(draft.from, draft.to, (node, pos, parent) => {
-    if (canCarryCommentMark(node, parent)) {
-      from ??= Math.max(pos, draft.from);
-      to = Math.min(pos + node.nodeSize, draft.to);
+  const range = getMarkableRange(doc, draft.from, draft.to);
+  return range ? inlineContentBetween(doc, range.from, range.to) : null;
+};
+
+/**
+ * A transform of `doc` marking comment `id` on the text between `from` and `to` a comment mark can
+ * sit on, or null when no text can take it.
+ */
+export const markComment = (
+  doc: Node,
+  from: number,
+  to: number,
+  id: string
+): Transform | null => {
+  // A range mark would also cover inline nodes such as hard breaks, which anchors
+  // cannot express, so the document would no longer save.
+  const mark = doc.type.schema.marks[COMMENT_MARK_NAME].create({ id });
+  // One step per run of adjacent text, as a range mark would make.
+  const runs: CommentRange[] = [];
+  doc.nodesBetween(from, to, (node, pos, parent) => {
+    if (!canCarryCommentMark(node, parent)) {
+      return;
+    }
+    const start = Math.max(pos, from);
+    const end = Math.min(pos + node.nodeSize, to);
+    const last = runs.at(-1);
+    if (last?.to === start) {
+      last.to = end;
+    } else {
+      runs.push({ from: start, to: end });
     }
   });
-  return from !== null && to !== null
-    ? inlineContentBetween(doc, from, to)
-    : null;
+  if (runs.length === 0) {
+    return null;
+  }
+  const marked = new Transform(doc);
+  for (const run of runs) {
+    marked.addMark(run.from, run.to, mark);
+  }
+  return marked;
 };
 
 const suggestableComments = new WeakMap<Node, Set<string>>();
@@ -971,7 +1020,7 @@ export const DocumentComments = Extension.create({
       },
     addComment:
       (comment) =>
-      ({ state, tr, dispatch }) => {
+      ({ state, tr, dispatch, commands }) => {
         const draft = documentCommentsPluginKey.getState(state)?.draft;
         if (
           !draft ||
@@ -981,29 +1030,25 @@ export const DocumentComments = Extension.create({
         }
 
         if (dispatch) {
-          // A range mark would also cover inline nodes such as hard breaks, which anchors
-          // cannot express, so the document would no longer save.
-          const mark = state.schema.marks[COMMENT_MARK_NAME].create({
-            id: comment.id,
-          });
-          // One step per run of adjacent text, as a range mark would make.
-          const runs: CommentRange[] = [];
-          state.doc.nodesBetween(draft.from, draft.to, (node, pos, parent) => {
-            if (!canCarryCommentMark(node, parent)) {
-              return;
-            }
-            const from = Math.max(pos, draft.from);
-            const to = Math.min(pos + node.nodeSize, draft.to);
-            const last = runs.at(-1);
-            if (last?.to === from) {
-              last.to = to;
-            } else {
-              runs.push({ from, to });
-            }
-          });
-          for (const { from, to } of runs) {
-            tr.addMark(from, to, mark);
+          const marked = markComment(
+            state.doc,
+            draft.from,
+            draft.to,
+            comment.id
+          );
+          for (const step of marked?.steps ?? []) {
+            tr.step(step);
           }
+        }
+        return commands.commitCommentDraft(comment);
+      },
+    commitCommentDraft:
+      (comment) =>
+      ({ state, tr, dispatch }) => {
+        if (!documentCommentsPluginKey.getState(state)?.draft) {
+          return false;
+        }
+        if (dispatch) {
           // A live document may already hold the thread, pushed by the session.
           tr.setDocAttribute(COMMENTS_ATTRIBUTE, [
             ...getDocumentComments(state.doc).filter(

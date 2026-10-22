@@ -6,12 +6,13 @@ import { MCPServerViewFactory } from "@app/tests/utils/MCPServerViewFactory";
 import { fileStorageMock } from "@app/tests/utils/mocks/file_storage";
 import { SandboxFunctionMCPActionFactory } from "@app/tests/utils/SandboxFunctionMCPActionFactory";
 import { createPersistedSandboxFunctionInvocationTokenTestContext } from "@app/tests/utils/SandboxTokenFactory";
-import { getPodFilesBasePath } from "@app/types/mount_path";
+import { getFramePersistentFilesBasePath } from "@app/types/api/frame_storage";
+import { getFramePersistentFilesMountPoint } from "@app/types/mount_path";
 import assert from "assert";
 import { describe, expect, it } from "vitest";
 
 describe("uploadAndFormatImageResponse", () => {
-  it("writes generated images to the frame function tool outputs folder", async () => {
+  it("writes generated images to the Frame persistent files folder", async () => {
     const {
       auth,
       workspace,
@@ -20,6 +21,7 @@ describe("uploadAndFormatImageResponse", () => {
       podSpace,
       sandboxFunction,
     } = await createPersistedSandboxFunctionInvocationTokenTestContext();
+    const frame = sandboxFunction.frame;
     const server = await InternalMCPServerInMemoryResource.makeNew(auth, {
       name: "common_utilities",
       useCase: null,
@@ -58,27 +60,40 @@ describe("uploadAndFormatImageResponse", () => {
     );
 
     assert(result.isOk());
-    expect(result.value).toHaveLength(1);
-    const fileOutput = result.value.find(isToolGeneratedFilePath);
+    assert(!Array.isArray(result.value));
+    const { content, structuredContent } = result.value;
+    expect(content).toHaveLength(1);
+    const fileOutput = content.find(isToolGeneratedFilePath);
     assert(fileOutput);
 
-    const scopedPathPrefix = `pod-${podSpace.sId}/.tool_outputs/${sandboxFunction.slug}/`;
+    const sandboxPathPrefix = `${getFramePersistentFilesMountPoint(frame.sId)}/.tool_outputs/${sandboxFunction.slug}/`;
     expect(fileOutput.resource.path).toBe(fileOutput.resource.uri);
     expect(fileOutput.resource.path).toBe(
-      `${scopedPathPrefix}${fileOutput.resource.title}`
+      `${sandboxPathPrefix}${fileOutput.resource.title}`
     );
     expect(fileOutput.resource.title).toMatch(/^\d+_generated_image\.png$/);
     expect(fileOutput.resource.contentType).toBe("image/png");
 
+    expect(structuredContent).toEqual({
+      files: [
+        {
+          path: fileOutput.resource.path,
+          title: fileOutput.resource.title,
+          contentType: "image/png",
+        },
+      ],
+      hint: `Read with node:fs/promises: await readFile(${JSON.stringify(fileOutput.resource.path)}). Do not pass this path to useFile().`,
+    });
+
     expect(fileStorageMock.saveFileCalls).toHaveLength(1);
     const fileWrite = fileStorageMock.saveFileCalls[0];
     const relativePath = fileOutput.resource.path.slice(
-      `pod-${podSpace.sId}/`.length
+      `${getFramePersistentFilesMountPoint(frame.sId)}/`.length
     );
     expect(fileWrite.filePath).toBe(
-      `${getPodFilesBasePath({
+      `${getFramePersistentFilesBasePath({
         workspaceId: workspace.sId,
-        podId: podSpace.sId,
+        frameId: frame.sId,
       })}${relativePath}`
     );
     expect(fileWrite.content).toEqual(imageContent);

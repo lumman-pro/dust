@@ -10,7 +10,11 @@ import type {
   DocumentProps,
   CollabStatus,
 } from "@app/components/editor/document/types";
-import { dfmToYDoc, yDocToDfm } from "@app/lib/api/collab/ydoc";
+import {
+  anchorYDocComment,
+  dfmToYDoc,
+  yDocToDfm,
+} from "@app/lib/api/collab/ydoc";
 import type { CommentChannel } from "@app/lib/client/collab/comments";
 import type { DfmMessageVerifier } from "@app/lib/client/dfm_signatures";
 import type { DfmAuthor, DfmComment, DfmMessage } from "@app/lib/markdown/dfm";
@@ -38,6 +42,7 @@ import type { Editor, JSONContent } from "@tiptap/core";
 import { Extension } from "@tiptap/core";
 import { Plugin } from "@tiptap/pm/state";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type * as Y from "yjs";
 
 const AUTHOR: DfmAuthor = { kind: "user", id: "usr_tom", name: "Tom" };
 const AT = "2026-09-25T14:16:32.380Z";
@@ -58,10 +63,14 @@ type LiveCommentAnswer = Result<DfmComment | null, CommentRequestErrorCode>;
 
 /**
  * A live session's comment side: it applies each command to its threads and sends them, as the
- * server does, writing new messages as `AUTHOR` at `AT`. `answer` answers instead, and can still
- * accept the command.
+ * server does, writing new messages as `AUTHOR` at `AT` and marking new threads' anchors in `doc`.
+ * `answer` answers instead, and can still accept the command.
  */
-function commentSession(initialThreads: DfmComment[], answer?: SessionAnswer) {
+function commentSession(
+  doc: Y.Doc,
+  initialThreads: DfmComment[],
+  answer?: SessionAnswer
+) {
   let threads = initialThreads;
   const listeners = new Set<(comments: DfmComment[]) => void>();
   const broadcast = (next: DfmComment[]) => {
@@ -83,6 +92,20 @@ function commentSession(initialThreads: DfmComment[], answer?: SessionAnswer) {
           status: "open",
           messages: [message(command.body)],
         };
+        if (command.anchor) {
+          const anchored = anchorYDocComment(
+            doc,
+            {
+              commentId: command.commentId,
+              anchor: command.anchor,
+              comments: [...threads, created],
+            },
+            { source: "local", context: null }
+          );
+          if (anchored.isErr()) {
+            return new Err(anchored.error);
+          }
+        }
         broadcast([...threads, created]);
         return new Ok(created);
       }
@@ -156,7 +179,7 @@ async function renderDocument(
   if (live.isErr()) {
     throw new Error(live.error);
   }
-  const session = commentSession(live.value.comments, answer);
+  const session = commentSession(live.value.doc, live.value.comments, answer);
   const extensions = buildCollabExtensions({
     t: (descriptor) => descriptor.id ?? "",
     document: live.value.doc,
@@ -1847,6 +1870,57 @@ describe("Document Frame embeds", () => {
     ).toBeDefined();
   });
 
+  it("gives the host's renderer the Frame's props, in the editor and the read-only preview", async () => {
+    const source =
+      'Intro\n\n::embed_frame{path="pod-abc/a.tsx" region="EU" year="2026"}\n\nOutro\n';
+    const renderFrame: DocumentProps["renderFrame"] = (
+      path,
+      _height,
+      props
+    ) => <iframe title={`Frame ${path} ${JSON.stringify(props)}`} />;
+    const title = 'Frame pod-abc/a.tsx {"region":"EU","year":"2026"}';
+
+    const { dom } = await renderDocument(source, { renderFrame });
+    expect(await within(dom).findByTitle(title)).toBeDefined();
+
+    const preview = render(
+      <DocumentEditor
+        initialContent={`${source}\n<div>Preview</div>\n`}
+        renderCommentAuthorAvatar={() => null}
+        renderCommentBody={(body) => <p>{body}</p>}
+        resolveImageSource={NO_IMAGE_SOURCE}
+        renderFrame={renderFrame}
+      />
+    );
+    expect(
+      await within(preview.container).findByRole("alert")
+    ).toHaveTextContent(
+      "This document can't be edited here yet because it has HTML."
+    );
+    expect(await within(preview.container).findByTitle(title)).toBeDefined();
+  });
+
+  it("keeps a Frame's props when its HTML is pasted back", async () => {
+    const { dom } = await renderDocument(
+      'Intro\n\n::embed_frame{path="pod-abc/a.tsx" region="EU"}\n',
+      {}
+    );
+    const html = dom.editor.getHTML();
+
+    act(() => {
+      dom.editor.commands.insertContentAt(
+        dom.editor.state.doc.content.size,
+        html
+      );
+    });
+
+    expect(
+      dom.editor
+        .getMarkdown()
+        .match(/::embed_frame\{path="pod-abc\/a\.tsx" region="EU"\}/g)
+    ).toHaveLength(2);
+  });
+
   it("shows a Frame as its path without a renderer", async () => {
     const dom = await renderFrames();
 
@@ -1890,7 +1964,7 @@ describe("Document Frame embeds", () => {
   it("keeps a Frame mounted when the read-only preview re-renders", async () => {
     const renderPreview = () => (
       <DocumentEditor
-        initialContent={`${SOURCE_WITH_FRAME}\n- [ ] todo\n`}
+        initialContent={`${SOURCE_WITH_FRAME}\n<div>Preview</div>\n`}
         renderCommentAuthorAvatar={() => null}
         renderCommentBody={(body) => <p>{body}</p>}
         resolveImageSource={NO_IMAGE_SOURCE}
@@ -1898,6 +1972,9 @@ describe("Document Frame embeds", () => {
       />
     );
     const { rerender } = render(renderPreview());
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "This document can't be edited here yet because it has HTML."
+    );
     const frame = await screen.findByTitle(
       "Frame pod-abc/dashboards/revenue.tsx"
     );
@@ -1911,14 +1988,14 @@ describe("Document Frame embeds", () => {
 
   it("shows in the read-only preview only the Frames the editor reads", async () => {
     const rejected = [
-      '::embed_frame{path="pod-abc/b.tsx" title="B"}',
+      "::embed_frame{path=\"pod-abc/b.tsx\" title='B'}",
       "::embed_frame{path=pod-abc/c.tsx}",
       '::embed_frame[D]{path="pod-abc/d.tsx"}',
       '   ::embed_frame{path="pod-abc/e.tsx"}',
     ];
     render(
       <DocumentEditor
-        initialContent={`${SOURCE_WITH_FRAME}\n${rejected.join("\n\n")}\n\n> ::embed_frame{path="pod-abc/quoted.tsx"}\n\n- ::embed_frame{path="pod-abc/listed.tsx"}\n\n- [ ] todo\n`}
+        initialContent={`${SOURCE_WITH_FRAME}\n${rejected.join("\n\n")}\n\n> ::embed_frame{path="pod-abc/quoted.tsx"}\n\n- ::embed_frame{path="pod-abc/listed.tsx"}\n\n<div>Preview</div>\n`}
         renderCommentAuthorAvatar={() => null}
         renderCommentBody={(body) => <p>{body}</p>}
         resolveImageSource={NO_IMAGE_SOURCE}
@@ -1926,6 +2003,9 @@ describe("Document Frame embeds", () => {
       />
     );
 
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "This document can't be edited here yet because it has HTML."
+    );
     await screen.findByTitle("Frame pod-abc/dashboards/revenue.tsx");
     expect(screen.getByTitle("Frame pod-abc/quoted.tsx")).toBeDefined();
     expect(screen.getAllByTitle(/^Frame /)).toHaveLength(2);
@@ -2138,7 +2218,7 @@ describe("Document file previews", () => {
   it("keeps a file preview mounted when the read-only preview re-renders", async () => {
     const renderPreview = () => (
       <DocumentEditor
-        initialContent={`${SOURCE_WITH_PREVIEWS}\n- [ ] todo\n`}
+        initialContent={`${SOURCE_WITH_PREVIEWS}\n<div>Preview</div>\n`}
         renderCommentAuthorAvatar={() => null}
         renderCommentBody={(body) => <p>{body}</p>}
         resolveImageSource={NO_IMAGE_SOURCE}
@@ -2148,6 +2228,9 @@ describe("Document file previews", () => {
       />
     );
     const { rerender } = render(renderPreview());
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "This document can't be edited here yet because it has HTML."
+    );
     const chip = await screen.findByRole("button", {
       name: "pod-abc/report.pdf",
     });

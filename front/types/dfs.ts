@@ -7,15 +7,21 @@
 /** A real stored object: 32 lowercase hex digits encoding a 16-byte UUIDv7. */
 export type DfsObjectId = string;
 
+/** A lock ownership token: 32 lowercase hex digits encoding a 16-byte UUIDv7. */
+export type DfsLockId = string;
+
 /** A real object or one of the session's virtual projections. */
 export type DfsObjectRef = DfsObjectId | "root" | "shared";
 
 // Version nibble 7 and RFC 4122 variant bits, as required by the server.
-export const DFS_OBJECT_ID_REGEX =
-  /^[0-9a-f]{12}7[0-9a-f]{3}[89ab][0-9a-f]{15}$/;
+const DFS_UUID_V7_REGEX = /^[0-9a-f]{12}7[0-9a-f]{3}[89ab][0-9a-f]{15}$/;
 
 export function isDfsObjectId(value: string): value is DfsObjectId {
-  return DFS_OBJECT_ID_REGEX.test(value);
+  return DFS_UUID_V7_REGEX.test(value);
+}
+
+export function isDfsLockId(value: string): value is DfsLockId {
+  return DFS_UUID_V7_REGEX.test(value);
 }
 
 export type DfsErrorCode =
@@ -32,6 +38,8 @@ export type DfsErrorCode =
   | "unavailable"
   | "unsupported"
   | "name_too_long"
+  | "would_block"
+  | "lock_lost"
   // Client-side only: the server answered with a message the client cannot decode.
   | "invalid_response"
   // Client-side only: a file changed between the chunks of a multi-chunk read (`DfsFileSystem`).
@@ -169,6 +177,18 @@ export type DfsFileResult =
 // One result per input; files that do not fit the reply budget get a `capacity` error.
 export interface DfsFilesBatch {
   results: DfsFileResult[];
+}
+
+// Enforced locks.
+
+export interface DfsLockState {
+  lockId: DfsLockId;
+  expiresAtMs: number;
+}
+
+export interface DfsObjectLock {
+  objectId: DfsObjectId;
+  lockId: DfsLockId;
 }
 
 // Filesystem mutations.

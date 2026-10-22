@@ -1,12 +1,16 @@
 import { ActionDetailsWrapper } from "@app/components/actions/ActionDetailsWrapper";
 import type { ToolExecutionDetailsProps } from "@app/components/actions/mcp/details/types";
 import { SkillInfoTab } from "@app/components/skills/SkillInfoTab";
+import { ENABLE_SKILL_TOOL_NAME } from "@app/lib/actions/constants";
+import {
+  SKILL_MANAGEMENT_SERVER_NAME,
+  validateToolInputs,
+} from "@app/lib/actions/mcp_internal_actions/constants";
 import {
   getOutputText,
   isResourceContentWithText,
   isTextContent,
 } from "@app/lib/actions/mcp_internal_actions/output_schemas";
-import { isSkillEnableInputType } from "@app/lib/actions/mcp_internal_actions/types";
 import { getEnableSkillIdFromOutputBlock } from "@app/lib/api/actions/servers/skill_management/rendering";
 import { SKILL_ICON } from "@app/lib/skill";
 import { useSkill } from "@app/lib/swr/skill_configurations";
@@ -24,7 +28,11 @@ export function MCPSkillEnableActionDetails({
   toolOutput,
 }: ToolExecutionDetailsProps) {
   const { t } = useLingui();
-  const skillName = isSkillEnableInputType(toolParams)
+  const skillName = validateToolInputs(
+    SKILL_MANAGEMENT_SERVER_NAME,
+    ENABLE_SKILL_TOOL_NAME,
+    toolParams
+  )
     ? toolParams.skillName
     : null;
 

@@ -464,7 +464,7 @@ async function getInteractingSlackUserGroups(
 
 type ToolValidationParams = {
   actionId: string;
-  approved: "approved" | "rejected";
+  approved: "approved" | "always_approved" | "rejected";
   conversationId: string;
   messageId: string;
   slackChatBotMessageId: number;
@@ -473,13 +473,18 @@ type ToolValidationParams = {
 
 function makeToolValidationConfirmationText(
   i18n: I18n,
-  approved: "approved" | "rejected",
+  approved: "approved" | "always_approved" | "rejected",
   toolName: string
 ): string {
   switch (approved) {
     case "approved":
       return i18n._(
         "The agent's request to use tool `{toolName}` was ✅ approved",
+        { toolName }
+      );
+    case "always_approved":
+      return i18n._(
+        "The agent's request to use tool `{toolName}` was ✅ always allowed",
         { toolName }
       );
     case "rejected":

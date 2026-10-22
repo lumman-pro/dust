@@ -96,6 +96,7 @@ function PokeConsumptionAttributionRows(
     search: props.search,
     filter: props.filter,
     sortOrder: queryState.sortOrder,
+    rankBy: queryState.rankBy,
   });
 
   return (

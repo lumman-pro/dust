@@ -129,6 +129,22 @@ msgstr "Weitere Aktionen"
 msgid "Delete"
 msgstr "Löschen"
 
+#: front/components/editor/document/DocumentCommentThread.tsx
+msgid "{name} is busy. It'll answer soon."
+msgstr "{name} ist beschäftigt und antwortet bald."
+
+#: front/components/editor/document/DocumentCommentThread.tsx
+msgid "{name} is thinking…"
+msgstr "{name} denkt nach…"
+
+#: front/components/editor/document/DocumentCommentThread.tsx
+msgid "{name} is reading the document…"
+msgstr "{name} liest das Dokument…"
+
+#: front/components/editor/document/DocumentCommentThread.tsx
+msgid "{name} is editing the document…"
+msgstr "{name} bearbeitet das Dokument…"
+
 #. placeholder {0}: replies.length
 #: front/components/editor/document/DocumentCommentThread.tsx
 msgid "{0, plural, one {# reply} other {# replies}}"
@@ -244,6 +260,14 @@ msgstr "Wird neu verbunden…"
 #: front/components/editor/document/DocumentSaveStatus.tsx
 msgid "Live editing unavailable"
 msgstr "Live-Bearbeitung nicht verfügbar"
+
+#: front/components/editor/document/DocumentSaveStatus.tsx
+msgid "thinking…"
+msgstr "denkt nach…"
+
+#: front/components/editor/document/DocumentSaveStatus.tsx
+msgid "{name} is thinking"
+msgstr "{name} denkt nach"
 
 #: front/components/editor/document/DocumentSaveStatus.tsx
 msgid "reading…"
@@ -519,6 +543,14 @@ msgid "This comment can't be saved in this document. Try shortening or simplifyi
 msgstr "Dieser Kommentar kann in diesem Dokument nicht gespeichert werden. Kürzen oder vereinfachen Sie ihn."
 
 #: front/components/editor/document/useDocumentComments.ts
+msgid "This document can't be saved right now."
+msgstr "Dieses Dokument kann derzeit nicht gespeichert werden."
+
+#: front/components/editor/document/useDocumentComments.ts
+msgid "This suggestion can't be saved in this document."
+msgstr "Dieser Vorschlag kann in diesem Dokument nicht gespeichert werden."
+
+#: front/components/editor/document/useDocumentComments.ts
 msgid "Suggestions can only replace text within one paragraph."
 msgstr "Vorschläge können nur Text innerhalb eines Absatzes ersetzen."
 
@@ -537,10 +569,6 @@ msgstr "Diese Diskussion hat sich beim Senden geändert. Senden Sie Ihre Nachric
 #: front/components/editor/document/useDocumentComments.ts
 msgid "This text is too long or complex to suggest a change to."
 msgstr "Dieser Text ist zu lang oder zu komplex, um eine Änderung dafür vorzuschlagen."
-
-#: front/components/editor/document/useDocumentComments.ts
-msgid "This suggestion can't be saved in this document."
-msgstr "Dieser Vorschlag kann in diesem Dokument nicht gespeichert werden."
 
 #: front/components/editor/document/useDocumentComments.ts
 msgid "The suggestion was applied, but the comment couldn't be resolved. {reason}"

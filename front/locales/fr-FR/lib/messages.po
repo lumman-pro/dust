@@ -422,6 +422,10 @@ msgid "This file is being edited live and can't take this change."
 msgstr "Ce fichier est en cours de modification en direct et ne peut pas accepter cette modification."
 
 #: front/lib/api_error_messages.ts
+msgid "Only files in a conversation or a Pod can be edited live."
+msgstr "Seuls les fichiers d'une conversation ou d'un Pod peuvent être modifiés en direct."
+
+#: front/lib/api_error_messages.ts
 msgid "Run not found."
 msgstr "Exécution introuvable."
 
@@ -556,6 +560,10 @@ msgstr "Utilisation du contexte de la conversation introuvable."
 #: front/lib/api_error_messages.ts
 msgid "The tool rejected the credentials."
 msgstr "L’outil a refusé les identifiants."
+
+#: front/lib/api_error_messages.ts
+msgid "These tools use each person's own credentials, so they can't be used for a message Dust posted."
+msgstr "Ces outils utilisent les identifiants personnels de chacun, ils ne peuvent donc pas être utilisés pour un message publié par Dust."
 
 #: front/lib/api_error_messages.ts
 msgid "The tool identifier is invalid."

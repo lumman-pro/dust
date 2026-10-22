@@ -133,6 +133,18 @@ msgstr "Le retour a été marqué comme vu."
 msgid "The feedback has been marked as unseen."
 msgstr "Le retour a été marqué comme non vu."
 
+#: front/hooks/useDownloadPdf.ts
+msgid "PDF export failed"
+msgstr "Échec de l’export PDF"
+
+#: front/hooks/useDownloadPdf.ts
+msgid "PDF exported"
+msgstr "PDF exporté"
+
+#: front/hooks/useDownloadPdf.ts
+msgid "Your PDF has been downloaded."
+msgstr "Votre PDF a été téléchargé."
+
 #: front/hooks/useDustMcpServerSettings.ts
 msgid "Failed to update the Dust MCP server settings"
 msgstr "Impossible de mettre à jour les paramètres du serveur MCP Dust"
@@ -176,6 +188,10 @@ msgstr "Activer"
 #: front/hooks/useEnableBrowserNotification.tsx
 msgid "Later"
 msgstr "Plus tard"
+
+#: front/hooks/useEnterFrameDraftMode.ts
+msgid "Could not turn on draft mode"
+msgstr "Impossible d’activer le mode brouillon."
 
 #: front/hooks/useExtensionMcpToolsToggle.ts
 msgid "Failed to update the extension MCP tools setting"
@@ -276,6 +292,10 @@ msgstr "Les modifications sont en ligne."
 #: front/hooks/useMakeFrameDraftLive.ts
 msgid "The share link now shows this version."
 msgstr "Le lien de partage affiche désormais cette version."
+
+#: front/hooks/useMakeFrameDraftLive.ts
+msgid "Draft mode is off"
+msgstr "Le mode brouillon est désactivé."
 
 #: front/hooks/useMarkAllConversationsAsRead.ts
 msgid "All conversations marked as read"

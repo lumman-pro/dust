@@ -237,6 +237,7 @@ function renderUserMessage(
       clientSideMCPServerIds: userMessage.clientSideMCPServerIds,
       lastTriggerRunAt:
         userMessage.userContextLastTriggerRunAt?.getTime() ?? null,
+      hostSelection: userMessage.userContextHostSelection,
     },
     agenticMessageData:
       userMessage.agenticMessageType && userMessage.agenticOriginMessageId
@@ -948,6 +949,7 @@ async function renderSingleAgentMessage(
     subAgentCostCredits,
     resolvedModel: resolvedModelFromAgentMessageRow(agentMessage),
     modelResolutionMethod: agentMessage.modelResolutionMethod,
+    fallbackModelId: agentMessage.fallbackModelId,
   } satisfies AgentMessageType;
 
   if (viewType === "full") {

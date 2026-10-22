@@ -11,6 +11,8 @@ import type {
   DfsErrorCode,
   DfsExtendedMetadata,
   DfsFileResult,
+  DfsLockId,
+  DfsLockState,
   DfsGrant,
   DfsGrantPage,
   DfsObjectId,
@@ -30,7 +32,7 @@ import type {
   DfsAttrResult,
   DfsTenant,
 } from "@app/types/dfs";
-import { DfsError, isDfsObjectId } from "@app/types/dfs";
+import { DfsError, isDfsLockId, isDfsObjectId } from "@app/types/dfs";
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
 import { assertNever } from "@app/types/shared/utils/assert_never";
@@ -53,6 +55,8 @@ const WIRE_ERROR_CODES = {
   UNAVAILABLE: "unavailable",
   UNSUPPORTED: "unsupported",
   NAME_TOO_LONG: "name_too_long",
+  WOULD_BLOCK: "would_block",
+  LOCK_LOST: "lock_lost",
 } as const satisfies Record<string, DfsErrorCode>;
 
 type WireErrorCode = keyof typeof WIRE_ERROR_CODES;
@@ -243,6 +247,35 @@ export const WireAttrSchema = z
     grantsVersion: a.grantsVersion,
     storeVersion: a.storeVersion,
     metadata: a.metadata,
+  }));
+
+// Enforced locks.
+
+export function encodeLockId(id: DfsLockId): Uint8Array {
+  if (!isDfsLockId(id)) {
+    throw new DfsError(
+      "invalid_input",
+      "lockId must be a UUIDv7 in lowercase hex."
+    );
+  }
+  return Buffer.from(id, "hex");
+}
+
+const WireLockIdSchema = WireBytesSchema.transform((value) =>
+  Buffer.from(value).toString("hex")
+).refine(
+  (id): id is DfsLockId => isDfsLockId(id),
+  "Expected a UUIDv7 lock id."
+);
+
+export const WireLockStateSchema = z
+  .object({
+    lockId: WireLockIdSchema,
+    expiresAt: WireNumberUint64Schema,
+  })
+  .transform((lock): DfsLockState => ({
+    lockId: lock.lockId,
+    expiresAtMs: lock.expiresAt,
   }));
 
 // Grants.

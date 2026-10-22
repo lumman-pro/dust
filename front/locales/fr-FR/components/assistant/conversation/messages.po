@@ -88,6 +88,14 @@ msgid "<0>View your Premium model usage in Analytics</0>."
 msgstr "<0>Voir votre utilisation des modèles Premium dans Statistiques</0>."
 
 #: front/components/assistant/conversation/AgentMessage.tsx
+msgid "Answered by {modelName}"
+msgstr "Réponse de {modelName}"
+
+#: front/components/assistant/conversation/AgentMessage.tsx
+msgid "The requested model declined to answer this message, so Dust used {modelName} instead."
+msgstr "Le modèle demandé a refusé de répondre à ce message, Dust a donc utilisé {modelName} à la place."
+
+#: front/components/assistant/conversation/AgentMessage.tsx
 msgid "Context limit reached"
 msgstr "Limite de contexte atteinte"
 

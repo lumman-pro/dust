@@ -34,7 +34,7 @@ async fn main() -> anyhow::Result<()> {
     // See https://docs.rs/foundationdb/0.11.0/foundationdb/fn.boot.html
     #[allow(unsafe_code)]
     let _network = unsafe { foundationdb::boot() };
-    fdb::ping(fdb::database()?).await?;
+    fdb::connect().await?;
     tracing::info!("connected to FoundationDB");
 
     let mut interrupt = signal(SignalKind::interrupt())?;

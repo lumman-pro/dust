@@ -1,5 +1,11 @@
 import { ActionDetailsWrapper } from "@app/components/actions/ActionDetailsWrapper";
 import type { ToolExecutionDetailsProps } from "@app/components/actions/mcp/details/types";
+import { validateToolInputs } from "@app/lib/actions/mcp_internal_actions/constants";
+import {
+  AGENT_MEMORY_ERASE_TOOL_NAME,
+  AGENT_MEMORY_RECORD_TOOL_NAME,
+  AGENT_MEMORY_SERVER_NAME,
+} from "@app/lib/api/actions/servers/agent_memory/metadata";
 import {
   Card,
   ContentMessage,
@@ -52,7 +58,13 @@ export function MCPAgentMemoryRecordActionDetails({
   displayContext,
 }: ToolExecutionDetailsProps) {
   const { t } = useLingui();
-  const entries = Array.isArray(toolParams.entries) ? toolParams.entries : [];
+  const entries = validateToolInputs(
+    AGENT_MEMORY_SERVER_NAME,
+    AGENT_MEMORY_RECORD_TOOL_NAME,
+    toolParams
+  )
+    ? toolParams.entries
+    : [];
   const entryCount = entries.length;
   return (
     <ActionDetailsWrapper
@@ -118,7 +130,13 @@ export function MCPAgentMemoryEraseActionDetails({
   displayContext,
 }: ToolExecutionDetailsProps) {
   const { t } = useLingui();
-  const indexes = Array.isArray(toolParams.indexes) ? toolParams.indexes : [];
+  const indexes = validateToolInputs(
+    AGENT_MEMORY_SERVER_NAME,
+    AGENT_MEMORY_ERASE_TOOL_NAME,
+    toolParams
+  )
+    ? toolParams.indexes
+    : [];
   const erasedCount = indexes.length;
   const remainingMemories = useMemo(
     () => parseMemoriesFromOutput(toolOutput),

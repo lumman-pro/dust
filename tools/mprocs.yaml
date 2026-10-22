@@ -2,7 +2,6 @@
 # Requirements:
 # * mprocs (`brew install mprocs`)
 # * bacon (`cargo install bacon`)
-# * FoundationDB client library for dfs-api (`tools/install-fdb-client.sh`)
 
 # ⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️
 # you need to restart front-workers after sdks-js is loaded: select front-workers in the mprocs window and press r
@@ -34,8 +33,8 @@ procs:
 
   dfs-api:
     cwd: "<CONFIG_DIR>/../dfs/server"
-    shell: "bacon dfs-api"
-    autostart: true
+    shell: "bash ../../tools/start-dfs.sh bacon dfs-api"
+    autostart: false
 
   sparkle:
     cwd: "<CONFIG_DIR>/../sparkle"

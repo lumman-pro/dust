@@ -12,7 +12,10 @@ import { getLocalTimeZone } from "@app/lib/i18n/format";
 import { useFrameFiles } from "@app/lib/swr/frame_files";
 import { getErrorFromResponse } from "@app/lib/swr/swr";
 import datadogLogger from "@app/logger/datadogLogger";
-import type { FrameFunctionReferenceScope } from "@app/types/api/frame_function_reference";
+import type {
+  FrameFunctionReference,
+  FrameFunctionReferenceScope,
+} from "@app/types/api/frame_function_reference";
 import { resolveFrameFunctionReference } from "@app/types/api/frame_function_reference";
 import type { GetFramePermissionsResponseBody } from "@app/types/api/frame_permissions";
 import type { FramePublicationTarget } from "@app/types/api/frame_publication";
@@ -467,6 +470,10 @@ function nextBlockedActionGroup(
   );
 }
 
+interface CreateSandboxFunctionInvocationInput extends FrameFunctionReference {
+  input?: unknown;
+}
+
 // Custom hook to encapsulate the logic for handling visualization messages.
 /**
  * @cc [owner:flvndvd,label:security;error-handling] frame-write-validation-response
@@ -498,8 +505,7 @@ function useVisualizationDataHandler({
 }: {
   conversationId: string | null;
   createSandboxFunctionInvocation: (
-    functionIdOrSlug: string,
-    input?: unknown
+    params: CreateSandboxFunctionInvocationInput
   ) => Promise<
     Result<PostSandboxFunctionInvocationResponseBody, SandboxFunctionCallError>
   >;
@@ -630,10 +636,10 @@ function useVisualizationDataHandler({
             break;
           }
 
-          const invocationRes = await createSandboxFunctionInvocation(
-            referenceRes.value,
-            data.params.input
-          );
+          const invocationRes = await createSandboxFunctionInvocation({
+            ...referenceRes.value,
+            input: data.params.input,
+          });
 
           if (invocationRes.isErr()) {
             sendErrorToIframe(data, invocationRes.error, event.source, {
@@ -822,6 +828,11 @@ export interface VisualizationActionIframeProps {
   locale?: SupportedLocale;
   onEditText?: EditTextFn;
   scopedUserIdentity?: ScopedWorkspaceUserIdentity;
+  /**
+   * Share token of a shared Frame page. Every function call then goes to the share's public
+   * route, for members and visitors alike, and the server picks the caller's path.
+   */
+  shareToken?: string;
   spaceId?: string;
   viewer: FrameViewer | null;
   visualization: Visualization;
@@ -918,21 +929,6 @@ export const VisualizationActionIframe = forwardRef<
     []
   );
 
-  const waitForSandboxFunctionInvocationResult = useCallback(
-    ({
-      functionId,
-      invocationId,
-    }: {
-      functionId: string;
-      invocationId: string;
-    }) =>
-      new Promise<Result<unknown, SandboxFunctionCallError>>((resolve) => {
-        invocationResolvers.set(invocationId, resolve);
-        setActiveInvocations((prev) => [...prev, { functionId, invocationId }]);
-      }),
-    [invocationResolvers]
-  );
-
   const settleSandboxFunctionInvocation = useCallback(
     (
       invocationId: string,
@@ -976,6 +972,7 @@ export const VisualizationActionIframe = forwardRef<
     isInDrawer = false,
     onEditText,
     scopedUserIdentity,
+    shareToken,
     spaceId,
     viewer,
     visualization,
@@ -994,6 +991,36 @@ export const VisualizationActionIframe = forwardRef<
       scopedUserIdentity
     );
   }, [canInvokeFunctions, scopedUserIdentity, workspaceId]);
+
+  const waitForSandboxFunctionInvocationResult = useCallback(
+    async ({
+      functionId,
+      invocationId,
+    }: {
+      functionId: string;
+      invocationId: string;
+    }): Promise<Result<unknown, SandboxFunctionCallError>> => {
+      // A visitor cannot open the member-only invocation event stream, so a call still running
+      // when the public route answers settles without its result reaching the Frame.
+      if (shareToken && !runtimeAccess.userIdentity.isWorkspaceMember) {
+        return new Err({
+          code: "not_supported",
+          message:
+            "This call is still running and may still complete, but its result cannot be shown on this shared link.",
+        });
+      }
+
+      return new Promise((resolve) => {
+        invocationResolvers.set(invocationId, resolve);
+        setActiveInvocations((prev) => [...prev, { functionId, invocationId }]);
+      });
+    },
+    [
+      invocationResolvers,
+      runtimeAccess.userIdentity.isWorkspaceMember,
+      shareToken,
+    ]
+  );
 
   const resolveUserIdentity = useCallback(
     () =>
@@ -1019,21 +1046,26 @@ export const VisualizationActionIframe = forwardRef<
   });
 
   const createSandboxFunctionInvocation = useCallback(
-    async (
-      functionIdOrSlug: string,
-      input?: unknown
-    ): Promise<
+    async ({
+      frameId,
+      functionName,
+      input,
+    }: CreateSandboxFunctionInvocationInput): Promise<
       Result<
         PostSandboxFunctionInvocationResponseBody,
         SandboxFunctionCallError
       >
     > => {
       try {
-        const accessError = getSandboxFunctionInvocationAccessError(
-          functionReferenceScope,
-          runtimeAccess.canInvokeFunctions,
-          runtimeAccess.userIdentity.isWorkspaceMember
-        );
+        // On a share page the public route authorizes every call, visitors included, so
+        // `canInvokeFunctions` does not apply there.
+        const accessError = shareToken
+          ? null
+          : getSandboxFunctionInvocationAccessError(
+              functionReferenceScope,
+              runtimeAccess.canInvokeFunctions,
+              runtimeAccess.userIdentity.isWorkspaceMember
+            );
         if (accessError) {
           return new Err(accessError);
         }
@@ -1046,9 +1078,10 @@ export const VisualizationActionIframe = forwardRef<
           target: props.functionTarget,
         };
 
-        const encodedFunctionIdOrSlug = encodeURIComponent(functionIdOrSlug);
         const response = await clientFetch(
-          `/api/w/${workspaceId}/sandbox-functions/${encodedFunctionIdOrSlug}/invocations`,
+          shareToken
+            ? `/api/v1/public/frames/${encodeURIComponent(shareToken)}/functions/${encodeURIComponent(functionName)}/invocations`
+            : `/api/w/${workspaceId}/sandbox-functions/${encodeURIComponent(`${frameId}/${functionName}`)}/invocations`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1084,6 +1117,7 @@ export const VisualizationActionIframe = forwardRef<
       props.functionTarget,
       runtimeAccess.canInvokeFunctions,
       runtimeAccess.userIdentity.isWorkspaceMember,
+      shareToken,
       workspaceId,
     ]
   );

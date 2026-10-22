@@ -1,13 +1,12 @@
 import {
   makeBaseDocument,
   modelForUsage,
-  reconciledCreditMicroForItem,
 } from "@app/lib/analytics/agent_message_consumption/document_common";
 import type {
   AgentMessageConsumptionAnalyticsInput,
   BilledRunUsage,
+  ReconciledConsumptionItem,
 } from "@app/lib/analytics/agent_message_consumption/load";
-import type { MessageConsumptionAllocation } from "@app/lib/api/assistant/agent_message_consumption_attribution/allocation";
 import { skillIdsAttributedToAction } from "@app/lib/api/assistant/agent_message_consumption_attribution/skill_attribution";
 import type { AgentMCPActionResource } from "@app/lib/resources/agent_mcp_action_resource";
 import type { AgentMessageToolConsumptionItemResource } from "@app/lib/resources/agent_message_consumption_item_resource";
@@ -22,19 +21,18 @@ function serverNameForAction(action: AgentMCPActionResource): string {
   );
 }
 
-function summarizeToolConsumptionItem({
-  allocation,
-  item,
-}: {
-  allocation: MessageConsumptionAllocation<BilledRunUsage>;
-  item: AgentMessageToolConsumptionItemResource;
-}): Pick<
+type ReconciledToolConsumptionItem = ReconciledConsumptionItem &
+  AgentMessageToolConsumptionItemResource;
+
+function summarizeToolConsumptionItem(
+  item: ReconciledToolConsumptionItem
+): Pick<
   AgentMessageConsumptionAnalyticsToolData,
   "credit_micro" | "gross_credit_micro" | "tokens"
 > {
   const resultFootprintTokens = item.inputTokensCount ?? 0;
   const directCreditMicro = item.directCreditAmountMicro ?? 0;
-  const attributedCreditMicro = reconciledCreditMicroForItem(allocation, item);
+  const attributedCreditMicro = item.reconciledCreditAmountMicro;
   assert(
     attributedCreditMicro >= directCreditMicro,
     "Tool credit is smaller than its direct charge"
@@ -68,7 +66,6 @@ function summarizeToolConsumptionItem({
 
 function buildToolConsumptionDocument({
   action,
-  allocation,
   enabledSkillIds,
   input,
   item,
@@ -76,10 +73,9 @@ function buildToolConsumptionDocument({
   usage,
 }: {
   action: AgentMCPActionResource;
-  allocation: MessageConsumptionAllocation<BilledRunUsage>;
   enabledSkillIds: string[];
   input: AgentMessageConsumptionAnalyticsInput;
-  item: AgentMessageToolConsumptionItemResource;
+  item: ReconciledToolConsumptionItem;
   parentAction: AgentMCPActionResource | undefined;
   usage: BilledRunUsage;
 }): AgentMessageConsumptionAnalyticsToolData {
@@ -87,13 +83,13 @@ function buildToolConsumptionDocument({
 
   return {
     ...makeBaseDocument(input, {
-      attributionVersion: allocation.attributionVersion,
+      attributionVersion: input.attributionVersion,
       consumptionKey: item.itemKey,
       runUsageModelId: item.runUsageId,
       stepIndex: serializedAction.step,
       usageType: usage.usageType,
     }),
-    ...summarizeToolConsumptionItem({ allocation, item }),
+    ...summarizeToolConsumptionItem(item),
     consumption_type: "tool",
     execution_time_ms: serializedAction.executionDurationMs,
     micro_usd: null,
@@ -116,11 +112,10 @@ function buildToolConsumptionDocument({
 }
 
 export function buildToolConsumptionDocuments(
-  input: AgentMessageConsumptionAnalyticsInput,
-  allocation: MessageConsumptionAllocation<BilledRunUsage>
+  input: AgentMessageConsumptionAnalyticsInput
 ): AgentMessageConsumptionAnalyticsToolData[] {
   const usageByModelId = new Map(
-    allocation.messageUsages.map((usage) => [usage.runUsageModelId, usage])
+    input.usages.map((usage) => [usage.runUsageModelId, usage])
   );
   const actionByModelId = new Map(
     input.actions.map((action) => [action.id, action])
@@ -130,7 +125,7 @@ export function buildToolConsumptionDocuments(
   );
   const documents: AgentMessageConsumptionAnalyticsToolData[] = [];
 
-  for (const item of allocation.items) {
+  for (const item of input.items) {
     if (!item.isToolItem()) {
       continue;
     }
@@ -145,7 +140,6 @@ export function buildToolConsumptionDocuments(
     documents.push(
       buildToolConsumptionDocument({
         action,
-        allocation,
         enabledSkillIds: input.enabledSkillIdsByActionId.get(action.sId) ?? [],
         input,
         item,

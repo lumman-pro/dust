@@ -154,6 +154,58 @@ msgstr ""
 msgid "all efforts"
 msgstr ""
 
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "High (always ask for confirmation)"
+msgstr ""
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Medium (allows input-scoped confirmation save)"
+msgstr ""
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Low (allows user-global confirmation save)"
+msgstr ""
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Never ask (automatic execution)"
+msgstr ""
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgctxt "tool stake level"
+msgid "High"
+msgstr ""
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgctxt "tool stake level"
+msgid "Medium"
+msgstr ""
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgctxt "tool stake level"
+msgid "Low"
+msgstr ""
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgctxt "tool stake level"
+msgid "Never ask"
+msgstr ""
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Needs explicit user approval."
+msgstr ""
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Users can save confirmations for specific tool inputs."
+msgstr ""
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Users can completely disable confirmations."
+msgstr ""
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Runs automatically."
+msgstr ""
+
 #: front/lib/client/visualization.ts
 msgid "The visualization code failed with this error:"
 msgstr ""

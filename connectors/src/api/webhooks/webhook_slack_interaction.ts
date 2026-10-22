@@ -16,10 +16,12 @@ import * as reporter from "io-ts-reporters";
 
 export const STATIC_AGENT_CONFIG = "static_agent_config";
 export const APPROVE_TOOL_EXECUTION = "approve_tool_execution";
+export const ALWAYS_APPROVE_TOOL_EXECUTION = "always_approve_tool_execution";
 export const REJECT_TOOL_EXECUTION = "reject_tool_execution";
 
 const ToolValidationActionsCodec = t.union([
   t.literal(APPROVE_TOOL_EXECUTION),
+  t.literal(ALWAYS_APPROVE_TOOL_EXECUTION),
   t.literal(REJECT_TOOL_EXECUTION),
 ]);
 
@@ -46,7 +48,7 @@ const ToolValidationActionsSchema = t.type({
 });
 
 export type RequestToolPermissionActionValueParsed = {
-  status: "approved" | "rejected";
+  status: "approved" | "always_approved" | "rejected";
   agentName: string;
   toolName: string;
 };
@@ -217,6 +219,7 @@ const _webhookSlackInteractionsAPIHandler = async (
         }
       } else if (
         action.action_id === APPROVE_TOOL_EXECUTION ||
+        action.action_id === ALWAYS_APPROVE_TOOL_EXECUTION ||
         action.action_id === REJECT_TOOL_EXECUTION
       ) {
         const blockIdValidation = SlackBlockIdToolValidationSchema.decode(
@@ -250,7 +253,11 @@ const _webhookSlackInteractionsAPIHandler = async (
 
         const valueValidation = t
           .type({
-            status: t.union([t.literal("approved"), t.literal("rejected")]),
+            status: t.union([
+              t.literal("approved"),
+              t.literal("always_approved"),
+              t.literal("rejected"),
+            ]),
             agentName: t.string,
             toolName: t.string,
           })

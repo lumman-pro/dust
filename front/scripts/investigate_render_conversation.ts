@@ -178,6 +178,7 @@ makeScript(
       costCredits: null,
       resolvedModel: null,
       modelResolutionMethod: null,
+      fallbackModelId: null,
     };
 
     const serverToolsAndInstructions = await tryListMCPTools(

@@ -4,10 +4,12 @@ import { ConversationSidePanelHeader } from "@app/components/assistant/conversat
 import { CenteredState } from "@app/components/assistant/conversation/interactive_content/CenteredState";
 import { FrameCodeView } from "@app/components/assistant/conversation/interactive_content/frame/FrameCodeView";
 import { FrameDraftControls } from "@app/components/assistant/conversation/interactive_content/frame/FrameDraftControls";
+import { FrameDraftModeBorder } from "@app/components/assistant/conversation/interactive_content/frame/FrameDraftModeBorder";
 import { FrameToolbar } from "@app/components/assistant/conversation/interactive_content/frame/FrameToolbar";
 import { FrameToolConsentGate } from "@app/components/assistant/conversation/interactive_content/frame/FrameToolConsentGate";
 import { PreviewActionButtons } from "@app/components/assistant/conversation/interactive_content/frame/PreviewActionButtons";
 import { useFrameEditSession } from "@app/components/assistant/conversation/interactive_content/frame/useFrameEditSession";
+import { useSidePanelFrameTracking } from "@app/components/assistant/conversation/interactive_content/useFrameTracking";
 import { useSidePanelFullScreen } from "@app/components/assistant/conversation/useSidePanelFullScreen";
 import { ConfirmContext } from "@app/components/Confirm";
 import { useVisualizationRevert } from "@app/hooks/conversations";
@@ -15,7 +17,7 @@ import {
   useSendApiErrorNotification,
   useSendNotification,
 } from "@app/hooks/useNotification";
-import { useAuth } from "@app/lib/auth/AuthContext";
+import { useAuth, useFeatureFlags } from "@app/lib/auth/AuthContext";
 import { clientFetch } from "@app/lib/egress/client";
 import {
   useFileContent,
@@ -106,11 +108,20 @@ export function FrameRenderer({
   const frameSpaceId = projectId ?? conversation.spaceId ?? null;
 
   const {
+    canEnterFullScreen,
     isFullScreen,
     enterFullScreen,
     exitFullScreen,
     closePanel: onClosePanel,
   } = useSidePanelFullScreen(DEFAULT_FRAME_PANEL_SIZE);
+
+  useSidePanelFrameTracking({
+    frameId: fileId,
+    location: { type: "conversation", id: conversation.sId },
+    uiElement: "conversation_side_panel",
+    isFullScreen,
+    canEnterFullScreen,
+  });
 
   const { fileContent, error, mutateFileContent, isFileContentLoading } =
     useFileContent({
@@ -170,7 +181,8 @@ export function FrameRenderer({
     isFramePermissionsLoading,
     hasFramePermissions,
     draftPublicationId,
-    livePublishedAt,
+    draftMode,
+    livePublicationId,
     mutateFramePermissions,
   } = useFramePermissions({
     owner,
@@ -200,6 +212,8 @@ export function FrameRenderer({
   // Frames v2 source writers edit in a Preview|Edit session with batch Save. Legacy Frames keep
   // the always-on double-click + blur-save path.
   const canEditV2 = renderMode === "v2" && isEditable;
+  const { hasFeature } = useFeatureFlags();
+  const isDraftMode = canEditV2 && draftMode;
   const editSession = useFrameEditSession({
     owner,
     fileId,
@@ -366,18 +380,6 @@ export function FrameRenderer({
           editSession={editSession}
           canEditV2={canEditV2}
           hideEditLabels={isMobile}
-          status={
-            canEditV2 && draftPublicationId ? (
-              <FrameDraftControls
-                owner={owner}
-                frameId={fileId}
-                draftPublicationId={draftPublicationId}
-                livePublishedAt={livePublishedAt}
-                hideLabels={isMobile}
-                onMadeLive={() => mutateFramePermissions()}
-              />
-            ) : null
-          }
           podActions={
             isFrameInPod
               ? {
@@ -418,6 +420,20 @@ export function FrameRenderer({
                   onClick={handleSaveToProject}
                 />
               )}
+              {canEditV2 && (
+                // Draft mode is turned on from the conversation panel only: the one surface that
+                // shows drafts.
+                <FrameDraftControls
+                  owner={owner}
+                  frameId={fileId}
+                  canEnterDraftMode={hasFeature("frames_v2_drafts")}
+                  draftMode={draftMode}
+                  draftPublicationId={draftPublicationId}
+                  livePublicationId={livePublicationId}
+                  hideLabels={isMobile}
+                  onDraftModeChanged={() => mutateFramePermissions()}
+                />
+              )}
             </>
           }
         />
@@ -437,62 +453,66 @@ export function FrameRenderer({
           />
         ) : (
           <>
-            {showCode ? (
-              <FrameCodeView
-                code={
-                  renderMode === "v2" ? (frameSource ?? undefined) : fileContent
-                }
-                isLoading={renderMode === "v2" && isFrameSourceLoading}
-                hasError={
-                  renderMode === "v2" &&
-                  (isFrameSourceNotFound || Boolean(frameSourceError))
-                }
-              />
-            ) : (
-              <div className="relative h-full">
-                <AuthenticatedVisualizationActionIframe
-                  agentConfigurationId={
-                    fileMetadata?.useCaseMetadata
-                      .lastEditedByAgentConfigurationId ?? ""
+            <FrameDraftModeBorder isDraftMode={isDraftMode}>
+              {showCode ? (
+                <FrameCodeView
+                  code={
+                    renderMode === "v2"
+                      ? (frameSource ?? undefined)
+                      : fileContent
                   }
-                  workspaceId={owner.sId}
-                  vizUrl={vizUrl}
-                  visualization={{
-                    code: fileContent ?? "",
-                    complete: true,
-                    // Stable across revisions — contentHash belongs in `key` only.
-                    // Putting it in identifier forced Next.js to recompile /content
-                    // for every publish / content refresh.
-                    identifier: `viz-${fileId}`,
-                  }}
-                  key={vizInstanceKey}
-                  conversationId={conversation?.sId ?? null}
-                  spaceId={frameSpaceId ?? undefined}
-                  framePackageRoot={framePackageRoot}
-                  frameId={renderMode === "v2" ? fileId : undefined}
-                  frameFileId={fileId}
-                  isInDrawer={true}
-                  functionTarget="latest"
-                  isEditable={isEditable}
-                  stagedEditMode={canEditV2 ? editSession.mode : undefined}
-                  onEditText={
-                    !isEditable
-                      ? undefined
-                      : canEditV2
-                        ? editSession.stageEdit
-                        : handleEditText
+                  isLoading={renderMode === "v2" && isFrameSourceLoading}
+                  hasError={
+                    renderMode === "v2" &&
+                    (isFrameSourceNotFound || Boolean(frameSourceError))
                   }
-                  ref={iframeRef}
                 />
-                {editSession.isSaving && (
-                  <div
-                    className="absolute inset-0 z-10 cursor-wait"
-                    aria-busy="true"
-                    aria-label={t`Publishing your changes...`}
+              ) : (
+                <div className="relative h-full">
+                  <AuthenticatedVisualizationActionIframe
+                    agentConfigurationId={
+                      fileMetadata?.useCaseMetadata
+                        .lastEditedByAgentConfigurationId ?? ""
+                    }
+                    workspaceId={owner.sId}
+                    vizUrl={vizUrl}
+                    visualization={{
+                      code: fileContent ?? "",
+                      complete: true,
+                      // Stable across revisions — contentHash belongs in `key` only.
+                      // Putting it in identifier forced Next.js to recompile /content
+                      // for every publish / content refresh.
+                      identifier: `viz-${fileId}`,
+                    }}
+                    key={vizInstanceKey}
+                    conversationId={conversation?.sId ?? null}
+                    spaceId={frameSpaceId ?? undefined}
+                    framePackageRoot={framePackageRoot}
+                    frameId={renderMode === "v2" ? fileId : undefined}
+                    frameFileId={fileId}
+                    isInDrawer={true}
+                    functionTarget="latest"
+                    isEditable={isEditable}
+                    stagedEditMode={canEditV2 ? editSession.mode : undefined}
+                    onEditText={
+                      !isEditable
+                        ? undefined
+                        : canEditV2
+                          ? editSession.stageEdit
+                          : handleEditText
+                    }
+                    ref={iframeRef}
                   />
-                )}
-              </div>
-            )}
+                  {editSession.isSaving && (
+                    <div
+                      className="absolute inset-0 z-10 cursor-wait"
+                      aria-busy="true"
+                      aria-label={t`Publishing your changes...`}
+                    />
+                  )}
+                </div>
+              )}
+            </FrameDraftModeBorder>
             <PreviewActionButtons
               lastEditedByAgentConfigurationId={
                 lastEditedByAgentConfigurationId

@@ -1,4 +1,8 @@
 import { FrameRenderer } from "@app/components/assistant/conversation/interactive_content/FrameRenderer";
+import {
+  trackFrameExpand,
+  trackFrameOpen,
+} from "@app/components/assistant/conversation/interactive_content/frameTracking";
 import { LightWorkspaceFactory } from "@app/tests/utils/LightWorkspaceFactory";
 import type { ConversationWithoutContentType } from "@app/types/assistant/conversation";
 import type { EditTextFn } from "@app/types/assistant/visualization";
@@ -11,7 +15,29 @@ import {
 } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { act } from "react";
+import type { ImperativePanelHandle } from "react-resizable-panels";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+// Side panel handle; null like in Analytics and the agent builder preview, where the panel cannot be
+// resized. Read by the side panel context mock below at render time.
+let sidePanelHandle: ImperativePanelHandle | null = null;
+
+function makeSidePanelHandle(): ImperativePanelHandle {
+  return {
+    collapse: vi.fn(),
+    expand: vi.fn(),
+    getId: () => "side_panel",
+    getSize: () => 40,
+    isCollapsed: () => false,
+    isExpanded: () => true,
+    resize: vi.fn(),
+  };
+}
+
+const FRAME_CLICK = {
+  source: "user",
+  uiElement: "message_frame_card",
+} as const;
 
 const mocks = vi.hoisted(() => ({
   batchEditFrameText: vi.fn(),
@@ -30,6 +56,10 @@ const mocks = vi.hoisted(() => ({
   hasFrameFunctions: false,
   canWriteFrameSource: true,
   draftPublicationId: null as string | null,
+  draftMode: false,
+  draftsEnabled: false,
+  enterDraftMode: vi.fn(async () => true),
+  mutateFramePermissions: vi.fn(async () => undefined),
   isMobile: false,
   /** Incremented on every iframe mount (React key change). */
   iframeMounts: 0,
@@ -60,9 +90,17 @@ vi.mock(
   () => ({
     useConversationSidePanelContext: () => ({
       closePanel: vi.fn(),
-      panelRef: null,
+      panelRef: { current: sidePanelHandle },
+      layoutBeforeFullScreenRef: { current: null },
+      isPanelClosing: false,
+      frameOpenedFrom: FRAME_CLICK,
     }),
   })
+);
+
+vi.mock(
+  "@app/components/assistant/conversation/interactive_content/frameTracking",
+  () => ({ trackFrameExpand: vi.fn(), trackFrameOpen: vi.fn() })
 );
 
 vi.mock(
@@ -100,16 +138,21 @@ vi.mock("@app/components/navigation/DesktopNavigationContext", () => ({
 vi.mock("@app/hooks/conversations", () => ({
   useVisualizationRevert: () => ({ handleVisualizationRevert: vi.fn() }),
 }));
-vi.mock("@app/hooks/useHashParams", () => ({
-  useHashParam: () => [undefined, vi.fn()],
-}));
+// Keeps its value like the real hook, so entering full screen changes `isFullScreen`.
+vi.mock("@app/hooks/useHashParams", async () => {
+  const { useState } = await vi.importActual<typeof import("react")>("react");
+  return { useHashParam: () => useState<string | undefined>(undefined) };
+});
 vi.mock("@app/hooks/useNotification", () => ({
   useSendNotification: () => vi.fn(),
   useSendApiErrorNotification: () => vi.fn(),
 }));
 vi.mock("@app/lib/auth/AuthContext", () => ({
   useAuth: () => ({ vizUrl: "https://viz.dust.tt" }),
-  useFeatureFlags: () => ({ hasFeature: () => false }),
+  useFeatureFlags: () => ({
+    hasFeature: (feature: string) =>
+      feature === "frames_v2_drafts" && mocks.draftsEnabled,
+  }),
 }));
 vi.mock("@app/lib/context/clientType", () => ({
   useClientType: () => "web",
@@ -152,6 +195,9 @@ vi.mock("@app/components/Confirm", async () => {
 vi.mock("@app/hooks/useMakeFrameDraftLive", () => ({
   useMakeFrameDraftLive: () => async () => true,
 }));
+vi.mock("@app/hooks/useEnterFrameDraftMode", () => ({
+  useEnterFrameDraftMode: () => mocks.enterDraftMode,
+}));
 
 vi.mock("@app/lib/swr/frames", () => ({
   useBatchEditFrameText: () => mocks.batchEditFrameText,
@@ -169,8 +215,10 @@ vi.mock("@app/lib/swr/frames", () => ({
       isFramePermissionsLoading: false,
       isFramePermissionsError: null,
       draftPublicationId: mocks.draftPublicationId,
+      draftMode: mocks.draftMode,
+      livePublicationId: "publication-live",
       livePublishedAt: null,
-      mutateFramePermissions: async () => undefined,
+      mutateFramePermissions: mocks.mutateFramePermissions,
     };
   },
 }));
@@ -211,8 +259,11 @@ afterEach(() => {
   mocks.hasFrameFunctions = false;
   mocks.canWriteFrameSource = true;
   mocks.draftPublicationId = null;
+  mocks.draftMode = false;
+  mocks.draftsEnabled = false;
   mocks.isMobile = false;
   mocks.iframeMounts = 0;
+  sidePanelHandle = null;
 });
 
 describe("FrameRenderer", () => {
@@ -392,35 +443,58 @@ describe("FrameRenderer", () => {
         />
       );
 
-    it("shows the Draft chip and Make live for an editor when a draft is pending", () => {
-      mocks.draftPublicationId = "publication-draft";
+    it("frames the panel and offers Validate draft to an editor in draft mode", () => {
+      mocks.draftMode = true;
 
       renderV2();
 
-      expect(screen.getByText("Draft")).toBeInTheDocument();
+      // The Draft tab sits on the border that frames the panel content.
+      expect(screen.getByText("Draft").closest("div")).toHaveClass(
+        "border-golden-500"
+      );
       expect(
-        screen.getByRole("button", { name: "Make live" })
+        screen.getByRole("button", { name: "Validate draft" })
       ).toBeInTheDocument();
-    });
-
-    it("hides the draft controls when no draft is pending", () => {
-      renderV2();
-
-      expect(screen.queryByText("Draft")).not.toBeInTheDocument();
       expect(
-        screen.queryByRole("button", { name: "Make live" })
+        screen.queryByRole("button", { name: "More actions" })
       ).not.toBeInTheDocument();
     });
 
-    it("hides the draft controls from a viewer who cannot edit", () => {
+    it("offers the more menu to an editor when drafts are enabled", () => {
+      mocks.draftsEnabled = true;
+
+      renderV2();
+
+      expect(
+        screen.getByRole("button", { name: "More actions" })
+      ).toBeInTheDocument();
+      expect(screen.queryByText("Draft")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Validate draft" })
+      ).not.toBeInTheDocument();
+    });
+
+    it("offers no draft mode without the drafts feature", () => {
+      renderV2();
+
+      expect(
+        screen.queryByRole("button", { name: "More actions" })
+      ).not.toBeInTheDocument();
+    });
+
+    it("offers no draft mode to a viewer who cannot edit", () => {
       mocks.canWriteFrameSource = false;
-      mocks.draftPublicationId = "publication-draft";
+      mocks.draftsEnabled = true;
+      mocks.draftMode = true;
 
       renderV2();
 
       expect(screen.queryByText("Draft")).not.toBeInTheDocument();
       expect(
-        screen.queryByRole("button", { name: "Make live" })
+        screen.queryByRole("button", { name: "Validate draft" })
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "More actions" })
       ).not.toBeInTheDocument();
     });
   });
@@ -460,6 +534,70 @@ describe("FrameRenderer", () => {
       "_blank",
       "noopener,noreferrer"
     );
+  });
+
+  it("tracks the open of the shown Frame with what opened it", () => {
+    render(
+      <FrameRenderer
+        conversation={conversation}
+        fileId="frame_1"
+        projectId={null}
+        owner={owner}
+        contentHash="frame_1@42"
+        renderMode="v2"
+      />
+    );
+
+    expect(trackFrameOpen).toHaveBeenCalledTimes(1);
+    expect(trackFrameOpen).toHaveBeenCalledWith({
+      frameId: "frame_1",
+      origin: FRAME_CLICK,
+      location: { type: "conversation", id: "conversation_1" },
+      extra: undefined,
+    });
+  });
+
+  it("tracks full screen in a conversation side panel", () => {
+    sidePanelHandle = makeSidePanelHandle();
+    render(
+      <FrameRenderer
+        conversation={conversation}
+        fileId="frame_1"
+        projectId={null}
+        owner={owner}
+        contentHash="frame_1@42"
+        renderMode="v2"
+      />
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Go to full screen mode" })
+    );
+
+    expect(trackFrameExpand).toHaveBeenCalledWith({
+      frameId: "frame_1",
+      uiElement: "conversation_side_panel",
+      location: { type: "conversation", id: "conversation_1" },
+    });
+  });
+
+  it("does not track full screen where the panel cannot go full screen", () => {
+    render(
+      <FrameRenderer
+        conversation={conversation}
+        fileId="frame_1"
+        projectId={null}
+        owner={owner}
+        contentHash="frame_1@42"
+        renderMode="v2"
+      />
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Go to full screen mode" })
+    );
+
+    expect(trackFrameExpand).not.toHaveBeenCalled();
   });
 
   it("remounts the viz iframe when contentHash changes", () => {

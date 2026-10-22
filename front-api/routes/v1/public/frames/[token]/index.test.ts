@@ -1,5 +1,6 @@
 import { prewarmFrameSandbox } from "@app/lib/api/frames/prewarm_frame_sandbox";
 import { createFrameSession } from "@app/lib/api/share/frame_session";
+import { extractAndVerifyVizAccessTokenFromHeader } from "@app/lib/api/viz/access_tokens";
 import { Authenticator } from "@app/lib/auth";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import type { FileResource } from "@app/lib/resources/file_resource";
@@ -12,12 +13,17 @@ import { WorkspaceModel } from "@app/lib/resources/storage/models/workspace";
 import type { UserResource } from "@app/lib/resources/user_resource";
 import { ConversationFactory } from "@app/tests/utils/ConversationFactory";
 import { FileFactory } from "@app/tests/utils/FileFactory";
-import { createTestFrameFunction } from "@app/tests/utils/FrameFunctionFactory";
+import {
+  createTestFrameFunction,
+  createTestFrameSessionCookie,
+  enablePublicFrameFunctions,
+} from "@app/tests/utils/FrameFunctionFactory";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
 import { MembershipFactory } from "@app/tests/utils/MembershipFactory";
 import { SharingGrantFactory } from "@app/tests/utils/SharingGrantFactory";
 import { SpaceFactory } from "@app/tests/utils/SpaceFactory";
 import { UserFactory } from "@app/tests/utils/UserFactory";
+import type { SandboxFunctionUserIdentityPolicy } from "@app/types/api/sandbox_functions";
 import { GLOBAL_AGENTS_SID } from "@app/types/assistant/assistant";
 import type { FileShareScope } from "@app/types/files";
 import { frameContentType, frameV2ContentType } from "@app/types/files";
@@ -36,6 +42,15 @@ vi.mock("@front-api/routes/v1/public/frames/shared_auth", () => ({
 }));
 
 import { resolveOptionalAuth } from "@front-api/routes/v1/public/frames/shared_auth";
+
+function decodeVizAccessToken(accessToken: string) {
+  const result = extractAndVerifyVizAccessTokenFromHeader(
+    `Bearer ${accessToken}`
+  );
+  assert(result.isOk(), "Expected a valid viz access token");
+
+  return result.value;
+}
 
 describe("GET /api/v1/public/frames/[token]", () => {
   let auth: Authenticator;
@@ -682,9 +697,16 @@ describe("GET /api/v1/public/frames/[token]", () => {
   });
 
   describe("Frame v2 function gating", () => {
-    const createFrameV2WithFunction = async (scope: FileShareScope) => {
+    const createFrameV2WithFunction = async (
+      scope: FileShareScope,
+      userIdentity?: SandboxFunctionUserIdentityPolicy
+    ) => {
       const space = await SpaceFactory.project(workspace, user.id);
-      const { frame } = await createTestFrameFunction(auth, { space });
+      const { frame } = await createTestFrameFunction(auth, {
+        space,
+        userIdentity,
+        executionMode: userIdentity === "public" ? "fast" : undefined,
+      });
       await frame.setShareScope(auth, scope);
 
       const shareInfo = await frame.getShareInfo();
@@ -727,6 +749,70 @@ describe("GET /api/v1/public/frames/[token]", () => {
       expect(response.status).toBe(404);
     });
 
+    const createVisitorSession = async () => {
+      const cookie = await createTestFrameSessionCookie(
+        workspace,
+        "visitor@example.com"
+      );
+      const sessionToken = cookie.match(/dust_frame_session=(.+)/)?.[1];
+      assert(sessionToken, "Expected a frame session token");
+
+      return sessionToken;
+    };
+
+    it("serves a public frame to a verified visitor when the workspace serves public functions", async () => {
+      await enablePublicFrameFunctions(auth);
+      const { token } = await createFrameV2WithFunction("public", "public");
+      vi.mocked(resolveOptionalAuth).mockResolvedValue(null);
+
+      const response = await requestFrame(token, {
+        cookies: { dust_frame_session: await createVisitorSession() },
+      });
+
+      expect(response.status).toBe(200);
+      const { accessToken } = await response.json();
+      expect(decodeVizAccessToken(accessToken)).toMatchObject({
+        canInvokePublicFunctions: true,
+      });
+      expect(prewarmFrameSandbox).not.toHaveBeenCalled();
+    });
+
+    it("returns 404 for an unverified visitor when the workspace serves public functions", async () => {
+      await enablePublicFrameFunctions(auth);
+      const { token } = await createFrameV2WithFunction("public", "public");
+      vi.mocked(resolveOptionalAuth).mockResolvedValue(null);
+
+      const response = await requestFrame(token);
+
+      expect(response.status).toBe(404);
+    });
+
+    it("returns 404 for a verified visitor of a public frame whose functions are all private", async () => {
+      await enablePublicFrameFunctions(auth);
+      const { token } = await createFrameV2WithFunction(
+        "public",
+        "workspace_user_required"
+      );
+      vi.mocked(resolveOptionalAuth).mockResolvedValue(null);
+
+      const response = await requestFrame(token, {
+        cookies: { dust_frame_session: await createVisitorSession() },
+      });
+
+      expect(response.status).toBe(404);
+    });
+
+    it("returns 404 for a verified visitor when public functions are off", async () => {
+      const { token } = await createFrameV2WithFunction("public", "public");
+      vi.mocked(resolveOptionalAuth).mockResolvedValue(null);
+
+      const response = await requestFrame(token, {
+        cookies: { dust_frame_session: await createVisitorSession() },
+      });
+
+      expect(response.status).toBe(404);
+    });
+
     it("returns 404 for an OTP-verified external viewer", async () => {
       const { frame, token } = await createFrameV2WithFunction("emails_only");
       vi.mocked(resolveOptionalAuth).mockResolvedValue(null);
@@ -751,9 +837,11 @@ describe("GET /api/v1/public/frames/[token]", () => {
       const response = await requestFrame(token);
 
       expect(response.status).toBe(200);
-      await expect(response.json()).resolves.toEqual(
-        expect.objectContaining({ hasFunctions: true })
-      );
+      const body = await response.json();
+      expect(body).toEqual(expect.objectContaining({ hasFunctions: true }));
+      expect(decodeVizAccessToken(body.accessToken)).toMatchObject({
+        canInvokePublicFunctions: false,
+      });
       expect(prewarmFrameSandbox).toHaveBeenCalledWith(
         auth,
         expect.objectContaining({ sId: frame.sId })

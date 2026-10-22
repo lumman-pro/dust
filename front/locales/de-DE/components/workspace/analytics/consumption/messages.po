@@ -66,8 +66,10 @@ msgid "Name"
 msgstr "Name"
 
 #: front/components/workspace/analytics/consumption/ConsumptionAttributionTable.tsx
-msgid "Active / total members"
-msgstr "Aktive / alle Mitglieder"
+#: front/components/workspace/analytics/consumption/ConsumptionChart.tsx
+#: front/components/workspace/analytics/consumption/ConsumptionSummary.tsx
+msgid "Active users"
+msgstr "Aktive Mitglieder"
 
 #: front/components/workspace/analytics/consumption/ConsumptionAttributionTable.tsx
 msgid "Vs workspace avg"
@@ -78,13 +80,14 @@ msgid "Consumption share"
 msgstr "Verbrauchsanteil"
 
 #: front/components/workspace/analytics/consumption/ConsumptionAttributionTable.tsx
-#: front/components/workspace/analytics/consumption/ConsumptionConversationAttribution.tsx
-msgid "Total credits"
-msgstr "Credits gesamt"
+#: front/components/workspace/analytics/consumption/ConsumptionBurnUpChart.tsx
+#: front/components/workspace/analytics/consumption/ConsumptionChart.tsx
+msgid "Credits"
+msgstr "Credits"
 
 #: front/components/workspace/analytics/consumption/ConsumptionAttributionTable.tsx
 msgid "Vs prev"
-msgstr "Vs. Vorperiode"
+msgstr "Vs. vorher"
 
 #: front/components/workspace/analytics/consumption/ConsumptionAttributionTable.tsx
 msgid "Add to filters"
@@ -154,11 +157,6 @@ msgstr "{deltaCreditCount, plural, one {{deltaAmount} Credit unter dem Ziel} oth
 msgid "Failed to load consumption."
 msgstr "Der Verbrauch konnte nicht geladen werden."
 
-#: front/components/workspace/analytics/consumption/ConsumptionBurnUpChart.tsx
-#: front/components/workspace/analytics/consumption/ConsumptionChart.tsx
-msgid "Credits"
-msgstr "Credits"
-
 #: front/components/workspace/analytics/consumption/ConsumptionChart.tsx
 msgid "Today (partial)"
 msgstr "Heute (unvollständig)"
@@ -184,11 +182,6 @@ msgid "{creditCount, plural, one {{total} credit so far this month} other {{tota
 msgstr "{creditCount, plural, one {{total} Credit bisher diesen Monat} other {{total} Credits bisher diesen Monat}}"
 
 #: front/components/workspace/analytics/consumption/ConsumptionChart.tsx
-#: front/components/workspace/analytics/consumption/ConsumptionSummary.tsx
-msgid "Active users"
-msgstr "Aktive Mitglieder"
-
-#: front/components/workspace/analytics/consumption/ConsumptionChart.tsx
 msgid "{creditCount, plural, one {{total} credit total} other {{total} credits total}}"
 msgstr "{creditCount, plural, one {{total} Credit insgesamt} other {{total} Credits insgesamt}}"
 
@@ -207,6 +200,10 @@ msgstr "Unterhaltung"
 #: front/components/workspace/analytics/consumption/ConsumptionConversationAttribution.tsx
 msgid "Untitled conversation"
 msgstr "Unbenannte Unterhaltung"
+
+#: front/components/workspace/analytics/consumption/ConsumptionConversationAttribution.tsx
+msgid "Total credits"
+msgstr "Credits gesamt"
 
 #: front/components/workspace/analytics/consumption/ConsumptionConversationAttribution.tsx
 msgid "Open conversation"
@@ -329,8 +326,8 @@ msgid "Invocations"
 msgstr "Aufrufe"
 
 #: front/components/workspace/analytics/consumption/consumptionDimensions.ts
-msgid "Credits / message"
-msgstr "Credits / Nachricht"
+msgid "Credit / msg"
+msgstr "Credit / Nachr."
 
 #: front/components/workspace/analytics/consumption/consumptionDimensions.ts
 msgid "Credits / invocation"

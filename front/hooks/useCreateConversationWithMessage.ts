@@ -56,7 +56,7 @@ export function useCreateConversationWithMessage({
   const resumeOngoingAgentLoopsPolling = useResumeOngoingAgentLoopsPolling(
     owner.sId
   );
-  const { setPendingFirstMessage, clearPendingFirstMessage } =
+  const { setPendingFirstMessage, clearPendingFirstMessage, hostSelection } =
     useContext(InputBarContext);
 
   return useCallback(
@@ -175,6 +175,7 @@ export function useCreateConversationWithMessage({
             selectedMCPServerViewIds,
             selectedSpaceIds,
             origin,
+            hostSelection: hostSelection?.label,
             skipToolsValidation,
             profilePictureUrl: user.image,
             modelSelection,
@@ -213,6 +214,7 @@ export function useCreateConversationWithMessage({
             selectedMCPServerViewIds,
             selectedSpaceIds,
             origin,
+            hostSelection: hostSelection?.label,
           },
           mentions,
           modelSelection,
@@ -277,6 +279,7 @@ export function useCreateConversationWithMessage({
       sendApiErrorNotification,
       setPendingFirstMessage,
       clearPendingFirstMessage,
+      hostSelection,
       resumeOngoingAgentLoopsPolling,
       t,
     ]
@@ -296,6 +299,7 @@ async function postFirstMessageInBackground({
   selectedMCPServerViewIds,
   selectedSpaceIds,
   origin,
+  hostSelection,
   skipToolsValidation,
   profilePictureUrl,
   modelSelection,
@@ -311,6 +315,7 @@ async function postFirstMessageInBackground({
   selectedMCPServerViewIds?: string[];
   selectedSpaceIds?: string[];
   origin: ClientMessageOrigin;
+  hostSelection?: string;
   skipToolsValidation: boolean;
   profilePictureUrl: string | null;
   modelSelection?: ModelSelectionType;
@@ -386,6 +391,7 @@ async function postFirstMessageInBackground({
             selectedMCPServerViewIds,
             selectedSpaceIds,
             origin,
+            hostSelection,
           },
           mentions,
           skipToolsValidation,

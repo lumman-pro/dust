@@ -384,9 +384,6 @@ describe("never started tool activity rescheduling", () => {
     });
 
     expect(runToolActivity).toHaveBeenCalledOnce();
-    expect(deprecatePatch).toHaveBeenCalledWith(
-      "recover-completed-tool-activity"
-    );
     expect(isToolActivityCompletedActivity).toHaveBeenCalledWith({
       workflowId: "workflow-id",
       runId: "run-id",

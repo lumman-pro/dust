@@ -65,3 +65,7 @@ export const CONSUMPTION_TOP_SORT_ORDER = ["asc", "desc"] as const;
 
 export type ConsumptionTopSortOrder =
   (typeof CONSUMPTION_TOP_SORT_ORDER)[number];
+
+export const CONSUMPTION_TOP_RANK_BY = ["credits", "count"] as const;
+
+export type ConsumptionTopRankBy = (typeof CONSUMPTION_TOP_RANK_BY)[number];

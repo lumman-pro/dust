@@ -119,9 +119,14 @@ export const OlBlock = memo(
 );
 OlBlock.displayName = "OlBlock";
 
-// mt-[3px] centers the 20px badge on the 26px leading-relaxed text line. The border stays on
-// both states so ticking a task only transitions colors.
-const taskStepBadgeVariants = cva(
+/**
+ * Classes of the circle badge the "step" task-list variant draws in place of a checkbox: 20px,
+ * with a faint border when open and a highlight fill when done. `mt-[3px]` centers it on a 26px
+ * `leading-relaxed` line. The border stays in both states so ticking a task only transitions
+ * colors.
+ * @summary Task step badge classes.
+ */
+export const taskStepBadgeVariants = cva(
   cn(
     "mt-[3px] flex size-5 shrink-0 items-center justify-center rounded-full border",
     "transition-colors duration-300 motion-reduce:transition-none"
@@ -135,6 +140,13 @@ const taskStepBadgeVariants = cva(
     },
   }
 );
+
+/** Classes of the check icon in a done task step badge, shown at the `2xs` icon size. */
+export const taskStepBadgeCheckClassName =
+  "animate-in fade-in zoom-in-50 duration-300 motion-reduce:animate-none";
+
+/** Classes of the number in an open, numbered task step badge. */
+export const taskStepBadgeNumberClassName = "text-xs font-medium leading-none";
 
 interface TaskStepBadgeProps {
   checked: boolean;
@@ -164,11 +176,11 @@ function TaskStepBadge({ checked, number }: TaskStepBadgeProps) {
         <Icon
           visual={Check}
           size="2xs"
-          className="animate-in fade-in zoom-in-50 duration-300 motion-reduce:animate-none"
+          className={taskStepBadgeCheckClassName}
         />
       ) : (
         formattedNumber !== undefined && (
-          <span className="text-xs font-medium leading-none">
+          <span className={taskStepBadgeNumberClassName}>
             {formattedNumber}
           </span>
         )

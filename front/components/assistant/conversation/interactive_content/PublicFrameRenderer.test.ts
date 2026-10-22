@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
     frameProps?: Record<string, string>;
     functionTarget?: string;
     scopedUserIdentity?: ScopedWorkspaceUserIdentity;
+    shareToken?: string;
     viewer: unknown;
   } | null,
   hasFrameFunctions: false,
@@ -35,6 +36,7 @@ vi.mock(
       frameProps?: Record<string, string>;
       functionTarget?: string;
       scopedUserIdentity?: ScopedWorkspaceUserIdentity;
+      shareToken?: string;
       viewer: unknown;
     }) => {
       mocks.iframeProps = props;
@@ -273,7 +275,7 @@ describe("PublicFrameRenderer", () => {
     expect(screen.queryByText("Beta")).toBeNull();
   });
 
-  it("disables function calls without a member identity", () => {
+  it("sends a viewer without a member identity to the share route with no member access", () => {
     mocks.isAuthenticatedMember = false;
     mocks.isUserLoading = false;
 
@@ -292,6 +294,7 @@ describe("PublicFrameRenderer", () => {
       canInvokeFunctions: false,
       framePackageRoot: null,
       scopedUserIdentity: undefined,
+      shareToken: "share-token",
       viewer: null,
     });
   });

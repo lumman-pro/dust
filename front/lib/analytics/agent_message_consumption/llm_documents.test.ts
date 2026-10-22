@@ -1,11 +1,11 @@
 import { buildLlmConsumptionDocuments } from "@app/lib/analytics/agent_message_consumption/llm_documents";
 import { loadAgentMessageConsumptionAnalyticsInput } from "@app/lib/analytics/agent_message_consumption/load";
-import { buildLatestMessageConsumptionAllocation } from "@app/lib/api/assistant/agent_message_consumption_attribution/allocation";
 import { AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION } from "@app/lib/api/assistant/agent_message_consumption_attribution/attribution_builder";
 import { AgentMessageModel } from "@app/lib/models/agent/conversation";
 import { AgentMessageConsumptionItemResource } from "@app/lib/resources/agent_message_consumption_item_resource";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { AgentConfigurationFactory } from "@app/tests/utils/AgentConfigurationFactory";
+import { AgentMessageConsumptionItemFactory } from "@app/tests/utils/AgentMessageConsumptionItemFactory";
 import { ConversationFactory } from "@app/tests/utils/ConversationFactory";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
 import {
@@ -109,28 +109,16 @@ describe("buildLlmConsumptionDocuments", () => {
       pendingToolItems: [],
     });
 
+    await AgentMessageConsumptionItemFactory.reconcileStoredItems(auth, {
+      agentMessageId: agentMessage.sId,
+    });
     const input = await loadAgentMessageConsumptionAnalyticsInput(auth, {
       agentMessageId: agentMessage.sId,
     });
     if (!input) {
       throw new Error("Consumption analytics input was not loaded");
     }
-    const allocationResult = buildLatestMessageConsumptionAllocation({
-      actions: input.actions,
-      billedCredits: 5,
-      dustRunIds: input.dustRunIds,
-      items: input.items,
-      runs: input.runs,
-      usages: input.usages,
-    });
-    if (allocationResult.isErr()) {
-      throw new Error(
-        `Consumption allocation was not built: ${allocationResult.error.code}`
-      );
-    }
-    const allocation = allocationResult.value;
-
-    expect(buildLlmConsumptionDocuments(input, allocation)).toEqual([
+    expect(buildLlmConsumptionDocuments(input)).toEqual([
       expect.objectContaining({
         agent_message_id: agentMessage.sId,
         completed_at: completedAt.toISOString(),
@@ -164,5 +152,86 @@ describe("buildLlmConsumptionDocuments", () => {
         },
       }),
     ]);
+  });
+
+  it("falls back to the chronological run order without step content", async () => {
+    const { authenticator: auth, workspace } = await createResourceTest({
+      role: "admin",
+    });
+    const agent = await AgentConfigurationFactory.createTestAgent(auth);
+    const conversationType = await ConversationFactory.create(auth, {
+      agentConfigurationId: agent.sId,
+      messagesCreatedAt: [],
+    });
+    const conversation = await ConversationResource.fetchById(
+      auth,
+      conversationType.sId
+    );
+    if (!conversation) {
+      throw new Error("Conversation was not created");
+    }
+
+    const userMessage = await ConversationFactory.createUserMessageWithRank({
+      auth,
+      workspace,
+      conversationId: conversation.id,
+      rank: 0,
+      content: "Hello",
+    });
+    const firstRun = await RunFactory.createWithUsage(auth);
+    const secondRun = await RunFactory.createWithUsage(auth);
+    const agentMessage = await ConversationFactory.createAgentMessageWithRank({
+      workspace,
+      conversationId: conversation.id,
+      rank: 1,
+      parentId: userMessage.id,
+      agentConfigurationId: agent.sId,
+      agentConfigurationVersion: agent.version,
+    });
+    const agentMessageModelId = agentMessage.agentMessageId;
+    if (!agentMessageModelId) {
+      throw new Error("Agent message was not created");
+    }
+
+    await AgentMessageModel.update(
+      {
+        completedAt: new Date("2026-08-05T12:00:00.000Z"),
+        runIds: [secondRun.run.dustRunId, firstRun.run.dustRunId],
+        status: "succeeded",
+      },
+      { where: { id: agentMessageModelId, workspaceId: workspace.id } }
+    );
+    await AgentMessageConsumptionItemFactory.createItems(auth, {
+      agentMessageModelId,
+      conversation,
+      reconciled: true,
+      records: [firstRun, secondRun].map(({ runUsageModelId }) => ({
+        itemType: "output",
+        runUsageModelId,
+        outputTokensCount: 20,
+        grossAttributedCreditAmountMicro: 1_000,
+      })),
+    });
+
+    const input = await loadAgentMessageConsumptionAnalyticsInput(auth, {
+      agentMessageId: agentMessage.sId,
+    });
+    if (!input) {
+      throw new Error("Consumption analytics input was not loaded");
+    }
+    expect(input.stepContents).toEqual([]);
+    expect(
+      new Map(
+        buildLlmConsumptionDocuments(input).map((document) => [
+          document.run_usage_id,
+          document.step_index,
+        ])
+      )
+    ).toEqual(
+      new Map([
+        [firstRun.runUsageModelId.toString(), 0],
+        [secondRun.runUsageModelId.toString(), 1],
+      ])
+    );
   });
 });

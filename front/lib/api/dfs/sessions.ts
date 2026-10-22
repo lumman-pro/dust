@@ -13,8 +13,17 @@ const MAX_SESSION_SUBJECTS = 512;
 // `superuser` in `dfs/design-docs/API.md`).
 export const DFS_SUPERUSER_SUBJECT = "superuser";
 
+const USER_SUBJECT_PREFIX = "u:";
+
 export function createUserSubject(user: UserResource): string {
-  return `u:${user.sId}`;
+  return `${USER_SUBJECT_PREFIX}${user.sId}`;
+}
+
+/** The sId of the user of a subject from `createUserSubject`, or null for any other subject. */
+export function parseUserSubject(subject: string): string | null {
+  return subject.startsWith(USER_SUBJECT_PREFIX)
+    ? subject.slice(USER_SUBJECT_PREFIX.length)
+    : null;
 }
 
 export function createGroupSubject(groupId: string): string {
@@ -85,10 +94,11 @@ export async function createDfsSession(
  * their permissions, so it MUST only be used to create the context folders of
  * `dfs/design-docs/URI.md`, with their MIME type and xattrs:
  * - `users/` and the user folders `users/<userSId>`;
- * - `pods/` and the pod folders `pods/<podName>`.
+ * - `pods/` and the pod folders `pods/<podName>` under a user folder.
  *
- * It MUST NOT read, write, move or remove any other object, nor be given to a user, an agent or a
- * sandbox. Any other access MUST use a session from `createDfsSession`.
+ * It MAY also list the names and attributes of every folder and file, without reading file
+ * contents, for Poke. It MUST NOT read, write, move or remove any other object, nor be given to a
+ * user, an agent or a sandbox. Any other access MUST use a session from `createDfsSession`.
  */
 export async function createDfsSuperuserSession(
   auth: Authenticator,

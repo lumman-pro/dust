@@ -1,9 +1,12 @@
+import type { InternalMCPToolInputType } from "@app/lib/actions/mcp_internal_actions/constants";
 import type {
-  DataSourceFilesystemFindInputType,
-  DataSourceFilesystemListInputType,
   IncludeInputType,
   SearchInputTypeWithTags,
 } from "@app/lib/actions/mcp_internal_actions/types";
+import type {
+  FILESYSTEM_FIND_TOOL_NAME,
+  FILESYSTEM_LIST_TOOL_NAME,
+} from "@app/lib/api/actions/servers/data_sources_file_system/metadata";
 import { assertNever } from "@app/types/shared/utils/assert_never";
 import type { TimeFrame } from "@app/types/shared/utils/time_frame";
 import { parseTimeFrame } from "@app/types/shared/utils/time_frame";
@@ -106,7 +109,10 @@ export function makeQueryTextForFind(
     rootNodeId,
     mimeTypes,
     nextPageCursor,
-  }: DataSourceFilesystemFindInputType
+  }: InternalMCPToolInputType<
+    "data_sources_file_system",
+    typeof FILESYSTEM_FIND_TOOL_NAME
+  >
 ): string {
   let searchText: string;
   if (query && rootNodeId) {
@@ -129,7 +135,14 @@ export function makeQueryTextForFind(
 
 export function makeQueryTextForList(
   t: Translate,
-  { nodeId, mimeTypes, nextPageCursor }: DataSourceFilesystemListInputType
+  {
+    nodeId,
+    mimeTypes,
+    nextPageCursor,
+  }: InternalMCPToolInputType<
+    "data_sources_file_system",
+    typeof FILESYSTEM_LIST_TOOL_NAME
+  >
 ): string {
   const listingText = nodeId
     ? t(msg`Listing content within node "${nodeId}"`)

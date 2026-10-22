@@ -1,4 +1,3 @@
-import { isUnavailableRunUsage } from "@app/lib/api/assistant/agent_message_consumption_attribution/allocation";
 import { AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION } from "@app/lib/api/assistant/agent_message_consumption_attribution/attribution_builder";
 import {
   canEnableSkill,
@@ -39,10 +38,7 @@ import type {
   AgentMessageStatus,
   UserMessageOrigin,
 } from "@app/types/assistant/conversation";
-import {
-  AGENT_MESSAGE_STATUSES_TO_TRACK,
-  isTerminalAgentMessageStatus,
-} from "@app/types/assistant/conversation";
+import { isTerminalAgentMessageStatus } from "@app/types/assistant/conversation";
 import { CAP_ELIGIBLE_GROUP_KINDS } from "@app/types/groups";
 import type { ModelId } from "@app/types/shared/model_id";
 import { assertNever } from "@app/types/shared/utils/assert_never";
@@ -69,12 +65,17 @@ export type ConsumptionAnalyticsMessageMetadata = {
   workspaceId: string;
 };
 
+export type ReconciledConsumptionItem = AgentMessageConsumptionItemResource & {
+  reconciledCreditAmountMicro: number;
+};
+
 export type AgentMessageConsumptionAnalyticsInput =
   ConsumptionAnalyticsMessageMetadata & {
     actions: AgentMCPActionResource[];
-    dustRunIds: string[];
+    attributionVersion: number;
     enabledSkillIdsByActionId: ReadonlyMap<string, string[]>;
-    items: AgentMessageConsumptionItemResource[];
+    // Every item of the newest attribution version, all reconciled.
+    items: ReconciledConsumptionItem[];
     runs: RunResource[];
     skills: SkillResource[];
     stepContents: AgentStepContentResource[];
@@ -99,6 +100,46 @@ function isBilledRunUsage(
     default:
       return assertNever(usage.usageType);
   }
+}
+
+// Indexing only projects the outcome of the attribution activity that ran before it: the newest
+// attribution version, whose items are all reconciled in one transaction. A message whose newest
+// version has no reconciled item has nothing to index.
+async function loadNewestReconciledItems(
+  auth: Authenticator,
+  agentMessageModelId: ModelId
+): Promise<{
+  attributionVersion: number;
+  items: ReconciledConsumptionItem[];
+} | null> {
+  const items =
+    await AgentMessageConsumptionItemResource.listByAgentMessageModelIds(auth, {
+      agentMessageModelIds: [agentMessageModelId],
+      maxAttributionVersion: AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION,
+    });
+  if (items.length === 0) {
+    return null;
+  }
+
+  const attributionVersion = Math.max(
+    ...items.map((item) => item.attributionVersion)
+  );
+  const newestItems = items.filter(
+    (item) => item.attributionVersion === attributionVersion
+  );
+  const reconciledItems = newestItems.filter(
+    (item): item is ReconciledConsumptionItem =>
+      item.reconciledCreditAmountMicro !== null
+  );
+  if (reconciledItems.length === 0) {
+    return null;
+  }
+  assert(
+    reconciledItems.length === newestItems.length,
+    "Only part of the newest attribution version is reconciled"
+  );
+
+  return { attributionVersion, items: reconciledItems };
 }
 
 async function loadApiKeyName(
@@ -190,27 +231,14 @@ async function loadAnalyticsUser({
 }
 
 /**
- * @cc [owner:sfriquet,label:product;backend] unbilled-execution-snapshot
- * A terminal message whose status is not tracked for billing (`failed`) MUST return null when its
- * `costCredits` is null. Otherwise it MUST be loaded like any other message: the indexed snapshot
- * is restricted to its reconciled attribution items, whose amounts add up to the bill of the
- * executions finalized before the message failed.
- */
-/**
- * @cc [owner:sfriquet,label:product;backend] unbilled-unavailable-calls-not-indexed
- * A message whose `costCredits` is null and whose billed run usages are all `unavailable` MUST
- * return null. For a message with a tracked status, a null `costCredits` alongside a reported
- * billed run usage MUST NOT return null.
+ * @cc [owner:sfriquet,label:product;backend] index-newest-reconciled-version
+ * MUST return null when the newest attribution version of the message has no reconciled item.
+ * Otherwise `items` MUST be exactly the items of that version, and every one of them MUST be
+ * reconciled.
  */
 export async function loadAgentMessageConsumptionAnalyticsInput(
   auth: Authenticator,
-  {
-    agentMessageId,
-    preloadedActions,
-  }: {
-    agentMessageId: string;
-    preloadedActions?: AgentMCPActionResource[];
-  }
+  { agentMessageId }: { agentMessageId: string }
 ): Promise<AgentMessageConsumptionAnalyticsInput | null> {
   const workspace = auth.getNonNullableWorkspace();
   const context =
@@ -223,6 +251,13 @@ export async function loadAgentMessageConsumptionAnalyticsInput(
   }
 
   const { agentMessage, conversation, triggeringUserMessage } = context;
+  const reconciledItems = await loadNewestReconciledItems(
+    auth,
+    agentMessage.agentMessageModelId
+  );
+  if (!reconciledItems) {
+    return null;
+  }
   // Deleted conversations still incurred billable consumption and must remain visible in
   // historical analytics. This system workflow is already workspace-scoped and loads the message
   // graph without user permission filtering, so load the conversation under the same conditions.
@@ -236,12 +271,6 @@ export async function loadAgentMessageConsumptionAnalyticsInput(
   );
   if (!messageConversation) {
     throw new Error("Agent message conversation not found");
-  }
-  const hasUnbilledExecution = !AGENT_MESSAGE_STATUSES_TO_TRACK.includes(
-    agentMessage.status
-  );
-  if (hasUnbilledExecution && agentMessage.costCredits === null) {
-    return null;
   }
   // A paused message cancelled through `finalizeAgentMessagesWithoutWorkflow` is not re-indexed,
   // so its documents keep the `created` status and the pause time as `completed_at`. Credits stay
@@ -267,27 +296,14 @@ export async function loadAgentMessageConsumptionAnalyticsInput(
   if (billedUsages.length === 0) {
     return null;
   }
-  if (
-    agentMessage.costCredits === null &&
-    billedUsages.every(isUnavailableRunUsage)
-  ) {
-    return null;
-  }
 
   const apiKeyName = await loadApiKeyName(
     auth,
     triggeringUserMessage.apiKeyModelId
   );
-  const items =
-    await AgentMessageConsumptionItemResource.listByAgentMessageModelIds(auth, {
-      agentMessageModelIds: [agentMessage.agentMessageModelId],
-      maxAttributionVersion: AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION,
-    });
-  const actions =
-    preloadedActions ??
-    (await AgentMCPActionResource.listByAgentMessageIds(auth, [
-      agentMessage.agentMessageModelId,
-    ]));
+  const actions = await AgentMCPActionResource.listByAgentMessageIds(auth, [
+    agentMessage.agentMessageModelId,
+  ]);
   // Outputs are only read to find enabled skills. Loading them all would not scale: a message can
   // make thousands of tool calls from a sandbox.
   const actionsWithOutputs =
@@ -349,12 +365,12 @@ export async function loadAgentMessageConsumptionAnalyticsInput(
     },
     agentMessageId,
     apiKeyName,
+    attributionVersion: reconciledItems.attributionVersion,
     completedAt,
     contextOrigin: triggeringUserMessage.origin,
     conversationId: conversation.conversationId,
-    dustRunIds,
     enabledSkillIdsByActionId,
-    items,
+    items: reconciledItems.items,
     messageStatus: agentMessage.status,
     messageVersion: agentMessage.version,
     model: resolvedModel

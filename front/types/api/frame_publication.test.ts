@@ -21,6 +21,7 @@ const publication = {
         entryPoint: "functions/add_task.ts",
         executionMode: "durable",
         defaultStake: "low",
+        schedules: [],
       },
     ],
     databases: [{ name: "tasks", schema: "databases/tasks.db.ts" }],
@@ -127,6 +128,56 @@ describe("FramePublicationDescriptorSchema", () => {
   });
 });
 
+describe("publication schedules", () => {
+  const schedule = {
+    cron: "0 9 * * 1-5",
+    timezone: "Europe/Paris",
+    input: { title: "Daily refresh", tags: ["crm", null, 3] },
+  };
+  const publicationWithSchedule = {
+    ...publication,
+    manifest: {
+      ...publication.manifest,
+      functions: [
+        { ...publication.manifest.functions[0], schedules: [schedule] },
+      ],
+    },
+  };
+
+  it("survives descriptor serialization and deserialization", () => {
+    const stored = Buffer.from(
+      JSON.stringify(
+        FramePublicationDescriptorSchema.parse(publicationWithSchedule)
+      )
+    );
+
+    const parsed = parseFramePublicationDescriptor(stored);
+
+    expect(parsed.isOk()).toBe(true);
+    if (parsed.isOk()) {
+      expect(parsed.value).toEqual(publicationWithSchedule);
+      expect(parsed.value.manifest.functions[0]?.schedules).toEqual([schedule]);
+    }
+  });
+
+  it("makes publications with different schedules different content", () => {
+    const base = FramePublicationDescriptorSchema.parse(publication);
+
+    expect(
+      isSameFramePublicationContent(
+        base,
+        FramePublicationDescriptorSchema.parse(publicationWithSchedule)
+      )
+    ).toBe(false);
+    expect(
+      isSameFramePublicationContent(
+        FramePublicationDescriptorSchema.parse(publicationWithSchedule),
+        FramePublicationDescriptorSchema.parse(publicationWithSchedule)
+      )
+    ).toBe(true);
+  });
+});
+
 describe("parseFramePublicationDescriptor", () => {
   it("returns a typed error for invalid JSON", () => {
     const result = parseFramePublicationDescriptor(Buffer.from("not json"));
@@ -134,6 +185,24 @@ describe("parseFramePublicationDescriptor", () => {
     expect(result.isErr()).toBe(true);
     expect(result.isErr() && result.error).toContain(
       "publication.json is not valid JSON"
+    );
+  });
+
+  it("reads a stored legacy optional user identity as workspace_user_required", () => {
+    const result = parseFramePublicationDescriptor(
+      Buffer.from(
+        JSON.stringify({
+          ...publication,
+          functions: [
+            { ...publication.functions[0], userIdentity: "optional" },
+          ],
+        })
+      )
+    );
+
+    expect(result.isOk()).toBe(true);
+    expect(result.isOk() && result.value.functions[0]?.userIdentity).toBe(
+      "workspace_user_required"
     );
   });
 });

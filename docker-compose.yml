@@ -131,6 +131,8 @@ services:
 
   fdb:
     image: foundationdb/foundationdb:7.4.8
+    profiles:
+      - dfs
     environment:
       # Host mode: the cluster file advertises 127.0.0.1:4500, reachable through the published port.
       FDB_NETWORKING_MODE: host
@@ -147,6 +149,8 @@ services:
       retries: 20
 
   fdb_init:
+    profiles:
+      - dfs
     depends_on:
       - fdb
     image: foundationdb/foundationdb:7.4.8

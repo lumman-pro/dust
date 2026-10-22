@@ -10,7 +10,7 @@ import type { ModelSelectionType } from "@app/types/assistant/models/types";
 import { ModelSelectionSchema } from "@app/types/assistant/models/types";
 import type { SkillWithoutInstructionsAndToolsType } from "@app/types/assistant/skill_configuration";
 import type { ContentFragmentsType } from "@app/types/content_fragment";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { createContext, useCallback, useMemo, useState } from "react";
 
 const STICKY_MODEL_OVERRIDE_STORAGE_KEY = "inputBarModelOverride_v1";
@@ -71,6 +71,16 @@ export type PendingInputText = {
   typedSuffix?: string;
 };
 
+/**
+ * What the user has selected in the app that hosts the input bar, e.g. cells in Excel. The input
+ * bar shows it with the attachments, and its `label` is sent with the message as `hostSelection`.
+ */
+export type InputBarHostSelection = {
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+  onRemove: () => void;
+};
+
 export type PendingSkill = Pick<
   SkillWithoutInstructionsAndToolsType,
   "sId" | "name" | "icon"
@@ -120,6 +130,7 @@ export const InputBarContext = createContext<{
   captureActions?: CaptureActions;
   // Fired right before submit; the extension uses it to snapshot browser tab state.
   onBeforeSubmit?: () => void;
+  hostSelection?: InputBarHostSelection | null;
 }>({
   shouldFocusInput: false,
   selectedAgent: null,
@@ -160,6 +171,7 @@ interface InputBarContextProviderProps {
   fileUploaderService: FileUploaderService;
   captureActions?: CaptureActions;
   onBeforeSubmit?: () => void;
+  hostSelection?: InputBarHostSelection | null;
 }
 
 export function InputBarContextProvider({
@@ -167,6 +179,7 @@ export function InputBarContextProvider({
   fileUploaderService,
   captureActions,
   onBeforeSubmit,
+  hostSelection,
 }: InputBarContextProviderProps) {
   const [shouldFocusInput, setShouldFocusInput] = useState<boolean>(false);
 
@@ -301,6 +314,7 @@ export function InputBarContextProvider({
       captureActions,
       fileUploaderService,
       onBeforeSubmit,
+      hostSelection,
     }),
     [
       shouldFocusInput,
@@ -322,6 +336,7 @@ export function InputBarContextProvider({
       captureActions,
       fileUploaderService,
       onBeforeSubmit,
+      hostSelection,
     ]
   );
 

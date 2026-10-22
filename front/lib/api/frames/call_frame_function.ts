@@ -6,7 +6,10 @@ import { resolveActiveFrameFunctionForUse } from "@app/lib/api/sandbox_functions
 import type { Authenticator } from "@app/lib/auth";
 import { FileResource } from "@app/lib/resources/file_resource";
 import { FRAME_MANIFEST_FILE } from "@app/types/api/frame_manifest";
-import type { SandboxFunctionCallError } from "@app/types/api/sandbox_functions";
+import type {
+  SandboxFunctionCallError,
+  SandboxFunctionInvocationContext,
+} from "@app/types/api/sandbox_functions";
 import type { ConversationWithoutContentType } from "@app/types/assistant/conversation";
 import type { DustFileSystemError } from "@app/types/file_system";
 import type { Result } from "@app/types/shared/result";
@@ -65,10 +68,12 @@ export async function callFrameFunction(
     frameId,
     functionName,
     input,
+    context,
   }: {
     frameId: string;
     functionName: string;
     input?: unknown;
+    context?: SandboxFunctionInvocationContext;
   }
 ): Promise<Result<CallFrameFunctionResult, CallFrameFunctionError>> {
   // The agent calls what it would see: its draft when it can edit the Frame, live otherwise.
@@ -86,7 +91,12 @@ export async function callFrameFunction(
     );
   }
 
-  const callResult = await callSandboxFunction(auth, sandboxFunction, input);
+  const callResult = await callSandboxFunction(
+    auth,
+    sandboxFunction,
+    input,
+    context
+  );
   if (callResult.isErr()) {
     return new Err(
       new FrameFunctionExecutionError(functionName, callResult.error)
@@ -108,11 +118,13 @@ export async function callFrameFunctionFromSource(
     sourcePath,
     functionName,
     input,
+    context,
   }: {
     conversation: ConversationWithoutContentType;
     sourcePath: string;
     functionName: string;
     input?: unknown;
+    context?: SandboxFunctionInvocationContext;
   }
 ): Promise<Result<CallFrameFunctionResult, CallFrameFunctionFromSourceError>> {
   const normalizedSourcePath = DustFileSystem.normalizeScopedPath(sourcePath);
@@ -172,5 +184,6 @@ export async function callFrameFunctionFromSource(
     frameId: frame.sId,
     functionName,
     input,
+    context,
   });
 }

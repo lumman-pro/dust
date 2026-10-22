@@ -78,7 +78,7 @@ export function UserWakeUpsTable({ owner, onNavigate }: UserWakeUpsTableProps) {
         id: "conversation",
         header: t`Conversation`,
         enableSorting: false,
-        meta: { className: "w-[30%] truncate", headerAlign: "left" },
+        meta: { className: "w-[27%] truncate", headerAlign: "left" },
         cell: (info) => (
           <DataTable.CellContent className="w-full justify-start text-left">
             <span className="truncate text-sm font-semibold">
@@ -91,7 +91,7 @@ export function UserWakeUpsTable({ owner, onNavigate }: UserWakeUpsTableProps) {
         id: "reason",
         header: t`Reason`,
         enableSorting: false,
-        meta: { className: "w-[30%] truncate", headerAlign: "left" },
+        meta: { className: "w-[27%] truncate", headerAlign: "left" },
         cell: (info) => (
           <DataTable.CellContent className="w-full justify-start text-left">
             <Tooltip
@@ -110,7 +110,7 @@ export function UserWakeUpsTable({ owner, onNavigate }: UserWakeUpsTableProps) {
         id: "schedule",
         header: t`Schedule kind`,
         enableSorting: false,
-        meta: { className: "w-[20%] truncate", headerAlign: "left" },
+        meta: { className: "w-[23%] truncate", headerAlign: "left" },
         cell: (info) => (
           <DataTable.CellContent className="w-full justify-start text-left">
             <span className="truncate text-sm text-muted-foreground">
@@ -126,7 +126,7 @@ export function UserWakeUpsTable({ owner, onNavigate }: UserWakeUpsTableProps) {
           context: "next run, table column header",
         }),
         enableSorting: false,
-        meta: { className: "w-[20%] truncate", headerAlign: "left" },
+        meta: { className: "w-[23%] truncate", headerAlign: "left" },
         cell: (info) => {
           // The endpoint only lists active wake-ups, so every row still has a firing ahead of it —
           // unless the stored cron no longer parses.

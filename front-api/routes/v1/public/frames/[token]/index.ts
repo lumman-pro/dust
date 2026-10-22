@@ -4,7 +4,10 @@ import {
   FRAME_SESSION_COOKIE_NAME,
   getFrameSessionEmail,
 } from "@app/lib/api/share/frame_session";
-import { recordFrameView } from "@app/lib/api/share/frame_sharing";
+import {
+  acceptsAnyVerifiedEmail,
+  recordFrameView,
+} from "@app/lib/api/share/frame_sharing";
 import { generateVizAccessToken } from "@app/lib/api/viz/access_tokens";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { FileResource } from "@app/lib/resources/file_resource";
@@ -133,9 +136,22 @@ app.get(
 
     const hasFunctions = await file.hasActiveFrameFunctions();
 
+    const isVisitorOfFrameWithFunctions = !auth && hasFunctions;
+    const sessionToken = getCookie(ctx, FRAME_SESSION_COOKIE_NAME);
+    const verifiedVisitorEmail =
+      isVisitorOfFrameWithFunctions && sessionToken
+        ? await getFrameSessionEmail(workspace, { token: sessionToken })
+        : null;
+    const isVerifiedPublicFunctionsVisitor =
+      verifiedVisitorEmail !== null &&
+      (await acceptsAnyVerifiedEmail(file, {
+        shareScope,
+        workspace: result.value.workspace,
+      }));
+
     // Runs before the email-scope branch so an external viewer is not walked through OTP for a
-    // Frame they still could not use.
-    if (!auth && hasFunctions) {
+    // Frame they still could not use. A Frame serving public functions only needs a verified email.
+    if (isVisitorOfFrameWithFunctions && !isVerifiedPublicFunctionsVisitor) {
       return apiError(ctx, {
         status_code: 404,
         api_error: {
@@ -248,6 +264,7 @@ app.get(
       userId: user?.sId,
       shareScope,
       workspaceId: workspace.sId,
+      canInvokePublicFunctions: isVerifiedPublicFunctionsVisitor,
     });
 
     return ctx.json({
@@ -265,8 +282,8 @@ app.get(
       // Only return the project URL if the user can read the project.
       projectUrl:
         canRead && spaceId ? getPodRoute(workspace.sId, spaceId) : null,
-      // Lets the frame enable member-only tools (e.g. callFunction) client-side;
-      // real authorization still happens server-side on invocation.
+      // Lets the frame enable member-only tools (e.g. file writes) client-side;
+      // real authorization still happens server-side.
       isAuthenticatedMember: !!user,
       isPodMember,
       isPodEditor,
@@ -274,8 +291,8 @@ app.get(
       hasFunctions,
       // Lets a shared Frame in an app folder resolve bare function references, exactly as it does
       // when opened from the Pod. Workspace members who may view the frame may invoke its app's
-      // functions, so they get the path even without pod read. External viewers cannot invoke
-      // and never receive it.
+      // functions, so they get the path even without pod read. Visitors call public functions by
+      // bare name through the share route and never receive it.
       framePath:
         auth && (canRead || canInvokeViaShareCapability)
           ? file.toScopedPath(auth)

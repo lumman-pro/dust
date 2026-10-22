@@ -53,7 +53,6 @@ function eventStream(
 
 async function setup() {
   const context = await createSandboxTokenTestContext();
-  await FeatureFlagFactory.basic(context.auth, "frames_v2");
   await FeatureFlagFactory.basic(context.auth, "frames_v2_functions");
   const sourceDirectoryPath = `conversation-${context.conversation.sId}/Status`;
   const publicationId = "publication-1";

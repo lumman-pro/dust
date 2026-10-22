@@ -45,7 +45,6 @@ interface FileExplorerProps {
   emptyState?: React.ReactNode;
   hideBreadcrumbAtRoot?: boolean;
   currentFolderPath: string;
-  displayFramePackages?: boolean;
   files: FileExplorerPathEntry[];
   toolbarExtraActions?: React.ReactNode;
   isLoading: boolean;
@@ -72,7 +71,6 @@ export function FileExplorer({
   contentClassName,
   contentNodes = [],
   defaultViewMode = "grid",
-  displayFramePackages = false,
   emptyState,
   currentFolderPath,
   files,
@@ -133,7 +131,6 @@ export function FileExplorer({
       getFileExplorerPipeline({
         contentNodes,
         currentFolderPath,
-        displayFramePackages,
         files,
         searchQuery,
         activeFilter,
@@ -143,7 +140,6 @@ export function FileExplorer({
     [
       contentNodes,
       currentFolderPath,
-      displayFramePackages,
       files,
       searchQuery,
       activeFilter,
@@ -373,15 +369,7 @@ export function FileExplorer({
             onDownload={onDownload}
             onMoveFileDrop={fileDragEnabled ? handleMoveFileDrop : undefined}
             onNodeOpen={handleNodeOpen}
-            getFileMenuItems={
-              displayFramePackages ||
-              onDelete ||
-              onRename ||
-              onMoveFile ||
-              getExtraFileMenuItems
-                ? getMenuItems
-                : undefined
-            }
+            getFileMenuItems={getMenuItems}
             searchFolderPath={searchFolderPath}
           />
         </div>

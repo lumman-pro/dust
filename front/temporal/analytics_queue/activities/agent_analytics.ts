@@ -243,8 +243,10 @@ export async function storeAgentAnalytics(
 
       return {
         actionResource,
+        createdAt: action.createdAt,
         internalMCPServerName: action.internalMCPServerName,
         mcpServerId: action.mcpServerId,
+        declaredBilling: actionResource.declaredBilling,
         status: action.status,
         toolName: action.toolName,
       };

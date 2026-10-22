@@ -65,6 +65,11 @@ import {
   decideMCPAuthFailureAction,
 } from "@app/lib/actions/mcp_oauth_provider";
 import {
+  getCredentialModeDescriptionNote,
+  isServerUsableForMessage,
+  PERSONAL_SERVER_UNUSABLE_MESSAGE,
+} from "@app/lib/actions/personal_actions";
+import {
   classifyToolAbortSignal,
   isToolInterruptionError,
   makeToolInterruptionError,
@@ -316,6 +321,7 @@ function makeClientSideMCPToolConfigurations(
     displayLabels: tool.displayLabels,
     ...(tool.timeoutMs && { timeoutMs: tool.timeoutMs }),
     ...(tool.eager && { eager: true }),
+    ...(tool.declaredBilling && { declaredBilling: tool.declaredBilling }),
   }));
 }
 
@@ -537,6 +543,13 @@ export async function* tryCallMCPTool(
                   type: "text",
                   text: "Could not call tool: configuration not found",
                 },
+              ],
+            };
+          case "personal_tools_unavailable":
+            return {
+              isError: true,
+              content: [
+                { type: "text", text: PERSONAL_SERVER_UNUSABLE_MESSAGE },
               ],
             };
           case "personal_auth_required":
@@ -877,6 +890,7 @@ function makeServerSideMCPConnectionParams(
  */
 type ServerSideMCPConnectionError =
   | { type: "not_found" }
+  | { type: "personal_tools_unavailable" }
   | { type: "personal_auth_required"; provider: OAuthProvider; scope?: string }
   | { type: "admin_auth_required"; message: string }
   | { type: "connection_failed"; message: string };
@@ -897,6 +911,17 @@ async function connectServerSideMCP(
   );
   if (!mcpServerView) {
     return new Err({ type: "not_found" });
+  }
+
+  if (
+    isAgentLoopRunContext(toolContext.runContext) &&
+    !isServerUsableForMessage(mcpServerView, {
+      isWithoutConcreteUser: isUserMessageWithoutConcreteUser(
+        toolContext.runContext.userMessage
+      ),
+    })
+  ) {
+    return new Err({ type: "personal_tools_unavailable" });
   }
 
   const connectionParams = makeServerSideMCPConnectionParams(mcpServerView);
@@ -1235,21 +1260,22 @@ export async function tryListMCPTools(
   // user's behalf) has no person to run as, so those servers are left out of the
   // tool list entirely: running them on the workspace connection instead would
   // quietly override that decision.
-  const listableActionsWithOrigin = isWithoutConcreteUser
-    ? mcpServerActionsWithOrigin.filter(({ action }) => {
-        if (!isServerSideMCPServerConfiguration(action)) {
-          return true;
-        }
-        const view = preFetchedMcpServerViews.get(action.mcpServerViewId);
-        return view?.oAuthUseCase !== "personal_actions";
-      })
-    : mcpServerActionsWithOrigin;
+  const listableActionsWithOrigin = mcpServerActionsWithOrigin.filter(
+    ({ action }) => {
+      if (!isServerSideMCPServerConfiguration(action)) {
+        return true;
+      }
+      const view = preFetchedMcpServerViews.get(action.mcpServerViewId);
+      return !view || isServerUsableForMessage(view, { isWithoutConcreteUser });
+    }
+  );
 
   // Discover all tools exposed by all available MCP servers.
   const results = await concurrentExecutor(
     listableActionsWithOrigin,
     async ({ action, isFromSkillServer }) => {
       let connectionParams: MCPConnectionParams;
+      let credentialModeNote: string | null = null;
       if (isServerSideMCPServerConfiguration(action)) {
         const mcpServerView = preFetchedMcpServerViews.get(
           action.mcpServerViewId
@@ -1272,6 +1298,11 @@ export async function tryListMCPTools(
           return new Err(error);
         }
         connectionParams = makeServerSideMCPConnectionParams(mcpServerView);
+        // Model-only: tell the agent which credential mode is active without
+        // changing the description shown in the product UI.
+        credentialModeNote = getCredentialModeDescriptionNote(
+          mcpServerView.oAuthUseCase
+        );
       } else {
         connectionParams = makeClientSideMCPConnectionParams(action, {
           conversationId: agentLoopListToolsContext.conversation.sId,
@@ -1401,6 +1432,10 @@ export async function tryListMCPTools(
           }
         }
 
+        if (credentialModeNote) {
+          extraDescription += `\n${credentialModeNote}`;
+        }
+
         processedTools.push({
           ...applyToolSourceLoadingPolicy(toolConfig, { isFromSkillServer }),
           originalName: toolConfig.name,
@@ -1451,6 +1486,7 @@ async function listToolsForClientSideMCPServer(
             dustMeta?.stake ?? DEFAULT_CLIENT_SIDE_MCP_TOOL_STAKE_LEVEL,
           argumentsRequiringApproval: dustMeta?.argumentsRequiringApproval,
           ...(dustMeta?.timeoutMs && { timeoutMs: dustMeta.timeoutMs }),
+          ...(dustMeta?.billing && { declaredBilling: dustMeta.billing }),
         };
       }),
     ];

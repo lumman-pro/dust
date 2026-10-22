@@ -7,6 +7,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const activeConversation = vi.hoisted(() => ({ id: "conv_1" }));
 
+const FRAME_CLICK = {
+  source: "user",
+  uiElement: "message_frame_card",
+} as const;
+
 vi.mock("@app/hooks/useActiveConversationId", () => ({
   useActiveConversationId: () => activeConversation.id,
 }));
@@ -134,6 +139,7 @@ describe("ConversationSidePanelProvider history", () => {
         type: "interactive_content",
         fileId: "fil_1",
         timestamp: "1",
+        openedFrom: FRAME_CLICK,
       })
     );
     act(() =>
@@ -141,6 +147,7 @@ describe("ConversationSidePanelProvider history", () => {
         type: "interactive_content",
         fileId: "fil_1",
         timestamp: "2",
+        openedFrom: FRAME_CLICK,
       })
     );
     expect(result.current.data).toBe("fil_1@2");
@@ -182,6 +189,7 @@ describe("ConversationSidePanelProvider history", () => {
         type: "interactive_content",
         fileId: "fil_1",
         timestamp: "1",
+        openedFrom: FRAME_CLICK,
       })
     );
     act(() => result.current.openPanel({ type: "files" }));
@@ -235,6 +243,7 @@ describe("ConversationSidePanelProvider auto-open dismiss", () => {
       result.current.openPanel({
         type: "interactive_content",
         fileId: "fil_frame",
+        openedFrom: FRAME_CLICK,
       })
     );
     expect(result.current.wasAutoOpenDismissedForFileId("fil_frame")).toBe(
@@ -251,6 +260,30 @@ describe("ConversationSidePanelProvider auto-open dismiss", () => {
     expect(result.current.wasAutoOpenDismissedForFileId("fil_frame")).toBe(
       false
     );
+  });
+
+  it("remembers Files panel dismiss until the conversation changes", () => {
+    const { result, rerender } = renderSidePanel();
+    act(() => result.current.openPanel({ type: "files" }));
+    expect(result.current.wasFilesPanelAutoOpenDismissed()).toBe(false);
+
+    act(() => result.current.closePanel());
+    expect(result.current.wasFilesPanelAutoOpenDismissed()).toBe(true);
+
+    activeConversation.id = "conv_2";
+    rerender();
+    expect(result.current.wasFilesPanelAutoOpenDismissed()).toBe(false);
+  });
+
+  it("does not treat navigating away from Files as a dismiss", () => {
+    const { result } = renderSidePanel();
+    act(() => result.current.openPanel({ type: "files" }));
+    act(() => result.current.openPanel({ type: "credits" }));
+    expect(result.current.wasFilesPanelAutoOpenDismissed()).toBe(false);
+
+    act(() => result.current.closePanel());
+    expect(result.current.currentPanel).toBe("files");
+    expect(result.current.wasFilesPanelAutoOpenDismissed()).toBe(false);
   });
 });
 
@@ -296,7 +329,11 @@ describe("ConversationSidePanelProvider full screen", () => {
   it("leaves full screen when another panel takes over", () => {
     const { result } = renderSidePanel();
     act(() =>
-      result.current.openPanel({ type: "interactive_content", fileId: "fil_1" })
+      result.current.openPanel({
+        type: "interactive_content",
+        fileId: "fil_1",
+        openedFrom: FRAME_CLICK,
+      })
     );
     act(() => hash.set({ fullScreen: "true" }));
 
@@ -307,7 +344,11 @@ describe("ConversationSidePanelProvider full screen", () => {
   it("stays full screen while the same Frame refreshes", () => {
     const { result } = renderSidePanel();
     act(() =>
-      result.current.openPanel({ type: "interactive_content", fileId: "fil_1" })
+      result.current.openPanel({
+        type: "interactive_content",
+        fileId: "fil_1",
+        openedFrom: FRAME_CLICK,
+      })
     );
     act(() => hash.set({ fullScreen: "true" }));
 
@@ -316,6 +357,7 @@ describe("ConversationSidePanelProvider full screen", () => {
         type: "interactive_content",
         fileId: "fil_1",
         timestamp: "123",
+        openedFrom: FRAME_CLICK,
       })
     );
     expect(hash.values.fullScreen).toBe("true");
@@ -326,9 +368,17 @@ describe("ConversationSidePanelProvider hash encoding", () => {
   it.each([
     [{ type: "actions", messageId: "msg_1" }, "msg_1"],
     [{ type: "actions", messageId: "msg_1", actionId: "act_2" }, "msg_1@act_2"],
-    [{ type: "interactive_content", fileId: "fil_1" }, "fil_1"],
     [
-      { type: "interactive_content", fileId: "fil_1", timestamp: "123" },
+      { type: "interactive_content", fileId: "fil_1", openedFrom: FRAME_CLICK },
+      "fil_1",
+    ],
+    [
+      {
+        type: "interactive_content",
+        fileId: "fil_1",
+        timestamp: "123",
+        openedFrom: FRAME_CLICK,
+      },
       "fil_1@123",
     ],
     [
@@ -367,5 +417,67 @@ describe("ConversationSidePanelProvider hash encoding", () => {
     restored.rerender();
     act(() => restored.result.current.togglePanel(params));
     expect(restored.result.current.currentPanel).toBeUndefined();
+  });
+});
+
+describe("ConversationSidePanelProvider Frame origin", () => {
+  it("exposes what opened the shown Frame, and keeps it while the Frame refreshes", () => {
+    const { result } = renderSidePanel();
+    const autoOpen = {
+      source: "agent",
+      uiElement: "side_panel_auto_open",
+    } as const;
+    act(() =>
+      result.current.openPanel({
+        type: "interactive_content",
+        fileId: "fil_1",
+        timestamp: "1",
+        openedFrom: autoOpen,
+      })
+    );
+    expect(result.current.frameOpenedFrom).toEqual(autoOpen);
+
+    act(() =>
+      result.current.openPanel({
+        type: "interactive_content",
+        fileId: "fil_1",
+        timestamp: "2",
+        openedFrom: FRAME_CLICK,
+      })
+    );
+    expect(result.current.frameOpenedFrom).toEqual(autoOpen);
+
+    act(() =>
+      result.current.openPanel({
+        type: "interactive_content",
+        fileId: "fil_2",
+        openedFrom: FRAME_CLICK,
+      })
+    );
+    expect(result.current.frameOpenedFrom).toEqual(FRAME_CLICK);
+  });
+
+  it("has no origin for a Frame shown again through the history", () => {
+    const { result } = renderSidePanel();
+    act(() =>
+      result.current.openPanel({
+        type: "interactive_content",
+        fileId: "fil_1",
+        openedFrom: FRAME_CLICK,
+      })
+    );
+    act(() => result.current.openPanel({ type: "files" }));
+    act(() => result.current.closePanel());
+    expect(result.current.currentPanel).toBe("interactive_content");
+    expect(result.current.frameOpenedFrom).toBeNull();
+  });
+
+  it("marks a Frame opened from the URL as page_url", () => {
+    hash.set({ spid: "fil_1@123", spt: "interactive_content" });
+    const { result } = renderSidePanel();
+    expect(result.current.frameOpenedFrom).toEqual({
+      source: "user",
+      uiElement: "page_url",
+    });
   });
 });

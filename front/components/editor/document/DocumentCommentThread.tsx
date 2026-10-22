@@ -1,6 +1,7 @@
 import { parseInlineMarkdown } from "@app/components/editor/document/content";
 import { DocumentCommentInput } from "@app/components/editor/document/DocumentCommentInput";
 import type { DocumentProps } from "@app/components/editor/document/types";
+import type { AgentEvent } from "@app/lib/client/collab/agents";
 import { formatRelativeTime } from "@app/lib/client/relative_time";
 import { formatDateTime } from "@app/lib/i18n/format";
 import type { DfmComment, DfmMessage } from "@app/lib/markdown/dfm";
@@ -8,6 +9,7 @@ import { readMessageSuggestions } from "@app/lib/markdown/dfm";
 import type { Result } from "@app/types/shared/result";
 import {
   AlertCircle,
+  AnimatedText,
   Button,
   Check,
   cn,
@@ -387,6 +389,37 @@ const ThreadActions = ({
   );
 };
 
+interface AgentActivityLineProps {
+  activity: AgentEvent;
+  renderAuthorAvatar: RenderAuthorAvatar;
+}
+
+const AgentActivityLine = ({
+  activity: { agent, activity },
+  renderAuthorAvatar,
+}: AgentActivityLineProps) => {
+  const { t } = useLingui();
+  const { name } = agent;
+  const label = {
+    waiting: t`${name} is busy. It'll answer soon.`,
+    thinking: t`${name} is thinking…`,
+    reading: t`${name} is reading the document…`,
+    editing: t`${name} is editing the document…`,
+  }[activity];
+  return (
+    <div role="status" aria-label={label} className="flex items-center gap-2">
+      <span aria-hidden="true" className="shrink-0">
+        {renderAuthorAvatar({ kind: "agent", id: agent.agentId, name }, "xxs")}
+      </span>
+      <span aria-hidden="true" className="min-w-0 truncate">
+        <AnimatedText variant="muted" className="text-xs">
+          {label}
+        </AnimatedText>
+      </span>
+    </div>
+  );
+};
+
 interface ThreadRepliesProps {
   replies: DfmMessage[];
   folded: boolean;
@@ -429,6 +462,7 @@ const ThreadReplies = ({
 interface DocumentCommentThreadProps {
   comment: DfmComment;
   quote: string | undefined;
+  agentActivity?: AgentEvent;
   /**
    * `card` floats over the text it comments, showing the whole thread. `list` sits in the
    * comments list under its commented text, folded to its first message until active.
@@ -454,9 +488,16 @@ interface DocumentCommentThreadProps {
   renderAuthorAvatar: RenderAuthorAvatar;
 }
 
+/**
+ * @cc [owner:adrien,label:product] document-comment-agent-activity
+ * While `agentActivity` is set, an unfolded thread MUST show the agent's avatar and what it is doing
+ * after its messages and right above the reply field, also when the user cannot reply or the
+ * thread is resolved. A folded thread MUST NOT show it.
+ */
 export const DocumentCommentThread = ({
   comment,
   quote,
+  agentActivity,
   variant,
   active,
   canWrite,
@@ -565,6 +606,12 @@ export const DocumentCommentThread = ({
           renderMessageBody={renderMessageBody}
           mountPortalContainer={mountPortalContainer}
         />
+        {agentActivity && !folded && (
+          <AgentActivityLine
+            activity={agentActivity}
+            renderAuthorAvatar={renderAuthorAvatar}
+          />
+        )}
         {canWrite && !folded && !resolved && (
           <DocumentCommentInput
             label={t`Reply`}

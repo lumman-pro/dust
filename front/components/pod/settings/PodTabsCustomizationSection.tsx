@@ -5,7 +5,6 @@ import type { AddablePodTabFile } from "@app/components/pod/settings/AddPodFileM
 import { AddPodFileMenu } from "@app/components/pod/settings/AddPodFileMenu";
 import { getIcon } from "@app/components/resources/resources_icons";
 import { usePodFileTabs } from "@app/hooks/usePodFileTabs";
-import { useFeatureFlags } from "@app/lib/auth/AuthContext";
 import { usePodFiles } from "@app/lib/swr/pods";
 import type { PodFileTab } from "@app/types/pod_file_tab";
 import {
@@ -61,8 +60,6 @@ export function PodTabsCustomizationSection({
   isEditor,
 }: PodTabsCustomizationSectionProps) {
   const { t } = useLingui();
-  const { hasFeature } = useFeatureFlags();
-  const displayFramePackages = hasFeature("frames_v2");
 
   const { orderedFileTabs, updateFileTab, removeFileTab, reorderFileTab } =
     usePodFileTabs({
@@ -96,9 +93,8 @@ export function PodTabsCustomizationSection({
       listAddablePodTabFiles({
         podFiles,
         existingTabPaths,
-        displayFramePackages,
       }),
-    [displayFramePackages, existingTabPaths, podFiles]
+    [existingTabPaths, podFiles]
   );
 
   const [draggingPath, setDraggingPath] = useState<string | null>(null);

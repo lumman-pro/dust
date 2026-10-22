@@ -1,5 +1,8 @@
 import { runOnRedis } from "@app/lib/api/redis";
-import { frameServesPublicFunctions } from "@app/lib/api/sandbox_functions/workspace_user";
+import {
+  doesFrameServePublicFunctions,
+  doesWorkspaceServePublicFunctions,
+} from "@app/lib/api/sandbox_functions/workspace_user";
 import type { Authenticator } from "@app/lib/auth";
 import { DustError } from "@app/lib/error";
 import { fireAndForgetNotification } from "@app/lib/notifications/fire_and_forget";
@@ -103,7 +106,7 @@ export async function addFrameSharingGrants(
   if (permission.isErr()) {
     return permission;
   }
-  await file.ensureShareableFrame(auth);
+  await file.ensureShareable(auth);
   const created = await SharingGrantResource.add(auth, file, {
     emails,
     domains,
@@ -166,20 +169,48 @@ export async function checkFrameShareScopePermission(
     return new Ok(undefined);
   }
 
-  // Write half of [shared-frame-with-functions-needs-workspace-user]: the read path hides such a
-  // Frame from every viewer who is not a workspace user, so publishing it would mint a dead link.
+  // Write half of [shared-frame-with-functions-needs-workspace-user] and
+  // [public-frame-needs-public-function]: the read path hides such a Frame from visitors unless it
+  // has a public function, so publishing it would mint a dead link.
+  const workspace = auth.getNonNullableWorkspace();
   const hasActiveFrameFunctions = await frame.hasActiveFrameFunctions();
   if (hasActiveFrameFunctions) {
-    return new Err(
-      new DustError(
-        "unauthorized",
-        "This Frame has functions, which only workspace members can run. It cannot be shared publicly."
-      )
-    );
+    const servesPublicFunctions = await doesWorkspaceServePublicFunctions({
+      workspace,
+      plan: auth.plan(),
+    });
+    if (!servesPublicFunctions) {
+      return new Err(
+        new DustError(
+          "unauthorized",
+          "This Frame has functions, which only workspace members can run. It cannot be shared publicly."
+        )
+      );
+    }
+
+    const hasActivePublicFunction = await frame.hasActivePublicFrameFunctions();
+    if (!hasActivePublicFunction) {
+      return new Err(
+        new DustError(
+          "unauthorized",
+          "None of this Frame's functions is public, so visitors could not run any of them. It cannot be shared publicly."
+        )
+      );
+    }
   }
 
-  const workspace = auth.getNonNullableWorkspace();
-  if (workspace.sharingPolicy !== "all_scopes") {
+  return checkShareScopePermission(auth, shareScope);
+}
+
+export function checkShareScopePermission(
+  auth: Authenticator,
+  shareScope: FileShareScope
+): Result<void, DustError<"unauthorized">> {
+  if (shareScope !== "public") {
+    return new Ok(undefined);
+  }
+
+  if (auth.getNonNullableWorkspace().sharingPolicy !== "all_scopes") {
     return new Err(
       new DustError(
         "unauthorized",
@@ -221,8 +252,9 @@ export type FrameFunctionSharingConflictParams = {
 /**
  * Declaring functions narrows a Frame to workspace users, per
  * [shared-frame-with-functions-needs-workspace-user], silently breaking the links its external
- * viewers already hold. Publishing writes no sharing, so neither permission check runs to refuse
- * it. Returns why the publication is refused, or null when every viewer can open it.
+ * viewers already hold, except for a public link per [public-frame-needs-public-function].
+ * Publishing writes no sharing, so neither permission check runs to refuse it. Returns why the
+ * publication is refused, or null when every viewer can open it.
  */
 export async function getFrameFunctionSharingConflict(
   auth: Authenticator,
@@ -238,11 +270,21 @@ export async function getFrameFunctionSharingConflict(
     return null;
   }
 
+  const reachesAnyoneWithLink =
+    SHARE_SCOPE_AUDIENCE[shareInfo.scope] === "anyone_with_link";
+  if (reachesAnyoneWithLink) {
+    const servesPublicFunctions = await doesWorkspaceServePublicFunctions({
+      workspace: auth.getNonNullableWorkspace(),
+      plan: auth.plan(),
+    });
+    if (servesPublicFunctions) {
+      return null;
+    }
+  }
+
   const grants = await SharingGrantResource.listForFile(file);
   const externalGrants = await getExternalFrameGrants(auth, grants);
 
-  const reachesAnyoneWithLink =
-    SHARE_SCOPE_AUDIENCE[shareInfo.scope] === "anyone_with_link";
   if (!reachesAnyoneWithLink && externalGrants.length === 0) {
     return null;
   }
@@ -512,14 +554,20 @@ type AcceptsAnyVerifiedEmailInput = {
 
 /**
  * @cc [owner:achilleburah,label:security;product] any-email-only-for-public-functions
- * True MUST be returned only for a `public` share of a Frame with active functions for which
- * frameServesPublicFunctions holds. Only then MAY an email verify for the share without a grant.
+ * True MUST be returned only for a `public` share of a Frame whose active publication declares a
+ * public function and for which doesFrameServePublicFunctions holds. Only then MAY an email verify
+ * for the share without a grant.
  */
 export async function acceptsAnyVerifiedEmail(
   file: FileResource,
   { shareScope, workspace }: AcceptsAnyVerifiedEmailInput
 ): Promise<boolean> {
-  if (shareScope !== "public" || !(await file.hasActiveFrameFunctions())) {
+  if (shareScope !== "public") {
+    return false;
+  }
+
+  const hasActivePublicFunction = await file.hasActivePublicFrameFunctions();
+  if (!hasActivePublicFunction) {
     return false;
   }
 
@@ -527,7 +575,7 @@ export async function acceptsAnyVerifiedEmail(
     workspace.id
   );
 
-  return frameServesPublicFunctions({
+  return doesFrameServePublicFunctions({
     workspace,
     plan: subscription.getPlan(),
     frame: file,

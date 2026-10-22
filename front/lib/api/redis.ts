@@ -59,6 +59,7 @@ export type RedisUsageTagsType =
   | "cache_with_redis"
   | "cancel_message_generation"
   | "collab_tickets"
+  | "collab_ydoc_state"
   | "conversation_events"
   | "daily_usage_tracking"
   | "email_context"
@@ -195,6 +196,15 @@ export async function getRedisCacheClient({
   return getRedisClientByUri({ origin, redisUri: redisCacheUri });
 }
 
+export async function getRedisCollabClient({
+  origin,
+}: {
+  origin: RedisUsageTagsType;
+}): Promise<RedisClientType> {
+  const redisCollabUri = config.getRedisCollabUri();
+  return getRedisClientByUri({ origin, redisUri: redisCollabUri });
+}
+
 export async function runOnRedis<T>(
   opts: { origin: RedisUsageTagsType },
   fn: (client: RedisClientType) => PromiseLike<T>
@@ -208,6 +218,14 @@ export async function runOnRedisCache<T>(
   fn: (client: RedisClientType) => PromiseLike<T>
 ): Promise<T> {
   const client = await getRedisCacheClient(opts);
+  return fn(client);
+}
+
+export async function runOnRedisCollab<T>(
+  opts: { origin: RedisUsageTagsType },
+  fn: (client: RedisClientType) => PromiseLike<T>
+): Promise<T> {
+  const client = await getRedisCollabClient(opts);
   return fn(client);
 }
 

@@ -41,13 +41,18 @@ const CACHE_DIAGNOSTICS_BETA_HEADER = "cache-diagnosis-2026-04-07";
 export const THINKING_BINDING_CONTROLS_BETA_HEADER =
   "thinking-binding-controls-2026-08-01";
 
+// Lets Anthropic answer with a fallback model when the requested model refuses.
+// Claude API only (not Vertex, Bedrock or batches).
+export const SERVER_SIDE_FALLBACK_BETA_HEADER =
+  "server-side-fallback-2026-07-01";
+
 // The request we build for the stream: the base non-beta params plus the beta
 // Messages API extras we attach (cache-diagnostics beta header + `diagnostics`
 // opt-in). Kept on the built payload rather than added in `streamRaw` so the
 // request we construct reflects exactly what we send (and what the debug dump
 // records). Non-beta params are assignable to the beta stream params.
 type AnthropicStreamRequest = AnthropicRequestPayload &
-  Pick<BetaMessageStreamParams, "betas" | "diagnostics">;
+  Pick<BetaMessageStreamParams, "betas" | "diagnostics" | "fallbacks">;
 
 // Extract the cache-miss reason from a message_start (null when nothing to
 // compare or the background comparison is still pending).
@@ -118,6 +123,11 @@ export abstract class AnthropicStream extends WithAnthropicAIInputConverter(
    * 2026-08-31 only report prefix-check failures in `input_transformations`; setting it turns
    * every failure into a 400 or a dropped thinking block.
    */
+  /**
+   * @cc [owner:fontanierh,label:product] server-side-fallback-direct-anthropic-only
+   * Every request from this direct Anthropic client MUST send `fallbacks` and its beta header.
+   * Vertex, Bedrock and batch clients MUST NOT send them: those APIs do not support them.
+   */
   async buildRequestPayload(
     payload: Payload,
     config: AnthropicInputConfig
@@ -130,6 +140,7 @@ export abstract class AnthropicStream extends WithAnthropicAIInputConverter(
       ...(requiresMidConversationOutputConfigBeta(request.messages)
         ? [MID_CONVERSATION_OUTPUT_CONFIG_BETA_HEADER]
         : []),
+      SERVER_SIDE_FALLBACK_BETA_HEADER,
     ];
     return {
       ...request,
@@ -139,7 +150,8 @@ export abstract class AnthropicStream extends WithAnthropicAIInputConverter(
       // Beta headers and the cache-diagnostics `diagnostics` body are attached
       // here, not in `streamRaw`, so the built payload reflects exactly what we
       // send.
-      ...(betas.length > 0 ? { betas } : {}),
+      betas,
+      fallbacks: "default",
       ...(this.cacheDiagnosticsEnabled
         ? { diagnostics: { previous_message_id: this.previousMessageId } }
         : {}),

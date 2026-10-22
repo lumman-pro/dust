@@ -8,12 +8,11 @@ import {
   withoutDocumentJSONComments,
 } from "@app/components/editor/document/DocumentComments";
 import { useDocumentEditor } from "@app/components/editor/document/useDocumentEditor";
-import type { CommentChannel } from "@app/lib/client/collab/comments";
 import type { DfmComment } from "@app/lib/markdown/dfm";
 import { FIXTURE } from "@app/lib/markdown/dfm/tests/dfm.test_utils";
 import { CollabUserFactory } from "@app/tests/utils/CollabUserFactory";
+import { fakeCommentChannel } from "@app/tests/utils/FakeCommentChannel";
 import { BODY_FRAGMENT_NAME } from "@app/types/collab";
-import { Err } from "@app/types/shared/result";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { Editor } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
@@ -53,29 +52,6 @@ const SESSION_THREADS: DfmComment[] = [
     ],
   },
 ];
-
-/** A session's comment side, whose thread pushes the test makes. */
-function fakeCommentChannel() {
-  const listeners = new Set<(comments: DfmComment[]) => void>();
-  let threads: DfmComment[] | null = null;
-  const channel: CommentChannel = {
-    getThreads: () => threads,
-    onThreads: (listener) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    send: async () => new Err("unavailable"),
-    close: () => {
-      threads = null;
-      listeners.clear();
-    },
-  };
-  const push = (comments: DfmComment[]) => {
-    threads = comments;
-    listeners.forEach((listener) => listener(comments));
-  };
-  return { channel, push };
-}
 
 function renderCollabEditor(
   document: Y.Doc,

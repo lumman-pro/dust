@@ -63,6 +63,7 @@ fn server() -> Result<()> {
         api::list::list_returns_readable_entries_and_conceals_the_rest().await?;
         api::shared::shared_lists_aliases_and_lookup_rechecks_revocation().await?;
         api::apply::apply_returns_per_operation_errors_and_rejects_invalid_requests().await?;
+        api::locks::locks_enforce_ownership_grace_and_atomic_invalidation().await?;
         api::capacity::oversized_transactions_return_capacity_without_committing().await?;
         api::create_session::creates_durable_sessions_for_authenticated_tenants().await?;
         api::superuser::superuser_sessions_read_and_write_despite_denies().await?;

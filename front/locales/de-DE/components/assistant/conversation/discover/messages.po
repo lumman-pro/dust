@@ -232,10 +232,6 @@ msgstr "Zur ursprünglichen Startseite zurückkehren."
 msgid "Your homepage is getting a refresh. <0>Get a sneak peek!</0>"
 msgstr "Ihre Startseite wird erneuert. <0>Werfen Sie einen ersten Blick darauf!</0>"
 
-#: front/components/assistant/conversation/discover/HomepageAnnouncement.tsx
-msgid "Figma MCP is now available"
-msgstr "Figma-MCP ist jetzt verfügbar"
-
 #: front/components/assistant/conversation/discover/HomepageUseCases.tsx
 msgid "Hide this suggestion"
 msgstr "Diesen Vorschlag ausblenden"

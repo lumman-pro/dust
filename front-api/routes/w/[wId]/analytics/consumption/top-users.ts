@@ -21,7 +21,7 @@ app.post(
     const auth = ctx.get("auth");
     const userId = ctx.get("consumptionUserId");
     const agentId = ctx.get("consumptionAgentId");
-    const { limit, offset, search, filter, sortOrder, ...periodQuery } =
+    const { limit, offset, search, filter, sortOrder, rankBy, ...periodQuery } =
       ctx.req.valid("json");
 
     const period = await resolveConsumptionPeriod(
@@ -40,6 +40,7 @@ app.post(
         ...(agentId ? { agents: [agentId] } : {}),
       },
       sortOrder,
+      rankBy,
     });
     if (result.isErr()) {
       return apiError(

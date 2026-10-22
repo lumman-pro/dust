@@ -1,7 +1,11 @@
 import type { ConfigurableToolInputType } from "@app/lib/actions/mcp_internal_actions/input_schemas";
 import type { MCPServerViewType, MCPToolType } from "@app/lib/api/mcp";
 import logger from "@app/logger/logger";
+import type { Result } from "@app/types/shared/result";
+import { Err, Ok } from "@app/types/shared/result";
+import { normalizeError } from "@app/types/shared/utils/error_utils";
 import { isRecord } from "@app/types/shared/utils/general";
+import type { ValidateFunction } from "ajv";
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
 import type {
@@ -235,6 +239,26 @@ function getAjvInstance(): Ajv {
   }
 
   return ajvInstance;
+}
+
+/** Checks that `value` is an instance of `schema`; errors when the schema itself does not compile. */
+export function checkValueAgainstJsonSchema(
+  schema: JSONSchema,
+  value: unknown
+): Result<undefined, string> {
+  const ajv = getAjvInstance();
+  let validate: ValidateFunction;
+  try {
+    validate = ajv.compile(schema);
+  } catch (error) {
+    return new Err(`Invalid JSON schema: ${normalizeError(error).message}`);
+  }
+
+  if (validate(value)) {
+    return new Ok(undefined);
+  }
+
+  return new Err(ajv.errorsText(validate.errors, { dataVar: "input" }));
 }
 
 /**

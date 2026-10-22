@@ -19,10 +19,12 @@ import {
 } from "@app/lib/api/audit/workos_audit";
 import { getRedisHybridManager } from "@app/lib/api/redis-hybrid-manager";
 import { resolveSandboxChildBlock } from "@app/lib/api/sandbox/sandbox_child_block";
+import { validateSandboxFunctionActionFromConversation } from "@app/lib/api/sandbox_functions/resolve_action_from_conversation";
 import type { Authenticator } from "@app/lib/auth";
 import { DustError } from "@app/lib/error";
 import { AgentMCPActionResource } from "@app/lib/resources/agent_mcp_action_resource";
 import type { ConversationResource } from "@app/lib/resources/conversation_resource";
+import { isResourceSId } from "@app/lib/resources/string_ids";
 import logger from "@app/logger/logger";
 import { launchAgentLoopWorkflow } from "@app/temporal/agent_loop/client";
 import type { Result } from "@app/types/shared/result";
@@ -80,6 +82,16 @@ export async function validateAction(
         "User is not authorized to validate this action"
       )
     );
+  }
+
+  // Frame-function tools published on the conversation channel use `sfa_` ids. Route them to the
+  // sandbox-function validator so conversation clients (web, SDK/CLI) share one endpoint.
+  if (isResourceSId("sandbox_function_mcp_action", actionId)) {
+    return validateSandboxFunctionActionFromConversation(auth, conversation, {
+      actionId,
+      approvalState,
+      messageId,
+    });
   }
 
   const action = await AgentMCPActionResource.fetchById(auth, actionId);

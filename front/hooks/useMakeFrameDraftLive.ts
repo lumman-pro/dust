@@ -18,13 +18,20 @@ export function useMakeFrameDraftLive({
   const sendApiErrorNotification = useSendApiErrorNotification();
   const sendNotification = useSendNotification();
 
-  return async (draftPublicationId: string): Promise<boolean> => {
+  /**
+   * Makes `publicationId` live and ends draft mode. `hasChanges` false means it is the live
+   * publication (nothing changed in draft mode): the request then only ends draft mode.
+   */
+  return async (
+    publicationId: string,
+    { hasChanges }: { hasChanges: boolean }
+  ): Promise<boolean> => {
     const res = await clientFetch(
       `/api/w/${owner.sId}/frames/${encodeURIComponent(frameId)}/make-live`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ draftPublicationId }),
+        body: JSON.stringify({ draftPublicationId: publicationId }),
       }
     );
 
@@ -36,11 +43,15 @@ export function useMakeFrameDraftLive({
       return false;
     }
 
-    sendNotification({
-      type: "success",
-      title: t`Changes are live`,
-      description: t`The share link now shows this version.`,
-    });
+    sendNotification(
+      hasChanges
+        ? {
+            type: "success",
+            title: t`Changes are live`,
+            description: t`The share link now shows this version.`,
+          }
+        : { type: "success", title: t`Draft mode is off` }
+    );
     return true;
   };
 }

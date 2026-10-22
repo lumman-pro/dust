@@ -1,5 +1,6 @@
 import {
   decodeWireResponse,
+  encodeLockId,
   encodeGrant,
   encodeObjectId,
   encodeObjectRef,
@@ -12,6 +13,7 @@ import {
   WireGrantPageSchema,
   WireEntryPageSchema,
   WireFilesBatchSchema,
+  WireLockStateSchema,
   WireReadDataSchema,
   WireSearchResultsSchema,
   WireSessionSchema,
@@ -33,6 +35,9 @@ import type {
   DfsOperation,
   DfsEntryPage,
   DfsFilesBatch,
+  DfsLockId,
+  DfsLockState,
+  DfsObjectLock,
   DfsReadData,
   DfsSearchRequest,
   DfsSearchResults,
@@ -42,8 +47,11 @@ import type {
 } from "@app/types/dfs";
 import { DfsError, isDfsObjectId } from "@app/types/dfs";
 import type { Result } from "@app/types/shared/result";
-import { Err } from "@app/types/shared/result";
+import { Err, Ok } from "@app/types/shared/result";
 import type { z } from "zod";
+
+// Maximum `limit` of `ListGrants`, see `dfs/design-docs/API.md`.
+const LIST_GRANTS_PAGE_LIMIT = 512;
 
 // `dfs-read-data-limit`: a read never returns more than 1 MiB.
 const MAX_READ_BYTES = 1024 * 1024;
@@ -218,6 +226,40 @@ export class DfsClient {
     return this.call("RefreshSession", () => ({}), WireSessionSchema);
   }
 
+  // Enforced locks. Require the session key; storage support is not implemented yet.
+
+  async lock({
+    objectId,
+    lockId,
+  }: {
+    objectId: DfsObjectId;
+    lockId?: DfsLockId;
+  }): Promise<Result<DfsLockState, DfsError>> {
+    return this.callMatching(
+      "Lock",
+      () => ({
+        objectId: encodeObjectId(objectId),
+        lockId: lockId === undefined ? undefined : encodeLockId(lockId),
+      }),
+      WireLockStateSchema,
+      (lock) => lockId === undefined || lock.lockId === lockId
+    );
+  }
+
+  async unlock({
+    objectId,
+    lockId,
+  }: DfsObjectLock): Promise<Result<void, DfsError>> {
+    return this.call(
+      "Unlock",
+      () => ({
+        objectId: encodeObjectId(objectId),
+        lockId: encodeLockId(lockId),
+      }),
+      WireEmptySchema
+    );
+  }
+
   // Grants. Require the tenant key, which also determines the tenant.
 
   async listGrants({
@@ -238,6 +280,29 @@ export class DfsClient {
       }),
       WireGrantPageSchema
     );
+  }
+
+  /** Every grant attached to `objectId`, fetching all the pages of `listGrants`. */
+  async listAllGrants({
+    objectId,
+  }: {
+    objectId: DfsObjectId;
+  }): Promise<Result<DfsGrant[], DfsError>> {
+    const grants: DfsGrant[] = [];
+    let after: string | undefined;
+    do {
+      const page = await this.listGrants({
+        objectId,
+        after,
+        limit: LIST_GRANTS_PAGE_LIMIT,
+      });
+      if (page.isErr()) {
+        return page;
+      }
+      grants.push(...page.value.grants);
+      after = page.value.nextAfter;
+    } while (after !== undefined);
+    return new Ok(grants);
   }
 
   async updateGrants({
@@ -373,12 +438,20 @@ export class DfsClient {
    */
   async apply({
     operations,
+    locks,
   }: {
     operations: DfsOperation[];
+    locks?: DfsObjectLock[];
   }): Promise<Result<DfsOperationBatch, DfsError>> {
     return this.callMatching(
       "Apply",
-      () => ({ operations: operations.map(encodeOperation) }),
+      () => ({
+        operations: operations.map(encodeOperation),
+        locks: locks?.map(({ objectId, lockId }) => ({
+          objectId: encodeObjectId(objectId),
+          lockId: encodeLockId(lockId),
+        })),
+      }),
       WireOperationBatchSchema,
       // The primary object, when returned, is the operation's object.
       ({ results }) =>

@@ -28,8 +28,8 @@ interface FakeNode {
   data: Buffer;
   // Undefined once cleared with an empty MIME type.
   mimeType: string | undefined;
-  // Set at creation only.
   xattrs: Record<string, Uint8Array>;
+  mtimeMs?: number;
   children: Map<string, DfsObjectId>;
   attrVersion: bigint;
   contentVersion: bigint;
@@ -110,7 +110,7 @@ export class InMemoryDfs implements DfsFileSystemClient {
       parentId,
       name,
       kind,
-      xattrs,
+      xattrs: { ...xattrs },
       data: Buffer.alloc(0),
       mimeType:
         mimeType === ""
@@ -161,10 +161,11 @@ export class InMemoryDfs implements DfsFileSystemClient {
       mode: 0o700,
       attrVersion: node.attrVersion,
       contentVersion: node.contentVersion,
+      mtimeMs: node.mtimeMs,
       grantsVersion: BigInt(1),
       storeVersion: BigInt(1),
       metadata: includeMetadata
-        ? { createdMs: 0, mimeType: node.mimeType, xattrs: node.xattrs }
+        ? { createdMs: 0, mimeType: node.mimeType, xattrs: { ...node.xattrs } }
         : undefined,
     };
   }
@@ -396,6 +397,16 @@ export class InMemoryDfs implements DfsFileSystemClient {
         }
         if (op.mimeType !== undefined) {
           node.mimeType = op.mimeType === "" ? undefined : op.mimeType;
+        }
+        for (const { name, value } of op.xattrs ?? []) {
+          if (value === undefined) {
+            delete node.xattrs[name];
+          } else {
+            node.xattrs[name] = Buffer.from(value);
+          }
+        }
+        if (op.mtimeMs !== undefined) {
+          node.mtimeMs = op.mtimeMs;
         }
         if (op.size !== undefined) {
           const resized = Buffer.alloc(op.size);

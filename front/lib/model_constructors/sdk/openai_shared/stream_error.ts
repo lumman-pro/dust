@@ -45,7 +45,7 @@ function getEffectiveHttpStatus(error: APIError): number | undefined {
  * statusless SSE errors, so expected flex capacity refusals do not count as provider failures.
  */
 /**
- * @cc [owner:aubin,label:error-handling] server-overloaded-is-provider-overload
+ * @cc [owner:aubin-tchoi,label:error-handling] server-overloaded-is-provider-overload
  * `server_is_overloaded` and `service_unavailable` API errors MUST map to a provider-attributed,
  * retryable `overloaded_error`, including statusless SSE errors, so the UI blames the provider.
  */

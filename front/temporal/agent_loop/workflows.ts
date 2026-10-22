@@ -196,7 +196,6 @@ async function runNonRetryableToolActivity(
       throw err;
     }
     if (!neverStarted) {
-      deprecatePatch("recover-completed-tool-activity");
       if (await checkToolActivityCompleted(execution, logContext)) {
         log.warn(
           "Recovered tool activity whose completion was lost.",

@@ -1,7 +1,6 @@
 import { FramePublicationResource } from "@app/lib/resources/frame_publication_resource";
 import { FrameToolAuthorizationResource } from "@app/lib/resources/frame_tool_authorization_resource";
 import { ConversationFactory } from "@app/tests/utils/ConversationFactory";
-import { FeatureFlagFactory } from "@app/tests/utils/FeatureFlagFactory";
 import { FileFactory } from "@app/tests/utils/FileFactory";
 import { createPrivateApiMockRequest } from "@app/tests/utils/generic_private_api_tests";
 import { FRAME_MANIFEST_FILE } from "@app/types/api/frame_manifest";
@@ -15,7 +14,6 @@ describe("POST /api/w/:wId/frames/:frameId/tool-authorizations", () => {
     const { auth, workspace, user } = await createPrivateApiMockRequest({
       role: "admin",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const conversation = await ConversationFactory.create(auth, {
       agentConfigurationId: "test-agent",
       messagesCreatedAt: [],
@@ -81,7 +79,6 @@ describe("POST /api/w/:wId/frames/:frameId/tool-authorizations", () => {
     const { auth, workspace } = await createPrivateApiMockRequest({
       role: "admin",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const conversation = await ConversationFactory.create(auth, {
       agentConfigurationId: "test-agent",
       messagesCreatedAt: [],

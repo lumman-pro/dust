@@ -32,6 +32,7 @@ import type { ModelId } from "@app/types/shared/model_id";
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
 import { normalizeError } from "@app/types/shared/utils/error_utils";
+import { removeNulls } from "@app/types/shared/utils/general";
 import type { LightWorkspaceType } from "@app/types/user";
 import assert from "assert";
 import type {
@@ -590,15 +591,15 @@ export class RunResource extends BaseResource<RunModel> {
       useWorkspaceCredentials: boolean;
     }
   ) {
-    const runUsage = this.tokenUsageToRunUsage(usage, modelId, {
+    const runUsages = this.tokenUsageToRunUsages(usage, modelId, {
       isBatch,
       region,
     });
-    if (!runUsage) {
+    if (runUsages.length === 0) {
       return;
     }
 
-    await this.recordRunUsage(auth, [runUsage], {
+    await this.recordRunUsage(auth, runUsages, {
       inferenceProvider,
       region,
       usageType,
@@ -607,7 +608,7 @@ export class RunResource extends BaseResource<RunModel> {
 
     // Return the computed cost so callers can meter it (e.g. the free-usage cost
     // cap). The result is undefined when the model is unknown and nothing was recorded.
-    return runUsage.costMicroUsd;
+    return sumCostMicroUsd(runUsages);
   }
 
   async markPendingRunUsageUnavailable(
@@ -700,20 +701,62 @@ export class RunResource extends BaseResource<RunModel> {
     modelId: ModelIdType,
     { region }: { region: Region | null }
   ): Promise<number | undefined> {
-    const runUsage = this.tokenUsageToRunUsage(usage, modelId, {
+    const runUsages = this.tokenUsageToRunUsages(usage, modelId, {
       isBatch: false,
       region,
     });
-    if (!runUsage) {
+    if (runUsages.length === 0) {
       return undefined;
     }
 
     const wasFinalized = await this.finalizePendingRunUsage(
       auth,
       runUsageModelId,
-      [runUsage]
+      runUsages
     );
-    return wasFinalized ? runUsage.costMicroUsd : undefined;
+    return wasFinalized ? sumCostMicroUsd(runUsages) : undefined;
+  }
+
+  /**
+   * @cc [owner:fontanierh,label:product] one-row-per-fallback-iteration
+   * Without `usage.usageIterations`, returns one row priced at `modelId`, exactly as before.
+   * With them, returns one row per iteration, priced at that iteration's model. An iteration
+   * whose model is null or not in our model config MUST be priced at `modelId` (logged when
+   * unknown), never dropped. `recordTokenUsage` and `finalizePendingTokenUsage` MUST return the
+   * sum of these rows' costs.
+   */
+  private tokenUsageToRunUsages(
+    usage: TokenUsage,
+    modelId: ModelIdType,
+    options: { isBatch: boolean; region: Region | null }
+  ): RunUsageType[] {
+    const { usageIterations } = usage;
+    if (!usageIterations || usageIterations.length === 0) {
+      const runUsage = this.tokenUsageToRunUsage(usage, modelId, options);
+      return runUsage ? [runUsage] : [];
+    }
+
+    return removeNulls(
+      usageIterations.map((iteration) => {
+        let iterationModelId = modelId;
+        if (iteration.model !== null) {
+          const iterationModelConfig = getModelConfigByModelId(iteration.model);
+          if (iterationModelConfig) {
+            iterationModelId = iterationModelConfig.modelId;
+          } else {
+            logger.warn(
+              { requestedModelId: modelId, iterationModelId: iteration.model },
+              "Unknown model in usage iteration, pricing at the requested model"
+            );
+          }
+        }
+        return this.tokenUsageToRunUsage(
+          iteration.usage,
+          iterationModelId,
+          options
+        );
+      })
+    );
   }
 
   private tokenUsageToRunUsage(
@@ -814,4 +857,8 @@ function addCreatedAtClause(where: WhereOptions<RunModel>) {
     ...where,
     createdAt: { [Op.gt]: getRunExecutionsDeletionCutoffDate() },
   };
+}
+
+function sumCostMicroUsd(usages: RunUsageType[]): number {
+  return usages.reduce((total, usage) => total + usage.costMicroUsd, 0);
 }

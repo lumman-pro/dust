@@ -1,5 +1,6 @@
 import { exportInteractiveContentFileAsPdf } from "@app/lib/api/files/pdf_export";
 import { assertNever } from "@app/types/shared/utils/assert_never";
+import { pdfAttachmentResponse } from "@front-api/lib/file_serving";
 import { workspaceApp } from "@front-api/middlewares/ctx";
 import { apiError } from "@front-api/middlewares/utils";
 import { validate } from "@front-api/middlewares/validator";
@@ -69,20 +70,7 @@ app.post(
     }
 
     const { buffer, fileName } = result.value;
-    // Sanitize filename for Content-Disposition: use ASCII-only fallback for
-    // `filename` and RFC 5987 `filename*` for the full UTF-8 name.
-    const asciiFallback = fileName.replace(/[^\x20-\x7E]/g, "_");
-    const encodedName = encodeURIComponent(fileName);
-
-    // Convert Node `Buffer` to `Uint8Array` so it satisfies `BodyInit`.
-    return new Response(new Uint8Array(buffer), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodedName}`,
-        "Content-Length": String(buffer.length),
-      },
-    });
+    return pdfAttachmentResponse(buffer, fileName);
   }
 );
 

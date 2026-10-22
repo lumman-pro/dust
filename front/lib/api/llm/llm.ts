@@ -32,7 +32,7 @@ import type {
   BatchResultWithRunIds,
   BatchStatus,
 } from "@app/lib/api/llm/types/batch";
-import type { LLMEvent } from "@app/lib/api/llm/types/events";
+import type { LLMEvent, TokenUsage } from "@app/lib/api/llm/types/events";
 import { EventError } from "@app/lib/api/llm/types/events";
 import type {
   LLMClientMetadata,
@@ -40,7 +40,10 @@ import type {
   LLMStreamMetadata,
   LLMStreamParameters,
 } from "@app/lib/api/llm/types/options";
-import { emitTokenUsageMetrics } from "@app/lib/api/llm/usage_metrics";
+import {
+  emitFallbackMetrics,
+  emitTokenUsageMetrics,
+} from "@app/lib/api/llm/usage_metrics";
 import { isProgrammaticUsageFromContext } from "@app/lib/api/programmatic_usage/common";
 import { usesWorkspaceProvidedCredentials } from "@app/lib/api/provider_credentials";
 import type { Authenticator } from "@app/lib/auth";
@@ -381,10 +384,13 @@ export abstract class LLM<
         // the base class covers both the new router and the legacy clients.
         if (currentEvent.type === "token_usage") {
           this.serviceTier = currentEvent.content.serviceTier;
-          emitTokenUsageMetrics(currentEvent.content, [
+          const usageTags = [
             ...metricTags,
             ...serviceTierTags(this.serviceTier),
-          ]);
+          ];
+          emitTokenUsageMetrics(currentEvent.content, usageTags);
+          emitFallbackMetrics(currentEvent.content, usageTags);
+          traceFallback(this.generation, currentEvent.content);
         }
 
         if (currentEvent.type === "interaction_id") {
@@ -425,6 +431,10 @@ export abstract class LLM<
             ? "flex_unavailable"
             : currentEvent.content.type;
           const errorSource = currentEvent.content.errorSource;
+          // A refusal without a category reports "none" so it stays filterable.
+          const refusalCategory = currentEvent.content.refusal
+            ? (currentEvent.content.refusal.category ?? "none")
+            : null;
 
           this.emitStreamAttemptTelemetry({
             outcome: "error",
@@ -440,6 +450,9 @@ export abstract class LLM<
               "isError:true",
               `errorType:${errorType}`,
               `errorSource:${errorSource}`,
+              ...(refusalCategory
+                ? [`refusalCategory:${refusalCategory}`]
+                : []),
             ],
           });
 
@@ -455,6 +468,7 @@ export abstract class LLM<
               traceId: this.traceId,
               errorType,
               errorSource,
+              ...(refusalCategory ? { refusalCategory } : {}),
               ...timingLogFields,
             },
             "LLM Error"
@@ -481,6 +495,9 @@ export abstract class LLM<
             region: this.metadata.region,
             context: this.context,
             traceId: this.traceId,
+            ...(tokenUsage?.servedModel && {
+              servedModel: tokenUsage.servedModel,
+            }),
             ...timingLogFields,
           };
 
@@ -815,12 +832,17 @@ export abstract class LLM<
 
         if (event.type === "token_usage") {
           emitTokenUsageMetrics(event.content, metricTags);
+          emitFallbackMetrics(event.content, metricTags);
+          traceFallback(generation, event.content);
         }
 
         if (event.type === "error") {
           hasError = true;
           const errorType = event.content.type;
           const errorSource = event.content.errorSource;
+          const refusalCategory = event.content.refusal
+            ? (event.content.refusal.category ?? "none")
+            : null;
           statsDMetrics.increment("llm_error.count", 1, [
             ...metricTags,
             `error_type:${errorType}`,
@@ -831,6 +853,9 @@ export abstract class LLM<
               "isError:true",
               `errorType:${errorType}`,
               `errorSource:${errorSource}`,
+              ...(refusalCategory
+                ? [`refusalCategory:${refusalCategory}`]
+                : []),
             ],
           });
           logger.error(
@@ -845,6 +870,7 @@ export abstract class LLM<
               traceId,
               errorType,
               errorSource,
+              ...(refusalCategory ? { refusalCategory } : {}),
               ...llmAttemptLogFields({
                 requestedReasoningEffort: this.reasoningEffort,
                 surface: "batch",
@@ -1018,4 +1044,19 @@ export abstract class LLM<
       userMessageOrigin
     );
   }
+}
+
+// When another model answered, show it on the trace next to the requested model
+// (the generation `model`). Does nothing when the requested model answered.
+function traceFallback(
+  generation: LangfuseGeneration,
+  usage: TokenUsage
+): void {
+  if (usage.servedModel === undefined) {
+    return;
+  }
+  generation.updateTrace({
+    metadata: { servedModel: usage.servedModel },
+    tags: ["fallback:true", `servedModel:${usage.servedModel}`],
+  });
 }

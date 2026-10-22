@@ -8,6 +8,7 @@ export class CollabAgentFactory {
       name: "Writer",
       userId: "usr_ada",
       userName: "Ada",
+      commentId: null,
       ...overrides,
     };
   }

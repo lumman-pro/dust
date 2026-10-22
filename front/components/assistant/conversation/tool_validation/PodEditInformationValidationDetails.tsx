@@ -1,7 +1,11 @@
 import { usePodLabel } from "@app/components/assistant/conversation/tool_validation/usePodLabel";
 import { useConversation } from "@app/hooks/conversations/useConversation";
+import type { InternalMCPToolInputType } from "@app/lib/actions/mcp_internal_actions/constants";
 import { parsePodConfigurationURI } from "@app/lib/actions/mcp_internal_actions/pod_configuration_uri";
-import type { PodManagerEditInformationInput } from "@app/lib/api/actions/servers/pod_manager/types";
+import type {
+  EDIT_INFORMATION_TOOL_NAME,
+  POD_MANAGER_SERVER_NAME,
+} from "@app/lib/api/actions/servers/pod_manager/metadata";
 import { useSpaceInfo } from "@app/lib/swr/spaces";
 import type { LightWorkspaceType } from "@app/types/user";
 import { Chip } from "@dust-tt/sparkle";
@@ -11,7 +15,10 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { useMemo } from "react";
 
 interface PodEditInformationValidationDetailsProps {
-  input: PodManagerEditInformationInput;
+  input: InternalMCPToolInputType<
+    typeof POD_MANAGER_SERVER_NAME,
+    typeof EDIT_INFORMATION_TOOL_NAME
+  >;
   owner: LightWorkspaceType;
   conversationId?: string | null;
 }
@@ -28,19 +35,6 @@ function formatAccess(access: "restricted" | "open", t: Translate): string {
   return access === "open"
     ? t(msg({ message: "Open", context: "pod access" }))
     : t(msg({ message: "Restricted", context: "pod access" }));
-}
-
-function formatPinnedFramePath(
-  path: string | null | undefined,
-  t: Translate
-): string {
-  if (path === null) {
-    return t(msg`Unpinned`);
-  }
-  if (path === undefined) {
-    return "—";
-  }
-  return path;
 }
 
 function ChangeRow({ label, before, after }: ChangeRowProps) {
@@ -142,16 +136,6 @@ export function PodEditInformationValidationDetails({
           ? loadingLabel
           : "—",
       after: formatAccess(input.access, t),
-    });
-  }
-
-  if (input.pinnedFramePath !== undefined) {
-    changes.push({
-      label: t`Pinned frame`,
-      before: isCurrentPodInfoLoading
-        ? loadingLabel
-        : formatPinnedFramePath(spaceInfo?.pinnedFramePath ?? undefined, t),
-      after: formatPinnedFramePath(input.pinnedFramePath, t),
     });
   }
 

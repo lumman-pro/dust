@@ -14,6 +14,8 @@ const DOCUMENT_NAME = "w_1:notes.md";
 const USER = { id: "u_1", name: "Daph", color: "#0ea5e9" };
 // Stable across renders, as the file panel's is: a new one would start a new connection.
 const getTicket = async () => "ticket";
+// The hook reads the time just before each log: a busy runner can pause between the two.
+const LOG_DELAY_TOLERANCE_MS = 50;
 
 // Hocuspocus reads a port of 0 as none and falls back to 80, so the free port goes through the
 // configuration. No signal handlers in tests.
@@ -214,7 +216,7 @@ describe("useCollabConnection", () => {
       expect(elapsedMs).toBeGreaterThanOrEqual(500);
       expect(info.mock.calls[1][0]).toMatchObject({
         offlineMs: expect.toSatisfy(
-          (ms: number) => Math.abs(ms - elapsedMs) <= 1
+          (ms: number) => Math.abs(ms - elapsedMs) <= LOG_DELAY_TOLERANCE_MS
         ),
       });
       unmount();

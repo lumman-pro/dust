@@ -45,6 +45,9 @@ const handlers: ToolHandlers<typeof FRESHSERVICE_TOOLS_METADATA> = {
       if (filter?.filter_type) {
         params.append("filter", filter.filter_type);
       }
+      if (filter?.workspace_id !== undefined) {
+        params.append("workspace_id", filter.workspace_id.toString());
+      }
 
       const result = await client.request<{ tickets: FreshserviceTicket[] }>(
         `tickets?${params.toString()}`

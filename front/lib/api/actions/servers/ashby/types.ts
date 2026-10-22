@@ -412,31 +412,6 @@ export type AshbyReferralFormInfo = z.infer<typeof AshbyReferralFormInfoSchema>;
 
 export const AshbyReferralFormInfoResponseSchema = AshbyReferralFormInfoSchema;
 
-// Referral tool input (as sent by the agent to the create_referral tool)
-
-export const AshbyCreateReferralInputSchema = z.object({
-  fieldSubmissions: z
-    .array(
-      z.object({
-        title: z
-          .string()
-          .describe("The human-readable field title (e.g. 'Candidate Name')."),
-        value: z
-          .union([z.string(), z.number(), z.boolean()])
-          .describe("The value for this field."),
-      })
-    )
-    .describe("Array of field values keyed by their human-readable title."),
-});
-
-type AshbyCreateReferralInput = z.infer<typeof AshbyCreateReferralInputSchema>;
-
-export function isAshbyCreateReferralInput(
-  input: Record<string, unknown>
-): input is AshbyCreateReferralInput {
-  return AshbyCreateReferralInputSchema.safeParse(input).success;
-}
-
 // Referral create
 
 export const AshbyFieldSubmissionSchema = z.object({
@@ -547,27 +522,6 @@ export const AshbyJobPostingInfoResponseSchema =
 const AshbyJobPostingWorkplaceTypeSchema = z
   .enum(["OnSite", "Hybrid", "Remote"])
   .nullable();
-
-// Tool input schema (as sent by the agent to the update_job_posting tool).
-const AshbyUpdateJobPostingInputSchema = z.object({
-  jobPostingId: z.string(),
-  jobId: z.string(),
-  title: z.string().optional(),
-  descriptionHtml: z.string().optional(),
-  workplaceType: AshbyJobPostingWorkplaceTypeSchema.optional(),
-  suppressDescriptionOpening: z.boolean().optional(),
-  suppressDescriptionClosing: z.boolean().optional(),
-});
-
-type AshbyUpdateJobPostingInput = z.infer<
-  typeof AshbyUpdateJobPostingInputSchema
->;
-
-export function isAshbyUpdateJobPostingInput(
-  input: Record<string, unknown>
-): input is AshbyUpdateJobPostingInput {
-  return AshbyUpdateJobPostingInputSchema.safeParse(input).success;
-}
 
 // API request schema (transformed from tool input).
 export const AshbyJobPostingUpdateRequestSchema = z.object({

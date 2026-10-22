@@ -18,6 +18,30 @@ export type SandboxFunctionEventScope = {
   invocationId: string;
 };
 
+/** True when an event carries a sandbox-function invocation scope (e.g. bridged onto a conversation message channel). */
+export function hasSandboxFunctionEventScope(
+  event: object
+): event is object & SandboxFunctionEventScope {
+  return (
+    "sandboxFunctionId" in event &&
+    typeof event.sandboxFunctionId === "string" &&
+    "invocationId" in event &&
+    typeof event.invocationId === "string"
+  );
+}
+
+/** Scope fields to spread onto a conversation blocked-action, or `{}` when absent. */
+export function sandboxFunctionEventScopeFields(
+  event: object
+): SandboxFunctionEventScope | Record<string, never> {
+  return hasSandboxFunctionEventScope(event)
+    ? {
+        sandboxFunctionId: event.sandboxFunctionId,
+        invocationId: event.invocationId,
+      }
+    : {};
+}
+
 interface ToolExecutionBase<
   T extends MCPValidationMetadataType = MCPValidationMetadataType,
 > {

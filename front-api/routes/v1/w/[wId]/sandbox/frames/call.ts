@@ -62,6 +62,14 @@ app.post(
     const result = await callFrameFunctionFromSource(auth, {
       conversation: conversation.toJSON(),
       ...ctx.req.valid("json"),
+      context: {
+        conversationCaller: {
+          conversationId: claims.cId,
+          agentMessageId: claims.mId,
+          configurationId: claims.aId,
+          parentActionId: claims.actionId,
+        },
+      },
     });
     if (result.isErr()) {
       const error = frameFunctionCallApiError(result.error);

@@ -8,11 +8,11 @@ Status: proposal.
 
 ## Three rules
 
-1. **Business logic lives in `front`, transport in `front-api`** (`one-way-front-dependency`,
-   `thin-api-handlers`). Access rules, Markdown and Yjs conversions, comment logic, loading and
-   saving files: `front/lib/api/*`, so workers, scripts and tests can reuse them. What only makes
-   sense inside the collab server process (Hocuspocus, its connections, the HTTP routes) lives in
-   `front-api/lib/collab/`.
+1. **What only the collab server runs lives in `front-api/collab/`, what the rest of the app
+   also uses lives in `front`** (`collab-server-folder`, `one-way-front-dependency`). The collab
+   server's folder shows the whole server: Hocuspocus, its connections and HTTP routes, but also
+   loading and saving files, the Yjs state kept in Redis and comment commands. Access rules, the
+   Yjs document format, tickets and front's client to the server stay in `front/lib/api/*`.
 2. **`Document*` is about a document, in any mode. `Collab*` only exists live. Never both.**
    `DocumentEditor` is the editor of a document, `DocumentComments` its comments,
    `DocumentImage` an image in it, `DfmDocument` a document parsed, `lib/api/documents/` what
@@ -47,36 +47,42 @@ Hocuspocus's own names (`Document`, `documentName`, `onStoreDocument`) stay wher
 
 ## Layout
 
-### The collab server: `front-api/lib/collab/`
+### The collab server: `front-api/collab/`
 
-One Node process, started by `front-api/collab_server.ts`, built from front-api's code. On one port
-it serves browsers' WebSockets through Hocuspocus and front's internal HTTP calls.
+One Node process, started by `front-api/collab/server.ts`, built from front-api's code. On one port
+it serves browsers' WebSockets through Hocuspocus and front's internal HTTP calls. All of its own
+code is in `front-api/collab/`; front-api's own server never imports from it.
 
 ```
-front-api/lib/collab/
+front-api/collab/
 ├── README.md                  this map
-├── hocuspocus.ts              builds Hocuspocus; thin hooks that call session.ts;
-│                              parses and answers browsers' messages; shutdown
-├── session.ts                 per open file: state, lifecycle, saving, the mutation queue,
-│                              reading and writing the source, applying comment requests
-├── connection_access.ts       who may stay connected: at connect, then every 5 min
-├── internal_routes.ts         the HTTP routes only front can call
-└── collab_access_errors.ts    CollabAccessError → HTTP errors, for any route
+├── server.ts                  starts the process: Hocuspocus, WebSocket upgrades, HTTP routes
+└── lib/
+    ├── hocuspocus.ts          builds Hocuspocus; thin hooks that call session.ts;
+    │                          parses and answers browsers' messages; shutdown
+    ├── session.ts             per open file: state, lifecycle, saving, the mutation queue,
+    │                          reading and writing the source, applying comment requests
+    ├── connection_access.ts   who may stay connected: at connect, then every 5 min
+    ├── session_file.ts        load a session from its file, save it back
+    ├── ydoc_state.ts          the Yjs state kept in Redis between saves
+    ├── comments.ts            apply a comment request, dispatch mentions
+    └── internal_routes.ts     the HTTP routes only front can call
+
+front-api/lib/collab_access_errors.ts   CollabAccessError → HTTP errors, shared with front-api's
+                                        collab ticket route
 ```
 
 Session operations return `Result`; the hooks turn errors into throws, the only place Hocuspocus
 needs them (`hocuspocus-hook-protocol`). `session.ts` never imports `hocuspocus.ts`: operations
 take the Hocuspocus instance as a parameter.
 
-### Collab business logic: `front/lib/api/collab/`
+### Collab logic the rest of the app uses: `front/lib/api/collab/`
 
 ```
 front/lib/api/collab/
 ├── access.ts                  CollabAccess: check, read-only check, recheck
-├── session_file.ts            load a session from its file, save it back
-├── comments.ts                apply a comment request, dispatch mentions
 ├── tickets.ts                 mint and redeem tickets
-├── ydoc.ts                    source ↔ Y.Doc
+├── ydoc.ts                    source ↔ Y.Doc, the format the editor binds to
 ├── client.ts                  front's HTTP client to the collab server
 └── write_through_session.ts   write a file through its session, with retries
 ```

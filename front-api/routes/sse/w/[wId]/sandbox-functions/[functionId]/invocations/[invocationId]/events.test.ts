@@ -140,9 +140,9 @@ describe.each(["", "?transport=sse", "/poll", "?transport=poll"])(
       ).not.toHaveBeenCalled();
     });
 
-    it("requires Frames v2 to be enabled", async () => {
+    it("requires Frame functions to be enabled", async () => {
       const { workspace, sandboxFunction, invocation } =
-        await makeTestFrameInvocation({ enableFramesV2: false });
+        await makeTestFrameInvocation({ enableFramesV2Functions: false });
 
       const response = await getEvents({
         workspaceId: workspace.sId,

@@ -24,6 +24,8 @@ class RedisMock {
   readonly streamClient = this.createStatefulClient(this.hashStore);
   // getRedisCacheClient / runOnRedisCache: one shared client, as in production.
   readonly cacheClient = this.createStatefulClient(this.hashStore);
+  // getRedisCollabClient / runOnRedisCollab: one shared client, as in production.
+  readonly collabClient = this.createStatefulClient(this.hashStore);
 
   reset(): void {
     this.stringStore.clear();
@@ -63,6 +65,7 @@ class RedisMock {
         .fn()
         .mockResolvedValue(this.createStatelessClient()),
       getRedisCacheClient: vi.fn().mockResolvedValue(this.cacheClient),
+      getRedisCollabClient: vi.fn().mockResolvedValue(this.collabClient),
       runOnRedis: vi
         .fn()
         .mockImplementation(
@@ -74,6 +77,12 @@ class RedisMock {
         .mockImplementation(
           async (_opts: unknown, fn: (client: unknown) => Promise<unknown>) =>
             fn(this.cacheClient)
+        ),
+      runOnRedisCollab: vi
+        .fn()
+        .mockImplementation(
+          async (_opts: unknown, fn: (client: unknown) => Promise<unknown>) =>
+            fn(this.collabClient)
         ),
       closeRedisClients: vi.fn().mockResolvedValue(undefined),
       REDIS_CACHE_CONCURRENCY: 32,
@@ -109,6 +118,18 @@ class RedisMock {
           this.stringStore.delete(key);
           return null;
         }
+        return entry.value;
+      }),
+      getEx: vi.fn(async (key: string, opts: { EX: number }) => {
+        const entry = this.stringStore.get(key);
+        if (
+          !entry ||
+          (entry.expiresAtMs > 0 && Date.now() > entry.expiresAtMs)
+        ) {
+          this.stringStore.delete(key);
+          return null;
+        }
+        entry.expiresAtMs = Date.now() + opts.EX * 1000;
         return entry.value;
       }),
       getDel: vi.fn(async (key: string) => {

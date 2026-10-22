@@ -142,6 +142,14 @@ const InvocationDataBaseSchema = z.object({
   context: z
     .object({
       timezone: z.string().optional(),
+      conversationCaller: z
+        .object({
+          conversationId: z.string(),
+          agentMessageId: z.string(),
+          configurationId: z.string(),
+          parentActionId: z.string().optional(),
+        })
+        .optional(),
     })
     .optional(),
   result: z.unknown().optional(),
@@ -1137,6 +1145,7 @@ export class SandboxFunctionInvocationResource extends BaseResource<SandboxFunct
     transaction?: Transaction
   ): Promise<SandboxFunctionInvocationResource> {
     const resource = await withTransaction(async (t) => {
+      const conversationCaller = context?.conversationCaller;
       const invocation = await this.model.create(
         {
           workspaceId: auth.getNonNullableWorkspace().id,
@@ -1149,6 +1158,10 @@ export class SandboxFunctionInvocationResource extends BaseResource<SandboxFunct
           // The final path contains the database-generated invocation sId. This placeholder is
           // replaced in the same transaction before the row becomes visible.
           gcsPath: "",
+          // Denormalized for conversation list-blocked without reading the GCS blob.
+          conversationId: conversationCaller?.conversationId ?? null,
+          agentMessageId: conversationCaller?.agentMessageId ?? null,
+          agentConfigurationId: conversationCaller?.configurationId ?? null,
         },
         { transaction: t }
       );

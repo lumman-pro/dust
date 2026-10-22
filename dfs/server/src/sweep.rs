@@ -6,7 +6,10 @@ use tokio::time::sleep;
 
 use crate::{
     clock,
-    storage::{self, fdb, receipt, resources::session::SessionResource},
+    storage::{
+        self, fdb, receipt,
+        resources::{object::ObjectResource, session::SessionResource},
+    },
 };
 
 const STORAGE_SWEEP_MIN_INTERVAL_MS: u64 = 1_000;
@@ -16,8 +19,8 @@ const SESSION_SWEEP_GRACE_PERIOD_MS: u64 = 60_000;
 /**
  * @cc [owner:spolu,label:backend;concurrency] storage-sweep-scheduling
  * Every pass, including the first, MUST wait a fresh random delay between one and sixty seconds
- * before accessing FDB. Sessions and receipts MUST share this delay and the pass timestamp.
- * Each cleanup MUST run even if the other fails; failures MUST be logged and wait until the next
+ * before accessing FDB. Sessions, receipts, and locks MUST share this delay and the pass timestamp.
+ * Each cleanup MUST run even if another fails; failures MUST be logged and wait until the next
  * pass before retrying.
  */
 pub(crate) async fn sweep_expired_storage() {
@@ -48,10 +51,14 @@ async fn sweep() -> Result<()> {
     sleep(Duration::from_millis(jitter_ms)).await;
 
     let now_ms = clock::now_ms()?;
-    let (sessions, receipts) = tokio::join!(
+    let (sessions, receipts, locks) = tokio::join!(
         sweep_expired_sessions(now_ms),
         sweep_expired_receipts(now_ms),
+        sweep_expired_locks(now_ms),
     );
+    if let Err(error) = locks {
+        tracing::error!(error = format!("{error:#}"), "expired lock cleanup failed");
+    }
     if let Err(error) = sessions {
         tracing::error!(
             error = format!("{error:#}"),
@@ -111,6 +118,18 @@ async fn sweep_expired_receipts(now_ms: u64) -> Result<()> {
         deleted_receipts += deleted;
         if deleted == 0 {
             tracing::info!(deleted_receipts, "expired receipt cleanup completed");
+            return Ok(());
+        }
+    }
+}
+
+async fn sweep_expired_locks(now_ms: u64) -> Result<()> {
+    loop {
+        let processed = fdb::with_transaction(|tx| async move {
+            ObjectResource::clear_expired_locks(&tx, now_ms).await
+        })
+        .await?;
+        if processed == 0 {
             return Ok(());
         }
     }

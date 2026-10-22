@@ -437,7 +437,7 @@ export function buildAuditActor(auth: Authenticator): AuditLogActor {
   };
 }
 
-type AuditTargetType =
+export type AuditTargetType =
   | "workspace"
   | "user"
   | "agent"

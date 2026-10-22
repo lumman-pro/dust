@@ -1,3 +1,4 @@
+import type { LightMCPToolConfigurationType } from "@app/lib/actions/mcp";
 import type { ToolHandlerExtra } from "@app/lib/actions/mcp_internal_actions/tool_definition";
 import type { ToolExecutionStatus } from "@app/lib/actions/statuses";
 import type { AgentLoopRunContext, StepContext } from "@app/lib/actions/types";
@@ -6,11 +7,13 @@ import type { AgentMessageFeedbackDirection } from "@app/lib/api/assistant/conve
 import { Authenticator } from "@app/lib/auth";
 import type { ConversationResource } from "@app/lib/resources/conversation_resource";
 import type { AgentMCPActionWithOutputType } from "@app/types/actions";
+import type { AgentConfigurationType } from "@app/types/assistant/agent";
 import type {
   AgentMessageType,
   LightAgentMessageWithActionsType,
   LightConversationType,
   MessageFeedback,
+  UserMessageType,
   UserMessageTypeWithContentFragments,
 } from "@app/types/assistant/conversation";
 import type { MembershipRoleType } from "@app/types/memberships";
@@ -24,7 +27,19 @@ import { SpaceFactory } from "./SpaceFactory";
 export function makeExtra(
   auth: Authenticator,
   conversation: ConversationResource,
-  { stepContext }: { stepContext?: StepContext } = {}
+  {
+    stepContext,
+    agentConfiguration,
+    agentMessage,
+    userMessage,
+    toolConfiguration,
+  }: {
+    stepContext?: StepContext;
+    agentConfiguration?: AgentConfigurationType;
+    agentMessage?: AgentMessageType;
+    userMessage?: UserMessageType;
+    toolConfiguration?: LightMCPToolConfigurationType;
+  } = {}
 ): ToolHandlerExtra & { runContext: AgentLoopRunContext } {
   const runContext = {
     contextType: "agent_loop",
@@ -34,6 +49,10 @@ export function makeExtra(
       owner: auth.getNonNullableWorkspace(),
     },
     stepContext,
+    agentConfiguration,
+    agentMessage,
+    userMessage,
+    toolConfiguration,
   } as unknown as AgentLoopRunContext;
   return { auth, runContext } as unknown as ToolHandlerExtra & {
     runContext: AgentLoopRunContext;
@@ -216,6 +235,7 @@ export function mockAgentMessage(
     activitySteps: [],
     resolvedModel: null,
     modelResolutionMethod: null,
+    fallbackModelId: null,
     actions: (params.actions ?? []).map(mockAction),
     feedback: (params.feedback ?? []).map((f) => ({
       thumbDirection: f.direction,
@@ -285,6 +305,7 @@ export function mockFullAgentMessage(
     modelInteractionDurationMs: null,
     resolvedModel: null,
     modelResolutionMethod: null,
+    fallbackModelId: null,
     richMentions: [],
     completionDurationMs: null,
     reactions: [],

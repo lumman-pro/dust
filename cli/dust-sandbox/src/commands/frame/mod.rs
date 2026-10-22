@@ -1,4 +1,6 @@
 mod call;
+mod draft_mode;
+mod make_live;
 mod publish;
 mod share_link;
 
@@ -8,6 +10,8 @@ use anyhow::{bail, Context};
 use clap::Subcommand;
 
 pub use call::run as cmd_frame_call;
+pub use draft_mode::run as cmd_frame_draft_mode;
+pub use make_live::run as cmd_frame_make_live;
 pub use publish::run as cmd_frame_publish;
 pub use share_link::run as cmd_frame_share_link;
 
@@ -37,6 +41,18 @@ pub enum FrameCommand {
         /// Legacy Frame entry file this v2 manifest replaces, keeping its ID and share link
         #[arg(long, value_name = "LEGACY_ENTRY")]
         replaces: Option<PathBuf>,
+    },
+    /// Turn a published Frame's draft mode on: until it is validated with `dsbx frame make-live`,
+    /// every publish shows in the conversation's Frame panel, not on the share link
+    DraftMode {
+        /// Absolute path to the Frame's v2 manifest under /files
+        manifest: PathBuf,
+    },
+    /// Validate a Frame's draft: the share link starts serving its latest version, whoever
+    /// published it, and the Frame leaves draft mode
+    MakeLive {
+        /// Absolute path to the Frame's v2 manifest under /files
+        manifest: PathBuf,
     },
 }
 

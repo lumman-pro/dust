@@ -33,6 +33,7 @@ import { FramePublicationResource } from "@app/lib/resources/frame_publication_r
 import type { FramePublicationFunctionDefinition } from "@app/lib/resources/sandbox_function_resource";
 import { SandboxFunctionResource } from "@app/lib/resources/sandbox_function_resource";
 import { concurrentExecutor } from "@app/lib/utils/async_utils";
+import { checkValueAgainstJsonSchema } from "@app/lib/utils/json_schemas";
 import { withTransaction } from "@app/lib/utils/sql_utils";
 import logger from "@app/logger/logger";
 import type { FrameManifest } from "@app/types/api/frame_manifest";
@@ -95,6 +96,7 @@ export class FramePublicationError extends Error {
       | "invalid_function_reference"
       | "invalid_manifest"
       | "invalid_publication"
+      | "invalid_schedule"
       | "invalid_source"
       | "invalid_tailwind"
       | "allowlist_failed"
@@ -146,8 +148,7 @@ type CheckPublicFrameFunctionInput = {
 /**
  * @cc [owner:achilleburah,label:product] public-function-publish-requirements
  * A function declaring the `public` user identity policy MUST be refused with
- * `invalid_function_artifact` unless public Frame functions are enabled for the workspace (see
- * isFramesV2PublicFunctionsEnabled) and its manifest declares the `fast` execution mode. A function
+ * `invalid_function_artifact` unless its manifest declares the `fast` execution mode. A function
  * with any other policy MUST pass.
  */
 /**
@@ -219,6 +220,12 @@ function sourceContentByPath(
   return sourceByPath;
 }
 
+/**
+ * @cc [owner:smb2268,label:product] schedule-input-matches-function-contract
+ * Every schedule's `input` MUST validate against the generated `inputSchema` of the function that
+ * declares it. A mismatch MUST fail with `invalid_schedule` naming the function and the schedule,
+ * before any publication object or row is written.
+ */
 export function buildFramePublicationContracts({
   functionArtifacts,
   manifest,
@@ -370,6 +377,23 @@ export function buildFramePublicationContracts({
       );
     }
     requiredTools.push(...toolCalls);
+
+    for (const schedule of fn.schedules) {
+      const scheduleInput = checkValueAgainstJsonSchema(
+        artifact.inputSchema,
+        schedule.input
+      );
+      if (scheduleInput.isErr()) {
+        return new Err(
+          new FramePublicationError(
+            "invalid_schedule",
+            `Frame function "${fn.name}" schedule (cron "${schedule.cron}", ${schedule.timezone}): ` +
+              `input does not match the function's input schema: ${scheduleInput.error}`
+          )
+        );
+      }
+    }
+
     functions.push({
       name: fn.name,
       bundleSha256: sha256(artifact.bundleCode),
@@ -911,6 +935,39 @@ export async function activateFramePublication(
   return new Ok(undefined);
 }
 
+/**
+ * When the Frame is shared publicly, refuses a publication whose functions are all private, per
+ * [public-frame-needs-public-function]. Function policies are only known once the publication is
+ * built, so this runs after the build. The previous publication stays live.
+ */
+export async function checkFramePublicFunctionSharing(
+  frame: FileResource,
+  functions: FramePublicationDescriptor["functions"]
+): Promise<Result<void, FramePublicationError>> {
+  const declaresOnlyPrivateFunctions =
+    functions.length > 0 &&
+    !functions.some((fn) => fn.userIdentity === "public");
+  if (!declaresOnlyPrivateFunctions) {
+    return new Ok(undefined);
+  }
+
+  const shareInfo = await frame.getShareInfo();
+  if (shareInfo?.scope !== "public") {
+    return new Ok(undefined);
+  }
+
+  return new Err(
+    new FramePublicationError(
+      "sharing_conflict",
+      "Not published: this Frame is shared publicly, and none of its functions declares " +
+        '`userIdentity: "public"`, so visitors on its link could not call any of them. The ' +
+        "current version stays live. Do not retry this publish unchanged. Tell the user to make " +
+        "at least one function public, or to restrict the Frame's sharing to workspace members " +
+        "in the Dust UI."
+    )
+  );
+}
+
 export async function publishFramePublication(
   auth: Authenticator,
   {
@@ -974,6 +1031,15 @@ export async function publishFramePublication(
       return stored;
     }
     const { publicationId, descriptor } = stored.value;
+
+    const publicSharing = await checkFramePublicFunctionSharing(
+      freshFrame,
+      descriptor.functions
+    );
+    if (publicSharing.isErr()) {
+      return publicSharing;
+    }
+
     const livePublicationId = freshFrame.useCaseMetadata?.activePublicationId;
     // A Frame with nothing live has nothing to protect: its first publish always goes live.
     const publishesDraft = mode === "draft" && livePublicationId !== undefined;

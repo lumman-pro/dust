@@ -177,6 +177,10 @@ msgstr "Impossible de charger les filtres."
 msgid "Select all"
 msgstr "Tout sélectionner"
 
+#: front/components/workspace/analytics/UsageFilterPanel.tsx
+msgid "Revoked"
+msgstr "Révoqué"
+
 #: front/components/workspace/analytics/UsageFilterSummary.tsx
 #: front/components/workspace/analytics/automationsFilter.ts
 msgid "Agent"

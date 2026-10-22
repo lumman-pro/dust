@@ -448,6 +448,13 @@ export function UsageFilterPanelView({
                   renderIcon={(option) => (
                     <UsageFilterOptionIcon option={option} />
                   )}
+                  renderBadge={(option) =>
+                    option.kind === "member" && option.revoked ? (
+                      <span className="shrink-0 text-xs font-normal text-faint">
+                        <Trans>Revoked</Trans>
+                      </span>
+                    ) : null
+                  }
                   status={
                     isFacetsLoading
                       ? "loading"

@@ -230,10 +230,10 @@ describe("runConsumptionExportBucketActivity", () => {
     const csv = fileStorageMock.getObject(`${tmpPrefix}0.csv`) ?? "";
     expect(csv).not.toContain("completedAt,conversationId");
     expect(csv).toContain(
-      "2026-08-01T00:00:00.000Z,conv1,space1,msg1,llm,agent1,'@dust"
+      "2026-08-01T00:00:00.000Z,conv1,space1,,msg1,llm,agent1,'@dust"
     );
     expect(csv).toContain(
-      "2026-08-01T00:00:00.000Z,conv1,space1,msg1,tool,agent1,'@dust"
+      "2026-08-01T00:00:00.000Z,conv1,space1,,msg1,tool,agent1,'@dust"
     );
 
     expect(notifyConsumptionExportReady).not.toHaveBeenCalled();

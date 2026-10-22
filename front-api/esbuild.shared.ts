@@ -51,7 +51,7 @@ export const BUILD_TARGETS: BuildTarget[] = [
   { name: "migrate", entry: "scripts/migrate.ts", outfile: "dist/migrate.js" },
   {
     name: "collab",
-    entry: "collab_server.ts",
+    entry: "collab/server.ts",
     outfile: "dist/collab_server.js",
   },
 ];

@@ -1,7 +1,7 @@
 import { ActionDetailsWrapper } from "@app/components/actions/ActionDetailsWrapper";
 import type { ToolExecutionDetailsProps } from "@app/components/actions/mcp/details/types";
+import { validateToolInputs } from "@app/lib/actions/mcp_internal_actions/constants";
 import { isTextContent } from "@app/lib/actions/mcp_internal_actions/output_schemas";
-import { UserQuestionSchema } from "@app/lib/actions/types";
 import { parseUserQuestionAnswer } from "@app/lib/actions/user_question";
 import { Check, Icon, MessageCircle01 } from "@dust-tt/sparkle";
 import { Trans, useLingui } from "@lingui/react/macro";
@@ -12,8 +12,13 @@ export function MCPAskUserQuestionActionDetails({
   displayContext,
 }: ToolExecutionDetailsProps) {
   const { t } = useLingui();
-  const parsed = UserQuestionSchema.safeParse(toolParams);
-  const userQuestion = parsed.success ? parsed.data : null;
+  const userQuestion = validateToolInputs(
+    "ask_user_question",
+    "ask_user_question",
+    toolParams
+  )
+    ? toolParams
+    : null;
 
   const outputText = toolOutput?.find(isTextContent)?.text ?? null;
   const { selectedLabels, customAnswer, isDeclined } =

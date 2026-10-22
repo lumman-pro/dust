@@ -1,13 +1,11 @@
 import config from "@app/lib/api/config";
 import { canAccessFrame } from "@app/lib/api/files/frame_access";
-import { PDF_FOOTER_HTML } from "@app/lib/api/files/pdf_footer";
+import {
+  PDF_FOOTER_HTML,
+  shouldShowPdfFooter,
+} from "@app/lib/api/files/pdf_footer";
 import { generateVizAccessToken } from "@app/lib/api/viz/access_tokens";
 import type { Authenticator } from "@app/lib/auth";
-import {
-  isDustCompanyPlan,
-  isEnterprisePlanPrefix,
-  isFriendsAndFamilyPlan,
-} from "@app/lib/plans/plan_codes";
 import { FileResource } from "@app/lib/resources/file_resource";
 import logger from "@app/logger/logger";
 import {
@@ -104,17 +102,8 @@ export async function exportInteractiveContentFileAsPdf(
 
   const isSlideshow = file.contentType === frameSlideshowContentType;
 
-  // Only show footer for non-Enterprise plans and non-FriendsAndFamily plans.
-  const plan = auth.plan();
-  const shouldHideFooter =
-    plan &&
-    (isDustCompanyPlan(plan.code) ||
-      isEnterprisePlanPrefix(plan.code) ||
-      isFriendsAndFamilyPlan(plan.code));
-  const showFooter = !shouldHideFooter;
-
   // Slideshows use zero margins (full-bleed slides).
-  const options: PdfOptions = showFooter
+  const options: PdfOptions = shouldShowPdfFooter(auth)
     ? {
         footerHtml: PDF_FOOTER_HTML,
         marginBottom: isSlideshow ? "0" : "1cm",

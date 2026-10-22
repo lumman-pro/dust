@@ -67,12 +67,12 @@ documents.
 | Script | Role |
 |--------|------|
 | `install.sh` | `npm install` + lefthook |
-| `infra.sh` | Postgres/Redis/Qdrant/FoundationDB/ES/Temporal + Chrome managed policies + materialize 1Password + migrations |
+| `infra.sh` | Postgres/Redis/Qdrant/ES/Temporal + Chrome managed policies + materialize 1Password + migrations |
 | `sweep-cargo-target.sh` | Prune stale `core/target` artifacts on the Cargo volume (14d / 12GiB cap) |
 | `init-data-dirs.sh` | Create `DUST_DATA_ROOT` dirs; `initdb` a fresh Postgres cluster if empty |
 | `init-qdrant-collections.sh` | Create the Qdrant embedding collection (idempotent) |
 | `ensure-fdb.sh` | Start the local FoundationDB server, create the database on a fresh volume (`single`, `ssd`), wait until available. Cluster file: `$FDB_CLUSTER_FILE`; listens on `127.0.0.1:4500` inside the container only. Required by `dfs-api`. |
-| `apps.sh` | Wait for infra, optional WorkOS seed, ngrok front tunnel, mprocs (includes `dfs-api`) |
+| `apps.sh` | Wait for infra, optional WorkOS seed, ngrok front tunnel, mprocs (`dfs-api` is opt-in) |
 | `ensure-ngrok.sh` | Start ngrok → `:3000` + `:3007` and persist `SBX_DEV_FRONT_URL` / viz URL for sandboxes |
 | `up.sh` | `install?` → `infra` → `apps` (serial entry for laptop / non-Cursor agents) |
 | `refresh-op-env.sh` | Re-fetch 1Password Environment into `/tmp` for all shells |
@@ -83,7 +83,26 @@ documents.
 - **Runtime / host-injected:** `OP_SERVICE_ACCOUNT_TOKEN`, `DEV_WORKOS_*` (already in process env; not re-exported).
 - **1Password Environment:** materialized once to `/tmp/dust-op-environment.env`, loaded via `BASH_ENV=/tmp/dust-shell-env.sh` for non-interactive bash (infra/mprocs) and via `/root/.zshrc` / `dev/zshrc` for interactive terminals. Store `GCP_SERVICE_ACCOUNT_B64` as base64-encoded JSON; on materialize it is decoded to `SERVICE_ACCOUNT` (`/tmp/dust-dev-sa.json`). Include `NGROK_AUTHTOKEN` so `apps.sh` can open the sandbox front-api tunnel.
 - **Local overrides:** `dev/scripts/env.sh` → `apply_local_overrides` forces in-container DB/API URLs after OP load. When `/tmp/dust-infra/sbx-dev-front-url` exists (from `ensure-ngrok.sh`), it exports `SBX_DEV_FRONT_URL` and defaults `SBX_DEV_UNRESTRICTED_EGRESS=true` so sandboxes can reach the tunnel (agent-proxied traffic otherwise goes through the cloud egress proxy, which only allowlists `dust.tt`). When `/tmp/dust-infra/sbx-dev-viz-url` exists, it exports `SBX_DEV_VIZ_URL`, which only overrides the sandbox's `DUST_VIZ_URL`; the browser keeps loading viz from `VIZ_PUBLIC_URL`.
-- **DFS (Dust File System):** `env.sh` sets `DFS_PORT` / `DFS_LISTEN` (default `127.0.0.1:50051`), a persistent 64-hex `DFS_MASTER_KEY` (file: `$DUST_INFRA_LOG_DIR/dfs-master-key`), and front's `DFS_API_URL` / `DFS_API_MASTER_KEY` (same key). `dfs-api` is started by mprocs (`tools/mprocs.yaml`), not by `infra.sh`; it needs FoundationDB from `ensure-fdb.sh`.
+- **DFS (Dust File System):** `env.sh` sets `DFS_PORT` / `DFS_LISTEN` (default `127.0.0.1:50051`), a persistent 64-hex `DFS_MASTER_KEY` (file: `$DUST_INFRA_LOG_DIR/dfs-master-key`), and front's `DFS_API_URL` / `DFS_API_MASTER_KEY` (same key). `dfs-api` is disabled by default. Starting it in mprocs runs `ensure-fdb.sh` first to start FoundationDB.
+
+## Optional DFS
+
+Front development does not require FoundationDB. `tools/start-mprocs.sh`, `tools/dev.sh`, and
+container startup skip FoundationDB checks and leave `dfs-api` stopped by default.
+
+To use DFS on macOS:
+
+```bash
+tools/install-fdb-client.sh
+docker compose --profile dfs up -d fdb fdb_init
+```
+
+Then select `dfs-api` in mprocs and press `s` to start it. With process-compose, start
+`infra-fdb` and then `dfs-api` from the TUI. The native client is checked only when DFS starts.
+The installer selects API 740 before reading the client version and verifies version 7.4.8.
+
+In the dev container, start `dfs-api` in mprocs. Its wrapper starts and initializes the bundled
+FoundationDB server before launching DFS; the normal `infra.sh` path does not start it.
 
 ## Infra models
 

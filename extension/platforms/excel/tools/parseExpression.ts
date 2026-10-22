@@ -110,7 +110,9 @@ function toSteps(node: Expression | Super): Result<Step[], string> {
       return new Err('"?." is not allowed.');
 
     case "AssignmentExpression":
-      return new Err("assignments are not allowed, only reads.");
+      return new Err(
+        'assignments are not allowed. To change a property, call "set", as in "set({ values: [[1]] })".'
+      );
 
     // All other syntax, for example `a + b` or `(a, b)`.
     default:

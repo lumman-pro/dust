@@ -1,6 +1,10 @@
 import { usePodLabel } from "@app/components/assistant/conversation/tool_validation/usePodLabel";
+import type { InternalMCPToolInputType } from "@app/lib/actions/mcp_internal_actions/constants";
+import type {
+  CREATE_TASKS_TOOL_NAME,
+  POD_TASKS_SERVER_NAME,
+} from "@app/lib/api/actions/servers/pod_tasks/metadata";
 import { inferProjectTaskSourceFromUrl } from "@app/lib/api/actions/servers/pod_tasks/source_utils";
-import type { PodTasksCreateTasksInput } from "@app/lib/api/actions/servers/pod_tasks/types";
 import { useMemberDetails } from "@app/lib/swr/assistants";
 import type { PodTaskSourceType } from "@app/types/project_task";
 import type { LightWorkspaceType, UserType } from "@app/types/user";
@@ -39,7 +43,10 @@ const SOURCE_ICON_BY_TYPE: Record<
 };
 
 interface PodTasksCreateValidationDetailsProps {
-  input: PodTasksCreateTasksInput;
+  input: InternalMCPToolInputType<
+    typeof POD_TASKS_SERVER_NAME,
+    typeof CREATE_TASKS_TOOL_NAME
+  >;
   owner: LightWorkspaceType;
   user: UserType;
   conversationId?: string | null;

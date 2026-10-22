@@ -46,6 +46,18 @@ export interface ScrollableDataTableProps<TData extends TBaseData> extends Omit<
 const MIN_COLUMN_WIDTH = 40;
 
 /**
+ * @cc [owner:aubin-tchoi,label:product;react] minimal-columns
+ * `columns` MUST contain only the columns the table's purpose requires; a new column MUST NOT be
+ * added when its data fits in an existing column (e.g. as a secondary line or description) or
+ * belongs in a details view.
+ */
+/**
+ * @cc [owner:aubin-tchoi,label:product;react] header-never-clipped
+ * In every supported locale (en-US, en-GB, fr-FR, de-DE), each rendered header label and its sort
+ * icon MUST be fully visible, without truncation or overflow, at every viewport width where its
+ * column is rendered per `columnsBreakpoints`.
+ */
+/**
  * Virtualized DataTable for large or infinite datasets: rows are windowed with
  * TanStack Virtual, with a sticky header and infinite loading via onLoadMore.
  * @summary Virtualized, infinitely scrollable data table.

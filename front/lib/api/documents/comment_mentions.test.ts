@@ -1,16 +1,23 @@
 import { postUserMessage } from "@app/lib/api/assistant/conversation";
+import { showCollabAgentActivity } from "@app/lib/api/collab/client";
 import {
   DocumentConversationBusyError,
   dispatchCommentMentions,
+  getCommentMentionStart,
   postCommentMention,
 } from "@app/lib/api/documents/comment_mentions";
 import type { NewCommentMessage } from "@app/lib/api/documents/comment_signatures";
 import { Authenticator } from "@app/lib/auth";
 import { notifyNewProjectConversation } from "@app/lib/notifications/triggers/project-new-conversation";
+import { AgentResource } from "@app/lib/resources/agent_resource";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { launchDocumentCommentMentionWorkflow } from "@app/temporal/mentions_queue/client";
 import { makeDocumentCommentMentionWorkflowId } from "@app/temporal/mentions_queue/helpers";
-import { mockUserMessage } from "@app/tests/utils/conversation_test_factories";
+import { AgentConfigurationFactory } from "@app/tests/utils/AgentConfigurationFactory";
+import {
+  mockFullAgentMessage,
+  mockUserMessage,
+} from "@app/tests/utils/conversation_test_factories";
 import { ConversationFactory } from "@app/tests/utils/ConversationFactory";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
 import { SpaceFactory } from "@app/tests/utils/SpaceFactory";
@@ -27,6 +34,11 @@ vi.mock(
     postUserMessage: vi.fn(),
   })
 );
+
+vi.mock(import("@app/lib/api/collab/client"), async (importOriginal) => ({
+  ...(await importOriginal()),
+  showCollabAgentActivity: vi.fn(),
+}));
 
 vi.mock(
   import("@app/lib/notifications/triggers/project-new-conversation"),
@@ -83,6 +95,8 @@ describe("postCommentMention", () => {
     postMock.mockReset();
     postMock.mockResolvedValue(posted(2));
     notified.mockReset();
+    vi.mocked(showCollabAgentActivity).mockReset();
+    vi.mocked(showCollabAgentActivity).mockResolvedValue(new Ok(undefined));
   });
 
   const podMemberAuth = async () => {
@@ -267,9 +281,45 @@ describe("postCommentMention", () => {
     expect(result.isErr() && result.error).toBeInstanceOf(
       DocumentConversationBusyError
     );
+    const [, { agent, activity }] = vi.mocked(showCollabAgentActivity).mock
+      .calls[0];
+    expect(agent).toMatchObject({
+      agentId: GLOBAL_AGENTS_SID.DUST,
+      commentId: "c1",
+    });
+    expect(activity).toBe("waiting");
   });
 
-  it("drops, without retrying, a comment whose post fails", async () => {
+  it("stays busy when the waiting agent cannot be found", async () => {
+    const conversation = await ConversationFactory.create(auth, {
+      agentConfigurationId: GLOBAL_AGENTS_SID.DUST,
+      messagesCreatedAt: [],
+    });
+    postMock.mockResolvedValue(
+      new Err({
+        status_code: 409,
+        api_error: {
+          type: "invalid_request_error",
+          message: "An agent or a compaction is running in this conversation.",
+        },
+      })
+    );
+    vi.spyOn(AgentResource, "fetchById").mockRejectedValueOnce(
+      new Error("Connection terminated")
+    );
+
+    const result = await postCommentMention(auth, {
+      documentPath: `conversation-${conversation.sId}/plan.md`,
+      newMessage: MENTIONING,
+    });
+
+    expect(result.isErr() && result.error).toBeInstanceOf(
+      DocumentConversationBusyError
+    );
+    expect(showCollabAgentActivity).not.toHaveBeenCalled();
+  });
+
+  it("drops, without retrying, a comment whose post fails, showing nothing", async () => {
     const conversation = await ConversationFactory.create(auth, {
       agentConfigurationId: GLOBAL_AGENTS_SID.DUST,
       messagesCreatedAt: [],
@@ -281,13 +331,127 @@ describe("postCommentMention", () => {
       })
     );
 
+    const documentPath = `conversation-${conversation.sId}/plan.md`;
+
     const result = await postCommentMention(auth, {
-      documentPath: `conversation-${conversation.sId}/plan.md`,
+      documentPath,
       newMessage: MENTIONING,
     });
 
     expect(result.isOk()).toBe(true);
     expect(postMock).toHaveBeenCalledTimes(1);
+    expect(showCollabAgentActivity).not.toHaveBeenCalled();
+  });
+
+  it("shows the agent thinking again once posted", async () => {
+    const configuration = await AgentConfigurationFactory.createTestAgent(
+      auth,
+      { name: "Writer" }
+    );
+    postMock.mockImplementation(
+      async (_auth, { content, context }) =>
+        new Ok({
+          userMessage: { ...mockUserMessage(content), context },
+          agentMessages: [mockFullAgentMessage({ configuration })],
+        })
+    );
+    const conversation = await ConversationFactory.create(auth, {
+      agentConfigurationId: GLOBAL_AGENTS_SID.DUST,
+      messagesCreatedAt: [],
+    });
+
+    await postCommentMention(auth, {
+      documentPath: `conversation-${conversation.sId}/plan.md`,
+      newMessage: MENTIONING,
+    });
+
+    const shown = vi.mocked(showCollabAgentActivity);
+    expect(shown).toHaveBeenCalledTimes(1);
+    const [, { agent, activity }] = shown.mock.calls[0];
+    expect(agent).toMatchObject({
+      agentId: configuration.sId,
+      name: "Writer",
+      commentId: "c1",
+    });
+    expect(activity).toBe("thinking");
+  });
+});
+
+describe("getCommentMentionStart", () => {
+  let auth: Authenticator;
+  let workspace: WorkspaceType;
+
+  beforeEach(async () => {
+    const setup = await createResourceTest({ role: "admin" });
+    auth = setup.authenticator;
+    workspace = setup.workspace;
+  });
+
+  const conversationPath = async (messagesCreatedAt: Date[]) => {
+    const conversation = await ConversationFactory.create(auth, {
+      agentConfigurationId: GLOBAL_AGENTS_SID.DUST,
+      messagesCreatedAt,
+    });
+    return `conversation-${conversation.sId}/plan.md`;
+  };
+
+  it("gives the agent thinking in an idle conversation", async () => {
+    const start = await getCommentMentionStart(auth, {
+      documentPath: await conversationPath([]),
+      newMessage: MENTIONING,
+    });
+
+    expect(start?.activity).toBe("thinking");
+    expect(start?.agent).toMatchObject({
+      agentId: GLOBAL_AGENTS_SID.DUST,
+      name: "Dust",
+      userId: auth.getNonNullableUser().sId,
+      commentId: "c1",
+    });
+  });
+
+  it("gives the agent waiting while another agent runs", async () => {
+    const start = await getCommentMentionStart(auth, {
+      documentPath: await conversationPath([new Date()]),
+      newMessage: MENTIONING,
+    });
+
+    expect(start?.activity).toBe("waiting");
+  });
+
+  it("gives the agent thinking in a pod document, creating no conversation", async () => {
+    const pod = await SpaceFactory.project(
+      workspace,
+      auth.getNonNullableUser().id
+    );
+    const documentPath = `pod-${pod.sId}/notes.md`;
+
+    const start = await getCommentMentionStart(auth, {
+      documentPath,
+      newMessage: MENTIONING,
+    });
+
+    expect(start?.activity).toBe("thinking");
+    expect(
+      await ConversationResource.fetchLatestForDocument(auth, {
+        space: pod,
+        documentPath,
+      })
+    ).toBeNull();
+  });
+
+  it("gives none for a file without a conversation, or a comment mentioning no agent", async () => {
+    const personal = await getCommentMentionStart(auth, {
+      documentPath: `user-${auth.getNonNullableUser().sId}/notes.md`,
+      newMessage: MENTIONING,
+    });
+    const usersOnly = await getCommentMentionStart(auth, {
+      documentPath: await conversationPath([]),
+      newMessage: comment(`Can ${YUKA} check?`),
+    });
+
+    expect(personal).toBeNull();
+    expect(usersOnly).toBeNull();
   });
 });
 
@@ -300,6 +464,8 @@ describe("dispatchCommentMentions", () => {
     auth = setup.authenticator;
     launched.mockReset();
     launched.mockResolvedValue(new Ok(undefined));
+    vi.mocked(showCollabAgentActivity).mockReset();
+    vi.mocked(showCollabAgentActivity).mockResolvedValue(new Ok(undefined));
   });
 
   it("hands each mentioning message to a job keyed by the normalized document path", async () => {

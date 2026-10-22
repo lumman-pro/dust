@@ -69,6 +69,14 @@ const UserQuestionOptionSchema = z.object({
     ),
 });
 
+const USER_QUESTION_FORMATS = ["list"] as const;
+
+/**
+ * @cc [owner:aubin-tchoi,label:product] fields-added-with-defaults
+ * Fields added to `UserQuestionSchema` or its options after release MUST parse when absent (e.g.
+ * `format` defaults to `"list"`): questions stored in blocked actions and resume states before a
+ * field existed MUST still parse, otherwise answered questions are asked again.
+ */
 export const UserQuestionSchema = z.object({
   question: z
     .string()
@@ -85,6 +93,12 @@ export const UserQuestionSchema = z.object({
     .boolean()
     .describe(
       "Whether the user can select multiple options for this question."
+    ),
+  format: z
+    .enum(USER_QUESTION_FORMATS)
+    .default("list")
+    .describe(
+      "How the question is displayed. 'list' (default) fits most questions."
     ),
 });
 
@@ -105,10 +119,13 @@ const UserQuestionResumeStateSchema = z.object({
 
 type UserQuestionResumeState = z.infer<typeof UserQuestionResumeStateSchema>;
 
-export function isUserQuestionResumeState(
+// Returns the parsed state rather than narrowing the raw value, so that defaults apply and the
+// question always has a `format`.
+export function parseUserQuestionResumeState(
   value: unknown
-): value is UserQuestionResumeState {
-  return UserQuestionResumeStateSchema.safeParse(value).success;
+): UserQuestionResumeState | null {
+  const result = UserQuestionResumeStateSchema.safeParse(value);
+  return result.success ? result.data : null;
 }
 
 const SandboxResumeStateSchema = z.object({
@@ -190,7 +207,7 @@ export type SandboxFunctionRunContext = {
   action: SandboxFunctionMCPActionResource;
   invocation: SandboxFunctionInvocationResource;
   // The Pod the invoked Frame runs in, resolved once when the context is built. Null for a Frame
-  // outside any Pod: tools that persist files have nowhere to put them and refuse.
+  // outside any Pod.
   pod: SpaceResource | null;
   toolConfiguration: LightMCPToolConfigurationType;
 };

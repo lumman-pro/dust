@@ -1,7 +1,10 @@
 import type { LLMEvent } from "@app/lib/api/llm/types/events";
 import { EventError } from "@app/lib/api/llm/types/events";
 import type { LLMClientMetadata } from "@app/lib/api/llm/types/options";
-import type { ErrorSource } from "@app/lib/model_constructors/types/output/events";
+import type {
+  ErrorSource,
+  RefusalDetails,
+} from "@app/lib/model_constructors/types/output/events";
 import type { AgentErrorCategory } from "@app/types/assistant/agent";
 import type { ModelProviderIdType } from "@app/types/assistant/models/types";
 import { assertNever } from "@app/types/shared/utils/assert_never";
@@ -35,6 +38,7 @@ export interface LLMErrorInfo {
   isRetryable: boolean;
   originalError?: unknown;
   errorSource: ErrorSource;
+  refusal?: RefusalDetails;
 }
 
 export function handleGenericError(

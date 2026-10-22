@@ -1,9 +1,11 @@
 import { ContentBlockWrapper } from "@sparkle/components/markdown/ContentBlockWrapper";
+import { markdownTableClasses } from "@sparkle/components/markdown/markdownSizes";
 import {
   type MarkdownNode,
   sameNodePosition,
 } from "@sparkle/components/markdown/utils";
 import { ScrollArea, ScrollBar } from "@sparkle/components/ScrollArea";
+import { cn } from "@sparkle/lib/utils";
 import React, { memo, type ReactNode, useMemo } from "react";
 
 const getNodeText = (node: ReactNode): string => {
@@ -80,7 +82,7 @@ export const TableBlock = memo(
 
     return (
       <ContentBlockWrapper
-        innerClassName="relative my-2 w-full border border-border rounded-2xl"
+        innerClassName={cn("relative my-2 w-full", markdownTableClasses.frame)}
         content={tableData}
       >
         <ScrollArea
@@ -137,14 +139,19 @@ interface TableHeaderBlockProps {
 }
 
 /**
- * Renders a `<th>` header cell of a Markdown table with truncating,
- * semibold, muted styling.
+ * Renders a `<th>` header cell of a Markdown table with wrapping, semibold,
+ * muted styling.
  * @summary Table header-cell renderer for Markdown.
  */
 export const TableHeaderBlock = memo(
   ({ children }: TableHeaderBlockProps) => {
     return (
-      <th className="truncate whitespace-nowrap break-words py-3.5 pl-4 text-left text-xs font-semibold text-muted-foreground">
+      <th
+        className={cn(
+          markdownTableClasses.cell,
+          markdownTableClasses.headerCell
+        )}
+      >
         {children}
       </th>
     );
@@ -166,7 +173,12 @@ interface TableDataBlockProps {
 export const TableDataBlock = memo(
   ({ children }: TableDataBlockProps) => {
     return (
-      <td className="px-4 py-3 text-sm text-foreground">
+      <td
+        className={cn(
+          markdownTableClasses.cell,
+          "border-t text-sm text-foreground"
+        )}
+      >
         {Array.isArray(children) ? (
           children.map((child: any, i) => {
             if (child === "<br>") {

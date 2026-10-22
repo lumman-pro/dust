@@ -113,14 +113,6 @@ msgid "Number of active users in the last 30 days."
 msgstr "Number of active users in the last 30 days."
 
 #: front/components/assistant/manager/AgentSearchTable.tsx
-msgid "Feedback"
-msgstr "Feedback"
-
-#: front/components/assistant/manager/AgentSearchTable.tsx
-msgid "{up} positive and {down} negative feedback"
-msgstr "{up} positive and {down} negative feedback"
-
-#: front/components/assistant/manager/AgentSearchTable.tsx
 msgid "Editors"
 msgstr "Editors"
 

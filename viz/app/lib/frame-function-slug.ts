@@ -3,7 +3,7 @@
  *
  * A reference is a bare function name, exactly as the Frame's manifest declares it. The host
  * qualifies it against the calling Frame's trusted identity — `resolveFrameFunctionReference` in
- * `front/types/api/frame_function_reference.ts` turns `list-notes` into `<frameId>/list-notes` —
+ * `front/types/api/frame_function_reference.ts` binds `list-notes` to the calling Frame's id —
  * so the Frame never names the Frame it is calling into, and cannot name another one.
  *
  * This deliberately accepts less than front's `SANDBOX_FUNCTION_SLUG_REGEX`, which still admits an

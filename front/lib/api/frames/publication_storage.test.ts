@@ -3,6 +3,7 @@ import { getFramePublishLockName } from "@app/lib/api/frames/operation_lock";
 import type { FramePublicationFunctionArtifact } from "@app/lib/api/frames/publication_storage";
 import {
   activateFramePublication,
+  checkFramePublicFunctionSharing,
   createFramePublicationFunctionRows,
   loadFramePublicationDescriptor,
   publishFramePublication,
@@ -40,7 +41,9 @@ import {
   getFramePublicationFunctionsArchivePath,
   getFramePublicationUiBundlePath,
 } from "@app/types/api/frame_storage";
+import type { SandboxFunctionUserIdentityPolicy } from "@app/types/api/sandbox_functions";
 import { GLOBAL_AGENTS_SID } from "@app/types/assistant/assistant";
+import type { FileShareScope } from "@app/types/files";
 import { frameContentType, frameV2ContentType } from "@app/types/files";
 import { getConversationFilesBasePath } from "@app/types/mount_path";
 import { Err, Ok } from "@app/types/shared/result";
@@ -158,6 +161,25 @@ const functionArtifacts = [
     },
   },
 ] satisfies FramePublicationFunctionArtifact[];
+
+const addTaskSchedule = {
+  cron: "0 9 * * 1-5",
+  timezone: "Europe/Paris",
+  input: { title: "Daily stand-up" },
+};
+
+const manifestWithSchedule = FrameManifestSchema.parse({
+  version: 1,
+  description: "Track tasks.",
+  functions: [
+    {
+      name: "add-task",
+      description: "Add a task.",
+      entryPoint: "functions/add_task.ts",
+      schedules: [addTaskSchedule],
+    },
+  ],
+});
 
 const publicFunctionArtifacts = functionArtifacts.map((artifact) => ({
   ...artifact,
@@ -490,7 +512,6 @@ describe("storeFramePublication", () => {
 
   it("rejects a public function when public functions are disabled", async () => {
     const { auth, frame } = await setupFrame();
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     await FeatureFlagFactory.basic(auth, "frames_v2_functions");
 
     const result = await storeFramePublication(auth, {
@@ -636,6 +657,38 @@ describe("storeFramePublication", () => {
 
     expect(result.isErr() && result.error.code).toBe("invalid_frame");
     expect(fileStorageMock.saveFileCalls).toHaveLength(0);
+  });
+
+  it("rejects a schedule input that does not match its function schema before writing", async () => {
+    const { auth, frame } = await setupFrame();
+
+    const stored = await storeFramePublication(auth, {
+      frame,
+      functionArtifacts,
+      manifest: FrameManifestSchema.parse({
+        ...manifestWithSchedule,
+        functions: [
+          {
+            ...manifestWithSchedule.functions[0],
+            schedules: [{ ...addTaskSchedule, input: { title: 42 } }],
+          },
+        ],
+      }),
+      sourceFiles: sourceFilesWithFunction,
+      uiBundleCode,
+    });
+
+    expect(stored.isErr() && stored.error).toMatchObject({
+      code: "invalid_schedule",
+      message: expect.stringContaining(
+        'Frame function "add-task" schedule (cron "0 9 * * 1-5", Europe/Paris)'
+      ),
+    });
+    expect(stored.isErr() && stored.error.message).toContain("input/title");
+    expect(fileStorageMock.saveFileCalls).toHaveLength(0);
+    expect(await FramePublicationResource.listForFrame(auth, frame)).toEqual(
+      []
+    );
   });
 
   it("does not write publication.json after an artifact failure", async () => {
@@ -1256,6 +1309,108 @@ describe("publishFramePublication", () => {
   });
 });
 
+describe("checkFramePublicFunctionSharing", () => {
+  async function setupSharedFrame(shareScope: FileShareScope) {
+    const { auth, frame } = await setupFrame({ ready: true });
+    await frame.ensureShareableFrame(auth);
+    await frame.setShareScope(auth, shareScope);
+
+    return frame;
+  }
+
+  function functionWith(userIdentity: SandboxFunctionUserIdentityPolicy) {
+    return {
+      name: "add-task",
+      bundleSha256: "bundle-sha",
+      userIdentity,
+      inputSchema: { type: "object" as const },
+      outputSchema: { type: "object" as const },
+      toolCalls: [],
+    };
+  }
+
+  it("refuses a public share when no function is public", async () => {
+    const frame = await setupSharedFrame("public");
+
+    const result = await checkFramePublicFunctionSharing(frame, [
+      functionWith("workspace_user_required"),
+      functionWith("frame_author_required"),
+    ]);
+
+    assert(result.isErr(), "Expected the publication to be refused");
+    expect(result.error).toMatchObject({ code: "sharing_conflict" });
+  });
+
+  it("accepts a public share with a public function", async () => {
+    const frame = await setupSharedFrame("public");
+
+    const result = await checkFramePublicFunctionSharing(frame, [
+      functionWith("workspace_user_required"),
+      functionWith("public"),
+    ]);
+
+    expect(result.isOk()).toBe(true);
+  });
+
+  it("accepts private functions when the Frame is not shared publicly", async () => {
+    const frame = await setupSharedFrame("workspace_and_emails");
+
+    const result = await checkFramePublicFunctionSharing(frame, [
+      functionWith("workspace_user_required"),
+    ]);
+
+    expect(result.isOk()).toBe(true);
+  });
+});
+
+describe("publishFramePublication public sharing", () => {
+  async function setupPublicFrame() {
+    const { auth, frame } = await setupFrame({ ready: true });
+    await enablePublicFrameFunctions(auth);
+    await frame.ensureShareableFrame(auth);
+    await frame.setShareScope(auth, "public");
+
+    return { auth, frame };
+  }
+
+  it("refuses a publication with no public function onto a public share", async () => {
+    const { auth, frame } = await setupPublicFrame();
+
+    const published = await publishFramePublication(auth, {
+      frame,
+      functionArtifacts,
+      manifest: manifestWithFunction,
+      sourceFiles: sourceFilesWithFunction,
+      uiBundleCode,
+      mode: "live",
+    });
+
+    assert(published.isErr(), "Expected the publication to be refused");
+    expect(published.error).toMatchObject({ code: "sharing_conflict" });
+    const fresh = await FileResource.fetchById(auth, frame.sId);
+    expect(fresh?.useCaseMetadata?.activePublicationId).toBeUndefined();
+  });
+
+  it("publishes a publication with a public function onto a public share", async () => {
+    const { auth, frame } = await setupPublicFrame();
+
+    const published = await publishFramePublication(auth, {
+      frame,
+      functionArtifacts: publicFunctionArtifacts,
+      manifest: manifestWithFastFunction,
+      sourceFiles: sourceFilesWithFunction,
+      uiBundleCode,
+      mode: "live",
+    });
+
+    assert(published.isOk(), "Expected the publication to be published");
+    const fresh = await FileResource.fetchById(auth, frame.sId);
+    expect(fresh?.useCaseMetadata?.activePublicationId).toBe(
+      published.value.publicationId
+    );
+  });
+});
+
 describe("publishFramePublication modes", () => {
   const publishBundle = (
     auth: Authenticator,
@@ -1681,6 +1836,63 @@ describe("publishFramePublication modes", () => {
         functionArtifacts[0].bundleCode
       ),
     });
+  });
+
+  it("stores schedules on a draft without touching the live publication", async () => {
+    const { auth, frame, workspaceId } = await setupFrame();
+    const live = await publishFramePublication(auth, {
+      frame,
+      functionArtifacts,
+      manifest: manifestWithFunction,
+      sourceFiles: sourceFilesWithFunction,
+      uiBundleCode: "export default function A() {}",
+      mode: "live",
+    });
+    expect(live.isOk()).toBe(true);
+    if (live.isErr()) {
+      return;
+    }
+    const liveAllowlist = await (
+      await FileResource.fetchById(auth, frame.sId)
+    )?.getActiveAuthorizedFileAccessAllowlist();
+
+    const draft = await publishFramePublication(auth, {
+      frame,
+      functionArtifacts,
+      manifest: manifestWithSchedule,
+      sourceFiles: sourceFilesWithFunction,
+      uiBundleCode: "export default function A() {}",
+      mode: "draft",
+    });
+
+    expect(draft.isOk() && draft.value.status).toBe("draft");
+    if (draft.isErr()) {
+      return;
+    }
+    expect(draft.value.publicationId).not.toBe(live.value.publicationId);
+    const reloaded = await FileResource.fetchById(auth, frame.sId);
+    expect(reloaded?.useCaseMetadata?.activePublicationId).toBe(
+      live.value.publicationId
+    );
+    expect(reloaded?.pendingDraftPublicationId).toBe(draft.value.publicationId);
+    expect(await reloaded?.getActiveAuthorizedFileAccessAllowlist()).toEqual(
+      liveAllowlist
+    );
+
+    const descriptorOf = (publicationId: string) =>
+      getStoredDescriptor(
+        getFramePublicationDescriptorPath({
+          workspaceId,
+          frameId: frame.sId,
+          publicationId,
+        })
+      );
+    expect(
+      descriptorOf(live.value.publicationId).manifest.functions[0]?.schedules
+    ).toEqual([]);
+    expect(
+      descriptorOf(draft.value.publicationId).manifest.functions[0]?.schedules
+    ).toEqual([addTaskSchedule]);
   });
 });
 

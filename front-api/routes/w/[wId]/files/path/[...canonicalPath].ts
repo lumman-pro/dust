@@ -7,7 +7,14 @@ import {
   type DfmCommentSignatureError,
   validateMarkdownCommentsForWrite,
 } from "@app/lib/api/documents/comment_signatures";
+import { exportDocument } from "@app/lib/api/documents/export";
 import { writeFileContentThroughCollabSession } from "@app/lib/api/documents/file_api_write";
+import {
+  type DocumentPdfExportError,
+  exportDocumentAsPdf,
+  isDocumentPdfExportError,
+} from "@app/lib/api/documents/pdf";
+import type { DfmStoredDocumentError } from "@app/lib/api/documents/read_write";
 import { DustFileSystem } from "@app/lib/api/file_system/dust_file_system";
 import {
   convertCanonicalFileToPdf,
@@ -42,6 +49,7 @@ import {
   DUST_FILE_CONTENT_TYPE_HEADER,
   DUST_FILE_ID_HEADER,
   DUST_FILE_REVISION_HEADER,
+  contentTypeFromFileName,
   FileRevisionSchema,
 } from "@app/types/files";
 import { assertNever } from "@app/types/shared/utils/assert_never";
@@ -49,6 +57,7 @@ import { readableToReadableStream } from "@app/types/shared/utils/streams";
 import {
   contentDispositionAttachment,
   isContentTypeSafeToDisplay,
+  pdfAttachmentResponse,
 } from "@front-api/lib/file_serving";
 import type { WorkspaceAwareCtx } from "@front-api/middlewares/ctx";
 import { workspaceApp } from "@front-api/middlewares/ctx";
@@ -68,12 +77,26 @@ const ParamsSchema = z.object({
   canonicalPath: z.string(),
 });
 
+const GetQuerySchema = z
+  .object({
+    download: z
+      .string()
+      .optional()
+      .transform((download) => !!download && download !== "0"),
+    format: z.enum(["markdown", "pdf"]).optional(),
+  })
+  .refine(({ download, format }) => format === undefined || download, {
+    message: "format requires download=1.",
+  });
+
 /**
  * Unified file system API by canonical scoped path.
  *
  *   GET    /api/w/:wId/files/path/conversation-{cId}/report.pdf         stream inline
  *   GET    /api/w/:wId/files/path/pod-{pId}/data.csv?download=1         stream + Content-Disposition
  *   GET    /api/w/:wId/files/path/conversation-{cId}/photo.png?thumbnail=1  stream thumbnail
+ *   GET    /api/w/:wId/files/path/pod-{pId}/notes.md?download=1&format=markdown  without its comments
+ *   GET    /api/w/:wId/files/path/pod-{pId}/notes.md?download=1&format=pdf  printed, without its comments
  *   HEAD   /api/w/:wId/files/path/{...canonicalPath}                    metadata only
  *   PATCH  /api/w/:wId/files/path/{...canonicalPath}  { action:"rename", fileName }
  *   PATCH  /api/w/:wId/files/path/{...canonicalPath}  { action:"move",   dest }
@@ -81,6 +104,9 @@ const ParamsSchema = z.object({
  *   PUT    /api/w/:wId/files/path/{...canonicalPath}                    replace text or JSON content, optional X-Dust-If-Revision-Match
  *   DELETE /api/w/:wId/files/path/{...canonicalPath}
  *
+ * A Markdown document downloads as its editors see it, live while a session holds it, and
+ * without its comments with format=markdown or format=pdf; one the codec cannot read fails to
+ * download.
  * Raw GCS reads return X-Dust-File-Revision for exactly the streamed bytes. PUT accepts
  * that revision in X-Dust-If-Revision-Match and returns 412 on a revision mismatch.
  * Successful GCS writes return their new X-Dust-File-Revision. Revisions are unquoted
@@ -285,182 +311,243 @@ async function handleHeadRequest(
 }
 
 /** @ignoreswagger */
-app.get("/:canonicalPath{.+}", validate("param", ParamsSchema), async (ctx) => {
-  const { canonicalPath } = ctx.req.valid("param");
-  const archive = ctx.req.query("archive");
+app.get(
+  "/:canonicalPath{.+}",
+  validate("param", ParamsSchema),
+  validate("query", GetQuerySchema),
+  async (ctx) => {
+    const { canonicalPath } = ctx.req.valid("param");
+    const { download: isDownload, format } = ctx.req.valid("query");
+    const archive = ctx.req.query("archive");
 
-  // Hono dispatches HEAD requests through the matching GET route.
-  if (archive === "zip") {
-    return handleFolderArchiveRequest(ctx, canonicalPath, {
-      headOnly: ctx.req.method === "HEAD",
-    });
-  }
+    // Hono dispatches HEAD requests through the matching GET route.
+    if (archive === "zip") {
+      return handleFolderArchiveRequest(ctx, canonicalPath, {
+        headOnly: ctx.req.method === "HEAD",
+      });
+    }
 
-  if (ctx.req.method === "HEAD") {
-    return handleHeadRequest(ctx, canonicalPath);
-  }
+    if (ctx.req.method === "HEAD") {
+      return handleHeadRequest(ctx, canonicalPath);
+    }
 
-  const auth = ctx.get("auth");
-  const { fs: dustFs, err } = await resolveFs(ctx, canonicalPath);
-  if (err) {
-    return err;
-  }
+    const auth = ctx.get("auth");
+    const { fs: dustFs, err } = await resolveFs(ctx, canonicalPath);
+    if (err) {
+      return err;
+    }
 
-  const thumbnail = ctx.req.query("thumbnail");
-  const download = ctx.req.query("download");
-  const previewPdf = ctx.req.query("preview") === "pdf";
+    const thumbnail = ctx.req.query("thumbnail");
+    const previewPdf = ctx.req.query("preview") === "pdf";
 
-  // ?preview=pdf converts Office files to PDF via Gotenberg's LibreOffice route.
-  if (previewPdf) {
-    const rendererUrl = config.getDocumentRendererUrl();
-    if (!rendererUrl) {
+    if (format && contentTypeFromFileName(canonicalPath) !== "text/markdown") {
       return apiError(ctx, {
-        status_code: 503,
+        status_code: 400,
         api_error: {
-          type: "internal_server_error",
-          message: "PDF preview is not configured.",
+          type: "file_type_not_supported",
+          message: `Only a Markdown document can be downloaded as ${format}.`,
         },
       });
     }
 
-    const conversionResult = await convertCanonicalFileToPdf(
-      dustFs,
-      canonicalPath,
-      rendererUrl
-    );
-    if (conversionResult.isErr()) {
-      const e = conversionResult.error;
-
-      switch (e.code) {
-        case "not_found":
-          return apiError(ctx, {
-            status_code: 404,
-            api_error: { type: "file_not_found", message: e.message },
-          });
-
-        case "too_large":
-          return apiError(ctx, {
-            status_code: 413,
-            api_error: { type: "file_too_large", message: e.message },
-          });
-
-        case "unsupported_type":
-          return apiError(ctx, {
-            status_code: 400,
-            api_error: { type: "file_type_not_supported", message: e.message },
-          });
-
-        case "conversion_failed":
-        case "internal":
-          return apiError(ctx, {
-            status_code: 500,
-            api_error: { type: "internal_server_error", message: e.message },
-          });
-
-        default:
-          assertNever(e.code);
+    // ?preview=pdf converts Office files to PDF via Gotenberg's LibreOffice route.
+    if (previewPdf) {
+      const rendererUrl = config.getDocumentRendererUrl();
+      if (!rendererUrl) {
+        return apiError(ctx, {
+          status_code: 503,
+          api_error: {
+            type: "internal_server_error",
+            message: "PDF preview is not configured.",
+          },
+        });
       }
+
+      const conversionResult = await convertCanonicalFileToPdf(
+        dustFs,
+        canonicalPath,
+        rendererUrl
+      );
+      if (conversionResult.isErr()) {
+        const e = conversionResult.error;
+
+        switch (e.code) {
+          case "not_found":
+            return apiError(ctx, {
+              status_code: 404,
+              api_error: { type: "file_not_found", message: e.message },
+            });
+
+          case "too_large":
+            return apiError(ctx, {
+              status_code: 413,
+              api_error: { type: "file_too_large", message: e.message },
+            });
+
+          case "unsupported_type":
+            return apiError(ctx, {
+              status_code: 400,
+              api_error: {
+                type: "file_type_not_supported",
+                message: e.message,
+              },
+            });
+
+          case "conversion_failed":
+          case "internal":
+            return apiError(ctx, {
+              status_code: 500,
+              api_error: { type: "internal_server_error", message: e.message },
+            });
+
+          default:
+            assertNever(e.code);
+        }
+      }
+
+      const { pdfBuffer, pdfFileName } = conversionResult.value;
+      // RFC 5987: filename= must be ASCII-safe; filename*= carries the UTF-8 encoded name.
+      const asciiFallback = pdfFileName.replace(/[^\x20-\x7E]/g, "_");
+      const encodedName = encodeURIComponent(pdfFileName);
+
+      return new Response(new Uint8Array(pdfBuffer), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `inline; filename="${asciiFallback}"; filename*=UTF-8''${encodedName}`,
+          "Content-Length": String(pdfBuffer.length),
+          "Cache-Control": "private, max-age=3600",
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
     }
 
-    const { pdfBuffer, pdfFileName } = conversionResult.value;
-    // RFC 5987: filename= must be ASCII-safe; filename*= carries the UTF-8 encoded name.
-    const asciiFallback = pdfFileName.replace(/[^\x20-\x7E]/g, "_");
-    const encodedName = encodeURIComponent(pdfFileName);
+    // ?thumbnail=1 serves the resized/processed version (images only).
+    if (thumbnail && thumbnail !== "0") {
+      const thumbResult = await streamThumbnail(auth, dustFs, canonicalPath);
+      if (thumbResult.isErr()) {
+        const e = thumbResult.error;
+        switch (e.code) {
+          case "not_found":
+            return apiError(ctx, {
+              status_code: 404,
+              api_error: { type: "file_not_found", message: e.message },
+            });
+          case "not_image":
+            return apiError(ctx, {
+              status_code: 400,
+              api_error: {
+                type: "file_type_not_supported",
+                message: e.message,
+              },
+            });
+          case "internal":
+            return apiError(ctx, {
+              status_code: 500,
+              api_error: { type: "internal_server_error", message: e.message },
+            });
+          default:
+            assertNever(e.code);
+        }
+      }
 
-    return new Response(new Uint8Array(pdfBuffer), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="${asciiFallback}"; filename*=UTF-8''${encodedName}`,
-        "Content-Length": String(pdfBuffer.length),
+      const { stream, contentType } = thumbResult.value;
+      const thumbHeaders: Record<string, string> = {
+        "Content-Type": contentType,
         "Cache-Control": "private, max-age=3600",
         "X-Content-Type-Options": "nosniff",
-      },
-    });
-  }
-
-  // ?thumbnail=1 serves the resized/processed version (images only).
-  if (thumbnail && thumbnail !== "0") {
-    const thumbResult = await streamThumbnail(auth, dustFs, canonicalPath);
-    if (thumbResult.isErr()) {
-      const e = thumbResult.error;
-      switch (e.code) {
-        case "not_found":
-          return apiError(ctx, {
-            status_code: 404,
-            api_error: { type: "file_not_found", message: e.message },
-          });
-        case "not_image":
-          return apiError(ctx, {
-            status_code: 400,
-            api_error: { type: "file_type_not_supported", message: e.message },
-          });
-        case "internal":
-          return apiError(ctx, {
-            status_code: 500,
-            api_error: { type: "internal_server_error", message: e.message },
-          });
-        default:
-          assertNever(e.code);
+      };
+      if (!isContentTypeSafeToDisplay(contentType)) {
+        const fileName = path.posix.basename(canonicalPath);
+        thumbHeaders["Content-Disposition"] =
+          contentDispositionAttachment(fileName);
       }
+      return new Response(readableToReadableStream(stream), {
+        status: 200,
+        headers: thumbHeaders,
+      });
     }
 
-    const { stream, contentType } = thumbResult.value;
-    const thumbHeaders: Record<string, string> = {
-      "Content-Type": contentType,
-      "Cache-Control": "private, max-age=3600",
-      "X-Content-Type-Options": "nosniff",
-    };
-    if (!isContentTypeSafeToDisplay(contentType)) {
-      const fileName = path.posix.basename(canonicalPath);
-      thumbHeaders["Content-Disposition"] =
-        contentDispositionAttachment(fileName);
+    // A Markdown document downloads as its editors see it, any other file as stored below.
+    if (
+      isDownload &&
+      contentTypeFromFileName(canonicalPath) === "text/markdown"
+    ) {
+      // format=pdf prints the document via Gotenberg's Chromium route.
+      if (format === "pdf") {
+        const printed = await exportDocumentAsPdf(auth, dustFs, canonicalPath);
+        if (printed.isErr()) {
+          const e = printed.error;
+          return apiError(
+            ctx,
+            isDocumentPdfExportError(e)
+              ? mapDocumentPdfExportError(e)
+              : mapDocumentExportError(e)
+          );
+        }
+        const { buffer, fileName } = printed.value;
+        return pdfAttachmentResponse(buffer, fileName);
+      }
+
+      const exported = await exportDocument(
+        auth,
+        dustFs,
+        canonicalPath,
+        format ? "markdown" : "dfm"
+      );
+      if (exported.isErr()) {
+        return apiError(ctx, mapDocumentExportError(exported.error));
+      }
+      return new Response(exported.value, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/markdown; charset=utf-8",
+          "Content-Disposition": contentDispositionAttachment(
+            path.posix.basename(canonicalPath)
+          ),
+          "Cache-Control": "private, no-cache",
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
     }
+
+    // Normal inline or attachment stream.
+    const readResult = await readCanonicalFileContent(dustFs, canonicalPath);
+    if (readResult.isErr()) {
+      return apiError(ctx, mapDustFsError(readResult.error));
+    }
+    if (!readResult.value) {
+      return apiError(ctx, {
+        status_code: 404,
+        api_error: { type: "file_not_found", message: "File not found." },
+      });
+    }
+    const { contentType, stream, revision } = readResult.value;
+
+    const headers: Record<string, string> = {
+      "Content-Type": contentType,
+      "X-Content-Type-Options": "nosniff",
+      [DUST_FILE_CAN_WRITE_HEADER]: String(
+        dustFs.checkWriteAccess(canonicalPath).isOk()
+      ),
+    };
+    if (revision !== undefined) {
+      headers[DUST_FILE_REVISION_HEADER] = revision;
+      headers["Cache-Control"] = "private, no-cache";
+    }
+
+    // Unsafe content types and ?download=1 must always be served as attachments.
+    if (!isContentTypeSafeToDisplay(contentType) || isDownload) {
+      const fileName = path.posix.basename(canonicalPath);
+      headers["Content-Disposition"] = contentDispositionAttachment(fileName);
+    }
+
     return new Response(readableToReadableStream(stream), {
       status: 200,
-      headers: thumbHeaders,
+      headers,
     });
   }
-
-  // Normal inline or attachment stream.
-  const readResult = await readCanonicalFileContent(dustFs, canonicalPath);
-  if (readResult.isErr()) {
-    return apiError(ctx, mapDustFsError(readResult.error));
-  }
-  if (!readResult.value) {
-    return apiError(ctx, {
-      status_code: 404,
-      api_error: { type: "file_not_found", message: "File not found." },
-    });
-  }
-  const { contentType, stream, revision } = readResult.value;
-
-  const headers: Record<string, string> = {
-    "Content-Type": contentType,
-    "X-Content-Type-Options": "nosniff",
-    [DUST_FILE_CAN_WRITE_HEADER]: String(
-      dustFs.checkWriteAccess(canonicalPath).isOk()
-    ),
-  };
-  if (revision !== undefined) {
-    headers[DUST_FILE_REVISION_HEADER] = revision;
-    headers["Cache-Control"] = "private, no-cache";
-  }
-
-  // Unsafe content types and ?download=1 must always be served as attachments.
-  if (
-    !isContentTypeSafeToDisplay(contentType) ||
-    (download && download !== "0")
-  ) {
-    const fileName = path.posix.basename(canonicalPath);
-    headers["Content-Disposition"] = contentDispositionAttachment(fileName);
-  }
-
-  return new Response(readableToReadableStream(stream), {
-    status: 200,
-    headers,
-  });
-});
+);
 
 app.patch(
   "/:canonicalPath{.+}",
@@ -947,6 +1034,68 @@ function mapDustFsError(
 
     case "too_many_mounts":
     case "internal":
+      return {
+        status_code: 500,
+        api_error: { type: "internal_server_error", message: err.message },
+      };
+
+    default:
+      return assertNever(err.code);
+  }
+}
+
+function mapDocumentExportError(
+  err: DfmStoredDocumentError
+): APIErrorWithContentfulStatusCode {
+  switch (err.code) {
+    case "not_found":
+      return {
+        status_code: 404,
+        api_error: { type: "file_not_found", message: err.message },
+      };
+
+    case "refused":
+      return {
+        status_code: 403,
+        api_error: { type: "workspace_auth_error", message: err.message },
+      };
+
+    case "not_markdown":
+    case "invalid_document":
+      return {
+        status_code: 400,
+        api_error: { type: "file_type_not_supported", message: err.message },
+      };
+
+    case "conflict":
+    case "storage_failed":
+      return {
+        status_code: 500,
+        api_error: { type: "internal_server_error", message: err.message },
+      };
+
+    default:
+      return assertNever(err.code);
+  }
+}
+
+function mapDocumentPdfExportError(
+  err: DocumentPdfExportError
+): APIErrorWithContentfulStatusCode {
+  switch (err.code) {
+    case "not_configured":
+      return {
+        status_code: 503,
+        api_error: { type: "service_unavailable", message: err.message },
+      };
+
+    case "not_exportable":
+      return {
+        status_code: 400,
+        api_error: { type: "file_type_not_supported", message: err.message },
+      };
+
+    case "render_failed":
       return {
         status_code: 500,
         api_error: { type: "internal_server_error", message: err.message },

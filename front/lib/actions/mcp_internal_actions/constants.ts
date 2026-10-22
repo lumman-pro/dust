@@ -5,6 +5,7 @@ import type {
   ServerMetadata,
   ToolMeta,
 } from "@app/lib/actions/mcp_internal_actions/tool_definition";
+import type { StepContext } from "@app/lib/actions/types";
 import { ACTIVATION_RECOMMENDATIONS_SERVER } from "@app/lib/api/actions/servers/activation_recommendations/metadata";
 import {
   AGENT_DELEGATION_SERVER,
@@ -112,6 +113,7 @@ import type {
 } from "@app/lib/api/mcp";
 import { isCreditPricedPlanPrefix } from "@app/lib/plans/plan_codes";
 import { getResourceNameAndIdFromSId } from "@app/lib/resources/string_ids";
+import type { StreamModelInfo } from "@app/types/assistant/agent_run";
 import type { PlanType } from "@app/types/plan";
 import type { WhitelistableFeature } from "@app/types/shared/feature_flags";
 import type { ModelId } from "@app/types/shared/model_id";
@@ -1297,6 +1299,18 @@ type RuntimeToolStakeLevelCallback = (
   params: RuntimeToolStakeLevelCallbackParams
 ) => MCPToolStakeLevelType;
 
+type ToolCallStakeLevelCallbackParams = {
+  toolName: string;
+  toolInputs: Record<string, unknown>;
+  modelInfo: StreamModelInfo;
+  stepContext: StepContext;
+  configuredStakeLevel: MCPToolStakeLevelType;
+};
+
+type ToolCallStakeLevelCallback = (
+  params: ToolCallStakeLevelCallbackParams
+) => MCPToolStakeLevelType;
+
 type InternalMCPServerEntry<
   K extends InternalMCPServerNameType = InternalMCPServerNameType,
 > = {
@@ -1306,6 +1320,9 @@ type InternalMCPServerEntry<
   isRestricted: IsRestrictedCallback | undefined;
   isPreview: boolean;
   runtimeToolStakeLevelCallback?: RuntimeToolStakeLevelCallback;
+  // Sets the stake level of a single agent loop call from its inputs and the run, e.g. to ask for
+  // approval only for some calls. Evaluated once, when the call's action is created.
+  toolCallStakeLevelCallback?: ToolCallStakeLevelCallback;
   // Defines which argument values scope approval for "medium" stake tools.
   // The user must approve each specific combination before the tool can execute.
   tools_arguments_requiring_approval: Record<string, string[]> | undefined;
@@ -1348,6 +1365,38 @@ export type InternalMCPToolNameType<N extends InternalMCPServerNameType> =
   N extends keyof DynamicInternalMCPToolNameOverrides
     ? StaticInternalMCPToolNameType<N> | DynamicInternalMCPToolNameOverrides[N]
     : StaticInternalMCPToolNameType<N>;
+
+// The input type (before defaults and transforms) since `validateToolInputs` narrows the raw inputs.
+export type InternalMCPToolInputType<
+  S extends InternalMCPServerNameType,
+  T extends InternalMCPToolNameType<S>,
+> = z.input<
+  z.ZodObject<
+    Extract<
+      (typeof INTERNAL_MCP_SERVERS)[S]["metadata"]["tools"][number],
+      { name: T }
+    >["schema"]
+  >
+>;
+
+export function validateToolInputs<
+  S extends InternalMCPServerNameType,
+  T extends InternalMCPToolNameType<S>,
+>(
+  serverName: S,
+  toolName: T,
+  inputs: Record<string, unknown>
+): inputs is InternalMCPToolInputType<S, T> {
+  const toolMetadata = INTERNAL_MCP_SERVERS[serverName].metadata.tools.find(
+    (tool) => tool.name === toolName
+  );
+  // The type enforces that this exists, but we return false out of retro-compatibility over tool/server name changes.
+  if (!toolMetadata) {
+    return false;
+  }
+
+  return z.object(toolMetadata.schema).safeParse(inputs).success;
+}
 
 type AutoServerKeys<T> = {
   [K in keyof T]: T[K] extends { availability: "auto" | "auto_hidden_builder" }
@@ -1514,6 +1563,17 @@ export function resolveInternalMCPServerToolStakeLevel(
   return (
     server.runtimeToolStakeLevelCallback?.(params) ??
     params.configuredStakeLevel
+  );
+}
+
+export function resolveInternalMCPServerToolCallStakeLevel(
+  name: InternalMCPServerNameType,
+  params: ToolCallStakeLevelCallbackParams
+): MCPToolStakeLevelType {
+  const server: InternalMCPServerEntry = INTERNAL_MCP_SERVERS[name];
+
+  return (
+    server.toolCallStakeLevelCallback?.(params) ?? params.configuredStakeLevel
   );
 }
 

@@ -266,7 +266,6 @@ describe("FileExplorer Frame packages", () => {
     render(
       <ControlledFileExplorer
         defaultViewMode="list"
-        displayFramePackages
         files={[manifest]}
         isLoading={false}
         onDownload={vi.fn().mockResolvedValue(undefined)}
@@ -305,7 +304,6 @@ describe("FileExplorer Frame packages", () => {
     render(
       <ControlledFileExplorer
         defaultViewMode="list"
-        displayFramePackages
         files={[manifest]}
         isLoading={false}
         onDownload={vi.fn().mockResolvedValue(undefined)}
@@ -343,7 +341,6 @@ describe("FileExplorer Frame packages", () => {
     render(
       <ControlledFileExplorer
         defaultViewMode="list"
-        displayFramePackages
         files={[manifest, source]}
         isLoading={false}
         onDelete={onDelete}

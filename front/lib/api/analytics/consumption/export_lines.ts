@@ -10,6 +10,7 @@ import {
   roundToTwoDecimals,
   rowsToCsv,
 } from "@app/lib/api/analytics/csv_utils";
+import { fetchSpaceNames } from "@app/lib/api/analytics/enrichment";
 import { ExportLookupCache } from "@app/lib/api/analytics/export_lookup_cache";
 import type { ElasticsearchError } from "@app/lib/api/elasticsearch";
 import { searchConsumptionAnalytics } from "@app/lib/api/elasticsearch";
@@ -29,6 +30,7 @@ type ConsumptionLineExportRow = {
   completedAt: string;
   conversationId: string;
   spaceId: string;
+  spaceName: string;
   agentMessageId: string;
   consumptionType: string;
   agentId: string;
@@ -74,6 +76,7 @@ const CONSUMPTION_LINE_EXPORT_HEADERS: (keyof ConsumptionLineExportRow)[] = [
   "completedAt",
   "conversationId",
   "spaceId",
+  "spaceName",
   "agentMessageId",
   "consumptionType",
   "agentId",
@@ -143,6 +146,22 @@ class DimensionLabelCache {
     await cache.load(keys);
     return cache;
   }
+
+  private spaceNames: ExportLookupCache<string> | undefined;
+
+  async resolveSpaceNames(
+    auth: Authenticator,
+    spaceIds: string[]
+  ): Promise<ExportLookupCache<string>> {
+    if (!this.spaceNames) {
+      this.spaceNames = new ExportLookupCache((ids) =>
+        fetchSpaceNames(auth, ids)
+      );
+    }
+
+    await this.spaceNames.load(spaceIds);
+    return this.spaceNames;
+  }
 }
 
 // `visibleGroupIds` restricts the user group columns to those groups (group sIds); every group of
@@ -171,6 +190,9 @@ async function buildConsumptionLineExportRows(
         labelCache.resolve(auth, dimension, keys)
     : (dimension: ConsumptionTopDimension, keys: string[]) =>
         resolveDimensionLabels(auth, dimension, keys);
+  const resolveSpaceNames = labelCache
+    ? (spaceIds: string[]) => labelCache.resolveSpaceNames(auth, spaceIds)
+    : (spaceIds: string[]) => fetchSpaceNames(auth, spaceIds);
 
   const [
     agentLabels,
@@ -181,6 +203,7 @@ async function buildConsumptionLineExportRows(
     groupLabels,
     sourceLabels,
     triggerLabels,
+    spaceNames,
   ] = await Promise.all([
     resolve("agent", [...new Set(docs.map((doc) => doc.agent.attributed_id))]),
     resolve("user", [...new Set(removeNulls(docs.map((doc) => doc.user?.id)))]),
@@ -199,6 +222,9 @@ async function buildConsumptionLineExportRows(
     ]),
     resolve("trigger", [
       ...new Set(removeNulls(docs.map((doc) => doc.trigger_id))),
+    ]),
+    resolveSpaceNames([
+      ...new Set(removeNulls(docs.map((doc) => doc.space_id))),
     ]),
   ]);
 
@@ -221,6 +247,7 @@ async function buildConsumptionLineExportRows(
       completedAt: doc.completed_at,
       conversationId: doc.conversation_id,
       spaceId: doc.space_id ?? "",
+      spaceName: doc.space_id ? (spaceNames.get(doc.space_id) ?? "") : "",
       agentMessageId: doc.agent_message_id,
       consumptionType: doc.consumption_type,
       agentId,

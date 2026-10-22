@@ -7,7 +7,7 @@ use crate::{
     storage::{
         self,
         resources::{
-            object::{self, ObjectResource},
+            object::{self, ObjectResource, locks::LockTokens},
             session::SessionResource,
         },
     },
@@ -28,6 +28,7 @@ impl DirectoryResource {
         tx: &Transaction,
         session: &SessionResource,
         operation: CreateOperation,
+        locks: &LockTokens,
     ) -> Result<Mutation, storage::Error<Error>> {
         let kind = Self::supported_kind(operation.kind)?;
 
@@ -40,6 +41,13 @@ impl DirectoryResource {
         if !mode.can_read() || !mode.can_write() {
             return Err(Error::Forbidden.into());
         }
+        let expired_locks = ObjectResource::check_locks(
+            tx,
+            session,
+            &[operation.parent_id, operation.object_id],
+            locks,
+        )
+        .await?;
         let mut parent = Self::try_from(parent)?;
 
         // Create the child and update the parent directory.
@@ -58,6 +66,7 @@ impl DirectoryResource {
         child.metadata = None;
 
         // The child has no explicit grants and inherits its parent's mode.
+        expired_locks.clear(tx, &session.tenant.tenant_id);
         Ok(Mutation {
             object: Some(child.attr(tx, mode).await?),
             related: vec![parent.object.attr(tx, mode).await?],
@@ -90,6 +99,7 @@ impl DirectoryResource {
         tx: &Transaction,
         session: &SessionResource,
         operation: MoveOperation,
+        locks: &LockTokens,
     ) -> Result<Mutation, storage::Error<Error>> {
         Self::validate_name(&operation.name)?;
         if operation.object_id == session.tenant.root_id {
@@ -126,6 +136,13 @@ impl DirectoryResource {
             return Err(Error::Forbidden.into());
         }
 
+        let expired_locks = ObjectResource::check_locks(
+            tx,
+            session,
+            &[operation.object_id, operation.parent_id, target_id],
+            locks,
+        )
+        .await?;
         // Check the source binding before validating directory kinds.
         if object.parent_id != Some(operation.parent_id) {
             return Err(Error::Object(object::Error::NotFound).into());
@@ -179,6 +196,7 @@ impl DirectoryResource {
             related.push(target.object.attr(tx, target_mode).await?);
         }
         // Both parents have read/write, so inherited permissions and the object's mode are unchanged.
+        expired_locks.clear(tx, &session.tenant.tenant_id);
         Ok(Mutation {
             object: Some(object.attr(tx, mode).await?),
             related,
@@ -209,6 +227,7 @@ impl DirectoryResource {
         tx: &Transaction,
         session: &SessionResource,
         operation: RemoveOperation,
+        locks: &LockTokens,
     ) -> Result<Mutation, storage::Error<Error>> {
         let kind = Self::supported_kind(operation.kind)?;
         if operation.object_id == session.tenant.root_id {
@@ -239,6 +258,13 @@ impl DirectoryResource {
             return Err(Error::Forbidden.into());
         }
 
+        let expired_locks = ObjectResource::check_locks(
+            tx,
+            session,
+            &[operation.object_id, operation.parent_id],
+            locks,
+        )
+        .await?;
         // Verify the parent binding, requested kind, and directory emptiness.
         if object.parent_id != Some(operation.parent_id) {
             return Err(Error::Object(object::Error::NotFound).into());
@@ -263,6 +289,7 @@ impl DirectoryResource {
         tx.clear(&parent.child_key(&object.name));
         parent.object.record_content_change(tx, now_ms);
 
+        expired_locks.clear(tx, &session.tenant.tenant_id);
         Ok(Mutation {
             object: None,
             related: vec![parent.object.attr(tx, parent_mode).await?],

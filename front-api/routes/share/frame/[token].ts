@@ -1,5 +1,6 @@
 import { lookupShareTokenInOtherCells } from "@app/lib/api/cells/lookup";
 import config from "@app/lib/api/config";
+import { acceptsAnyVerifiedEmail } from "@app/lib/api/share/frame_sharing";
 import { getWorkspaceBrandingPublicUrls } from "@app/lib/api/workspace_branding";
 import { formatFilenameForDisplay } from "@app/lib/files";
 import { FileResource } from "@app/lib/resources/file_resource";
@@ -105,9 +106,17 @@ app.get(
       resolveOptionalAuth(ctx, workspace.sId),
     ]);
 
+    const acceptsAnyEmail =
+      hasActiveFrameFunctions &&
+      !auth &&
+      (await acceptsAnyVerifiedEmail(file, {
+        shareScope,
+        workspace: result.value.workspace,
+      }));
+
     // A Frame whose active publication declares functions is unusable without a workspace
-    // session, so it must look unshared to everyone else.
-    if (hasActiveFrameFunctions && !auth) {
+    // session or a verified email, so it must look unshared to everyone else.
+    if (hasActiveFrameFunctions && !auth && !acceptsAnyEmail) {
       return apiError(ctx, {
         status_code: 404,
         api_error: {
@@ -126,7 +135,8 @@ app.get(
     const hasActiveGrants = isEmailScope
       ? (await SharingGrantResource.listForFile(file)).length > 0
       : false;
-    const requiresEmailVerification = isEmailScope && hasActiveGrants;
+    const requiresEmailVerification =
+      (isEmailScope && hasActiveGrants) || acceptsAnyEmail;
 
     const { faviconUrl, logoUrl, ogImageUrl } =
       await getWorkspaceBrandingPublicUrls(workspace);

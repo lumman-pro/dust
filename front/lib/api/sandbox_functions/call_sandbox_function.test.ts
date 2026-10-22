@@ -24,6 +24,13 @@ vi.mock("@app/lib/api/sandbox_functions/events", async (importOriginal) => {
   return { ...actual, getSandboxFunctionInvocationEvents: vi.fn() };
 });
 
+vi.mock(
+  "@app/lib/api/sandbox_functions/cancel_pending_blocked_actions",
+  () => ({
+    cancelPendingSandboxFunctionBlockedActions: vi.fn(),
+  })
+);
+
 vi.mock("@app/temporal/sandbox_functions/client", async (importOriginal) => {
   const actual =
     await importOriginal<
@@ -37,6 +44,7 @@ vi.mock("@app/temporal/sandbox_functions/client", async (importOriginal) => {
   };
 });
 
+import { cancelPendingSandboxFunctionBlockedActions } from "@app/lib/api/sandbox_functions/cancel_pending_blocked_actions";
 import { getSandboxFunctionInvocationEvents } from "@app/lib/api/sandbox_functions/events";
 import { launchSandboxFunctionInvocationWorkflow } from "@app/temporal/sandbox_functions/client";
 
@@ -339,6 +347,10 @@ describe("callSandboxFunction", () => {
       code: "transport_error",
       message: "Frame function did not return a result in time.",
     });
+    expect(cancelPendingSandboxFunctionBlockedActions).toHaveBeenCalledWith(
+      auth,
+      expect.objectContaining({ sId: expect.stringMatching(/^sfi_/) })
+    );
   });
 
   it("returns a transport error when the event stream fails", async () => {

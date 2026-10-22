@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   canWriteFrameSource: true,
   hasAuthorizedRequiredTools: true,
   requiredTools: [] as [string, string][],
-  draftPublicationId: null as string | null,
+  draftMode: false,
   iframe: vi.fn((_props: unknown) => null),
 }));
 
@@ -84,7 +84,7 @@ vi.mock(
 vi.mock("@app/lib/swr/frames", () => ({
   useFramePermissions: () => ({
     canWriteFrameSource: mocks.canWriteFrameSource,
-    draftPublicationId: mocks.draftPublicationId,
+    draftMode: mocks.draftMode,
     hasFrameFunctions: false,
     requiredTools: mocks.requiredTools,
     isLastPublisher: false,
@@ -104,7 +104,7 @@ beforeEach(() => {
   mocks.canWriteFrameSource = true;
   mocks.hasAuthorizedRequiredTools = true;
   mocks.requiredTools = [];
-  mocks.draftPublicationId = null;
+  mocks.draftMode = false;
 });
 
 afterEach(() => {
@@ -141,8 +141,8 @@ describe("PodHoverFrameViewer", () => {
     );
   });
 
-  it("offers no editing while a draft is pending and shows the draft chip", () => {
-    mocks.draftPublicationId = "pub_draft";
+  it("offers no editing in draft mode and shows the draft chip", () => {
+    mocks.draftMode = true;
 
     render(
       <PodHoverFrameViewer
@@ -162,7 +162,7 @@ describe("PodHoverFrameViewer", () => {
     );
 
     expect(screen.queryByText("edit-controls")).not.toBeInTheDocument();
-    expect(screen.getByText("Draft pending")).toBeInTheDocument();
+    expect(screen.getByText("Draft mode")).toBeInTheDocument();
     expect(mocks.iframe).toHaveBeenCalledWith(
       expect.objectContaining({ isEditable: false })
     );

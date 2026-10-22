@@ -1,3 +1,4 @@
+import type { RunAgentResultResourceType } from "@app/lib/actions/mcp_internal_actions/output_schemas";
 import { makeEnableSkillResultOutput } from "@app/lib/api/actions/servers/skill_management/rendering";
 import {
   renderEquippedSkillsUserMessage,
@@ -15,6 +16,7 @@ import { SkillFactory } from "@app/tests/utils/SkillFactory";
 import type { AttachmentCapabilityContext } from "@app/types/api/assistant/conversation/attachments";
 import type { TextContent } from "@app/types/assistant/generation";
 import { isTextContent } from "@app/types/assistant/generation";
+import { isString } from "@app/types/shared/utils/general";
 import { INTERNAL_MIME_TYPES } from "@dust-tt/client";
 import assert from "assert";
 import { describe, expect, it } from "vitest";
@@ -200,6 +202,20 @@ Hello!`);
     const text = (res.content[0] as TextContent).text;
 
     expect(text).toContain("- Source: email");
+  });
+
+  it("adds the host selection to the message metadata, right below the source", async () => {
+    const { conversation, userMessage } = await buildMessage({
+      content: "Sum these",
+      context: { origin: "extension", hostSelection: "Sheet1!C5:D6" },
+    });
+
+    const res = renderUserMessage(conversation, userMessage);
+    const text = (res.content[0] as TextContent).text;
+
+    expect(text).toContain(
+      "- Source: extension\n- Selection when sent: Sheet1!C5:D6"
+    );
   });
 
   it("includes only conversation metadata when no user metadata is available", async () => {
@@ -623,5 +639,66 @@ describe("websearch resource array compaction in getSteps", () => {
     // Every result is flattened to its own fields directly, no "type"/"resource" wrapper and
     // no mimeType, for the whole array, not just a single item.
     expect(parsed).toEqual(websearchResults);
+  });
+});
+
+describe("run_agent result rendering in getSteps", () => {
+  it("keeps the sub-agent chain of thought out of the rendered tool result", async () => {
+    const { authenticator } = await createResourceTest({ role: "admin" });
+
+    const agentConfig = await AgentConfigurationFactory.createTestAgent(
+      authenticator,
+      {
+        name: "Parent Agent",
+        description: "An agent that calls a sub-agent",
+        model: { providerId: "anthropic", modelId: "claude-sonnet-4-6" },
+      }
+    );
+    const model = getSupportedModelConfig(agentConfig.model);
+    assert(model, "Expected a supported model configuration.");
+
+    const runAgentResult: RunAgentResultResourceType = {
+      mimeType: INTERNAL_MIME_TYPES.TOOL_OUTPUT.RUN_AGENT_RESULT,
+      conversationId: "sub_conv_1",
+      text: "The report says revenue grew.",
+      chainOfThought: "SECRET_SUB_AGENT_REASONING",
+      uri: "https://dust.tt/w/ws/conversation/sub_conv_1",
+    };
+
+    const message = mockFullAgentMessage({
+      configuration: agentConfig,
+      actions: [
+        {
+          functionCallName: "run_sub_agent__run_agent",
+          functionCallId: "toolu_run_agent_1",
+          internalMCPServerName: "run_agent",
+          toolName: "run_agent",
+          params: { query: "Summarize the report" },
+          status: "succeeded",
+          output: [{ type: "resource" as const, resource: runAgentResult }],
+        },
+      ],
+    });
+
+    const steps = await getSteps(authenticator, {
+      model,
+      message,
+      workspaceId: "workspace_123",
+      conversationId: "conv_1",
+      enabledSkillById: new Map(),
+      onMissingAction: "skip",
+      capabilities: LEGACY_CAPABILITIES,
+    });
+
+    const result = steps[0].actions[0].result;
+    assert(isString(result.content));
+    expect(result.content).not.toContain("SECRET_SUB_AGENT_REASONING");
+    expect(JSON.parse(result.content)).toEqual([
+      {
+        conversationId: "sub_conv_1",
+        text: "The report says revenue grew.",
+        uri: "https://dust.tt/w/ws/conversation/sub_conv_1",
+      },
+    ]);
   });
 });

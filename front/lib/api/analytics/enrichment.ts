@@ -1,4 +1,5 @@
 import type { Authenticator } from "@app/lib/auth";
+import { SpaceResource } from "@app/lib/resources/space_resource";
 import { getFrontReplicaDbConnection } from "@app/lib/resources/storage";
 import { TagResource } from "@app/lib/resources/tags_resource";
 import { UserResource } from "@app/lib/resources/user_resource";
@@ -57,6 +58,28 @@ export async function fetchTagNames(
 
   const tags = await TagResource.fetchByIds(auth, tagIds);
   return new Map(tags.map((t) => [t.sId, t.name]));
+}
+
+/**
+ * @cc [owner:fabiencelier,label:security] space-names-fetchable-only
+ * MUST only return the name of spaces the caller can fetch (`canFetch(auth)`), so a caller holding
+ * no verb on a restricted pod never learns its name. Deleted spaces MUST be included, so conversations
+ * of a since-deleted space keep reporting its name.
+ */
+export async function fetchSpaceNames(
+  auth: Authenticator,
+  spaceIds: string[]
+): Promise<Map<string, string>> {
+  if (spaceIds.length === 0) {
+    return new Map();
+  }
+
+  const spaces = await SpaceResource.fetchByIds(auth, spaceIds, {
+    includeDeleted: true,
+  });
+  return new Map(
+    spaces.filter((s) => s.canFetch(auth)).map((s) => [s.sId, s.name])
+  );
 }
 
 export async function fetchUserEmails(

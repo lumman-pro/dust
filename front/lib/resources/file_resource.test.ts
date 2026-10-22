@@ -1,3 +1,4 @@
+import config from "@app/lib/api/config";
 import { createClientExecutableFile } from "@app/lib/api/files/client_executable";
 import { computeFrameContentHash } from "@app/lib/api/viz/authorized_file_access_policy";
 import { uploadFrameContent } from "@app/lib/api/viz/upload_frame_content";
@@ -142,6 +143,40 @@ describe("FileResource", () => {
     expect(await frame.canCurrentUserUseFrame(memberAuth)).toBe(true);
     expect((await grant.revoke(auth)).isOk()).toBe(true);
     expect(await frame.canCurrentUserUseFrame(memberAuth)).toBe(false);
+  });
+
+  it("builds the share URL from the share kind and refuses to share non-shareable files", async () => {
+    const { authenticator: auth, user } = await createResourceTest({
+      role: "admin",
+    });
+    const frame = await FileFactory.create(auth, user, {
+      contentType: frameContentType,
+      fileName: "frame.tsx",
+      fileSize: 100,
+      status: "ready",
+      useCase: "conversation",
+    });
+    const text = await FileFactory.create(auth, user, {
+      contentType: "text/plain",
+      fileName: "notes.txt",
+      fileSize: 100,
+      status: "ready",
+      useCase: "conversation",
+    });
+
+    await frame.setShareScope(auth, "workspace_and_emails");
+    const shareInfo = await frame.getShareInfo();
+
+    expect(frame.shareKind).toBe("frame");
+    expect(shareInfo?.shareUrl).toMatch(
+      new RegExp(`^${config.getAppUrl()}/share/frame/[^/]+$`)
+    );
+    expect(text.shareKind).toBeNull();
+    expect(text.isShareable).toBe(false);
+    expect(await text.getShareInfo()).toBeNull();
+    await expect(
+      text.setShareScope(auth, "workspace_and_emails")
+    ).rejects.toThrow();
   });
 
   describe("fetchByShareTokenWithContent", () => {

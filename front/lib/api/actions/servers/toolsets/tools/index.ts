@@ -7,6 +7,10 @@ import {
 import type { ToolHandlers } from "@app/lib/actions/mcp_internal_actions/tool_definition";
 import { buildTools } from "@app/lib/actions/mcp_internal_actions/tool_definition";
 import { isJITMCPServerView } from "@app/lib/actions/mcp_internal_actions/utils";
+import {
+  isServerUsableForMessage,
+  PERSONAL_SERVER_UNUSABLE_MESSAGE,
+} from "@app/lib/actions/personal_actions";
 import { getToolNamePrefix } from "@app/lib/actions/tool_name_utils";
 import { isAgentLoopRunContext } from "@app/lib/actions/types";
 import { isServerSideMCPServerConfiguration } from "@app/lib/actions/types/guards";
@@ -14,6 +18,7 @@ import { TOOLSETS_TOOLS_METADATA } from "@app/lib/api/actions/servers/toolsets/m
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { MCPServerViewResource } from "@app/lib/resources/mcp_server_view_resource";
 import { SpaceResource } from "@app/lib/resources/space_resource";
+import { isUserMessageWithoutConcreteUser } from "@app/types/assistant/conversation";
 import { Err, Ok } from "@app/types/shared/result";
 import { INTERNAL_MIME_TYPES } from "@dust-tt/client";
 import assert from "assert";
@@ -30,6 +35,10 @@ const handlers: ToolHandlers<typeof TOOLSETS_TOOLS_METADATA> = {
       runContext.agentConfiguration.actions
         .filter(isServerSideMCPServerConfiguration)
         .map((action) => action.mcpServerViewId);
+
+    const isWithoutConcreteUser = isUserMessageWithoutConcreteUser(
+      runContext.userMessage
+    );
 
     const globalSpace = await SpaceResource.fetchWorkspaceGlobalSpace(auth);
     const mcpServerViews = (
@@ -56,6 +65,11 @@ const handlers: ToolHandlers<typeof TOOLSETS_TOOLS_METADATA> = {
       .filter(
         (mcpServerView) =>
           mcpServerView.server.availability !== "auto_hidden_builder"
+      )
+      .filter((mcpServerView) =>
+        isServerUsableForMessage(mcpServerView, {
+          isWithoutConcreteUser,
+        })
       );
 
     return new Ok(
@@ -89,6 +103,18 @@ const handlers: ToolHandlers<typeof TOOLSETS_TOOLS_METADATA> = {
         new MCPError(`Failed to enable toolset`, {
           tracked: false,
         })
+      );
+    }
+
+    if (
+      !isServerUsableForMessage(mcpServerView, {
+        isWithoutConcreteUser: isUserMessageWithoutConcreteUser(
+          runContext.userMessage
+        ),
+      })
+    ) {
+      return new Err(
+        new MCPError(PERSONAL_SERVER_UNUSABLE_MESSAGE, { tracked: false })
       );
     }
 

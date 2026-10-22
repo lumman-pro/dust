@@ -71,7 +71,10 @@ impl From<storage::Error<file::Error>> for storage::Error<Status> {
 impl From<object::Error> for ErrorCode {
     fn from(error: object::Error) -> Self {
         match error {
-            object::Error::InvalidXattrName
+            object::Error::WouldBlock => ErrorCode::WouldBlock,
+            object::Error::LockLost => ErrorCode::LockLost,
+            object::Error::InvalidLockId
+            | object::Error::InvalidXattrName
             | object::Error::InvalidMimeType
             | object::Error::XattrsTooLarge
             | object::Error::InvalidId

@@ -25,7 +25,12 @@ const AUTH = { vizUrl: "https://viz.dust.tt" } as AuthContextValue;
 const renderEmbed = (path: string) =>
   render(
     <AuthContext.Provider value={AUTH}>
-      <DocumentFrameEmbed owner={owner} path={path} height={600} />
+      <DocumentFrameEmbed
+        owner={owner}
+        path={path}
+        height={600}
+        frameProps={{ region: "EU" }}
+      />
     </AuthContext.Provider>
   );
 
@@ -64,6 +69,7 @@ describe("DocumentFrameEmbed", () => {
         isPodMember: true,
         frameId: "fil_frame",
         framePath: "pod-spc_pod/dashboards/revenue.frame.json",
+        frameProps: { region: "EU" },
       }),
       expect.anything()
     );
@@ -84,6 +90,31 @@ describe("DocumentFrameEmbed", () => {
       }),
       expect.anything()
     );
+  });
+
+  it("gives each embed of the same Frame its own identifier", () => {
+    const path = "pod-spc_pod/dashboards/revenue.frame.json";
+    render(
+      <AuthContext.Provider value={AUTH}>
+        <DocumentFrameEmbed
+          owner={owner}
+          path={path}
+          height={600}
+          frameProps={{ region: "EU" }}
+        />
+        <DocumentFrameEmbed
+          owner={owner}
+          path={path}
+          height={600}
+          frameProps={{ region: "US" }}
+        />
+      </AuthContext.Provider>
+    );
+
+    const identifiers = vi
+      .mocked(PodFrameVisualization)
+      .mock.calls.map(([props]) => props.identifier);
+    expect(new Set(identifiers).size).toBe(2);
   });
 
   it("waits for the reader's pod roles before rendering the Frame", () => {

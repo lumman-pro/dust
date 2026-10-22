@@ -30,6 +30,7 @@ import { LinkWrapper } from "@app/lib/platform";
 import { getSkillAvatarIcon } from "@app/lib/skill";
 import type {
   ConsumptionScopeFilter,
+  ConsumptionTopRankBy,
   ConsumptionTopSortOrder,
 } from "@app/types/api/analytics/consumption";
 import { CONSUMPTION_DIMENSION_FILTER_KEYS } from "@app/types/api/analytics/consumption";
@@ -95,9 +96,11 @@ const DEFAULT_ATTRIBUTION_SORTING: SortingState = [
   { id: "credits", desc: true },
 ];
 
-const ATTRIBUTION_SERVER_SORTABLE_COLUMN_IDS = new Set([
-  "credits",
-  "costShare",
+// Server ranking each sortable column follows.
+const ATTRIBUTION_SERVER_RANK_BY = new Map<string, ConsumptionTopRankBy>([
+  ["credits", "credits"],
+  ["costShare", "credits"],
+  ["count", "count"],
 ]);
 
 function AttributionTooltipCard({
@@ -454,7 +457,7 @@ function buildColumns({
             meta: {
               className: cn(
                 COLLAPSED_COLUMN_CLASSES,
-                "@xs:w-56 @xs:max-w-none @xs:px-2"
+                "@xs:w-44 @xs:max-w-none @xs:px-2"
               ),
               headerAlign: "left",
             },
@@ -475,7 +478,9 @@ function buildColumns({
       id: "credits",
       accessorKey: "credits",
       header: labels.totalCredits,
-      meta: { headerAlign: "right" },
+      // Numeric columns have fixed widths that fit their header and values in
+      // every locale, so the free width goes to the name column.
+      meta: { className: "w-28", headerAlign: "right" },
       cell: (info) => (
         <DataTable.BasicCellContent
           className="justify-end text-right tabular-nums"
@@ -487,11 +492,11 @@ function buildColumns({
       id: "count",
       accessorKey: "count",
       header: countLabel,
-      enableSorting: false,
+      enableSorting: true,
       meta: {
         className: cn(
           COLLAPSED_COLUMN_CLASSES,
-          "@sm:w-auto @sm:max-w-none @sm:px-2"
+          "@sm:w-32 @sm:max-w-none @sm:px-2"
         ),
         headerAlign: "right",
       },
@@ -510,7 +515,7 @@ function buildColumns({
       meta: {
         className: cn(
           COLLAPSED_COLUMN_CLASSES,
-          "@lg:w-auto @lg:max-w-none @lg:px-2"
+          "@lg:w-40 @lg:max-w-none @lg:px-2"
         ),
         headerAlign: "right",
       },
@@ -639,6 +644,7 @@ export interface ConsumptionAttributionRowsQueryState {
   sorting: SortingState;
   onSortingChange: OnChangeFn<SortingState>;
   sortOrder: ConsumptionTopSortOrder;
+  rankBy: ConsumptionTopRankBy;
 }
 
 export function useConsumptionAttributionRowsQueryState(): ConsumptionAttributionRowsQueryState {
@@ -658,16 +664,13 @@ export function useConsumptionAttributionRowsQueryState(): ConsumptionAttributio
   };
 
   const activeSort = sorting[0];
-  // Ranking is always by credits: only forward asc/desc when the sorted
-  // column actually rides that ranking, so sorting by anything else keeps
-  // fetching pages in the default credits-desc order and reorders them
-  // locally instead.
-  const sortOrder =
-    activeSort?.id &&
-    ATTRIBUTION_SERVER_SORTABLE_COLUMN_IDS.has(activeSort.id) &&
-    !activeSort.desc
-      ? "asc"
-      : "desc";
+  // Only forward the sort when the sorted column rides a server ranking, so
+  // sorting by anything else keeps fetching pages in the default credits-desc
+  // order and reorders them locally instead.
+  const serverRankBy = activeSort?.id
+    ? ATTRIBUTION_SERVER_RANK_BY.get(activeSort.id)
+    : undefined;
+  const sortOrder = serverRankBy && !activeSort?.desc ? "asc" : "desc";
 
   return {
     pagination,
@@ -675,6 +678,7 @@ export function useConsumptionAttributionRowsQueryState(): ConsumptionAttributio
     sorting,
     onSortingChange,
     sortOrder,
+    rankBy: serverRankBy ?? "credits",
   };
 }
 
@@ -726,10 +730,10 @@ export function ConsumptionAttributionRowsView({
   const columnLabels = useMemo<AttributionColumnLabels>(
     () => ({
       name: t`Name`,
-      activeMembers: t`Active / total members`,
+      activeMembers: t`Active users`,
       usageVsAverage: t`Vs workspace avg`,
       costShare: t`Consumption share`,
-      totalCredits: t`Total credits`,
+      totalCredits: t`Credits`,
       vsPrev: t`Vs prev`,
       addToFilters: t`Add to filters`,
       removeFromFilters: t`Remove from filters`,
@@ -928,6 +932,7 @@ function WorkspaceConsumptionAttributionRows(
     filter: props.filter,
     analyticsScope: props.analyticsScope,
     sortOrder: queryState.sortOrder,
+    rankBy: queryState.rankBy,
     disabled: props.disabled,
   });
 

@@ -115,6 +115,7 @@ describe("envgen", () => {
       const content = generateEnvSh("test", ports);
       expect(content).toContain("export REDIS_URI=redis://localhost:10379");
       expect(content).toContain("export REDIS_CACHE_URI=redis://localhost:10379");
+      expect(content).toContain("export REDIS_COLLAB_URI=redis://localhost:10379");
       expect(content).toContain("export QDRANT_CLUSTER_0_URL=http://127.0.0.1:10334");
       expect(content).toContain("export ELASTICSEARCH_URL=http://localhost:10200");
       expect(content).toContain("export TEXT_EXTRACTION_URL=http://localhost:10998");

@@ -384,18 +384,6 @@ msgstr "Der Zugriff konnte nicht widerrufen werden."
 msgid "Couldn't save edits"
 msgstr "Änderungen konnten nicht gespeichert werden"
 
-#: front/lib/swr/frames.ts
-msgid "PDF export failed"
-msgstr "Der PDF-Export ist fehlgeschlagen."
-
-#: front/lib/swr/frames.ts
-msgid "PDF exported"
-msgstr "PDF exportiert"
-
-#: front/lib/swr/frames.ts
-msgid "Your PDF has been downloaded."
-msgstr "Ihr PDF wurde heruntergeladen."
-
 #: front/lib/swr/github_connection.ts
 msgid "GitHub disconnected"
 msgstr "GitHub getrennt"

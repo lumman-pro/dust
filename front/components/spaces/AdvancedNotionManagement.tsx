@@ -127,7 +127,7 @@ export function AdvancedNotionManagement({
         </DataTable.CellContent>
       ),
       meta: {
-        className: "w-16",
+        className: "w-28",
       },
     },
     { header: t`URL`, accessorKey: "url" },
@@ -156,7 +156,7 @@ export function AdvancedNotionManagement({
         </DataTable.CellContent>
       ),
       meta: {
-        className: "w-16",
+        className: "w-24",
       },
     },
     {

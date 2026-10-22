@@ -7,6 +7,7 @@
 set -euo pipefail
 
 FDB_VERSION=7.4.8
+FDB_API_VERSION=740
 LIBRARY=/usr/local/lib/libfdb_c.dylib
 
 # Linux installs the client from its own package (the dev container image does), so there is
@@ -25,17 +26,30 @@ fi
 
 client_is_current() {
   [ -e "$LIBRARY" ] || return 1
-  python3 - "$LIBRARY" "$FDB_VERSION" <<'PYTHON'
+  python3 - "$LIBRARY" "$FDB_VERSION" "$FDB_API_VERSION" <<'PYTHON'
 import ctypes
 import sys
 
 try:
     library = ctypes.CDLL(sys.argv[1])
-except OSError:
+except OSError as error:
+    print(f"Cannot load FoundationDB client: {error}", file=sys.stderr)
     sys.exit(1)
+library.fdb_select_api_version_impl.argtypes = [ctypes.c_int, ctypes.c_int]
+library.fdb_select_api_version_impl.restype = ctypes.c_int
+api_version = int(sys.argv[3])
+error = library.fdb_select_api_version_impl(api_version, api_version)
+if error:
+    library.fdb_get_error.argtypes = [ctypes.c_int]
+    library.fdb_get_error.restype = ctypes.c_char_p
+    print(library.fdb_get_error(error).decode(), file=sys.stderr)
+    sys.exit(1)
+library.fdb_get_client_version.argtypes = []
 library.fdb_get_client_version.restype = ctypes.c_char_p
 version = library.fdb_get_client_version().decode().split(",")[0]
-sys.exit(0 if version == sys.argv[2] else 1)
+if version != sys.argv[2]:
+    print(f"FoundationDB client {version} installed; {sys.argv[2]} required.", file=sys.stderr)
+    sys.exit(1)
 PYTHON
 }
 

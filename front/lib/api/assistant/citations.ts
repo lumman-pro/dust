@@ -203,5 +203,6 @@ export function getLightAgentMessageFromAgentMessage(
     activitySteps: [],
     resolvedModel: agentMessage.resolvedModel,
     modelResolutionMethod: agentMessage.modelResolutionMethod,
+    fallbackModelId: agentMessage.fallbackModelId,
   };
 }

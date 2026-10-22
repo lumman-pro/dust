@@ -92,6 +92,7 @@ import type {
   FileTypeWithUploadUrl,
   FileUseCase,
   FileUseCaseMetadata,
+  ShareableFileKind,
   SharingGrantType,
 } from "@app/types/files";
 import {
@@ -505,8 +506,10 @@ export class FileResource extends BaseResource<FileModel> {
       }
     }
 
-    const authorizedFileAccess =
-      await fileRes.getActiveAuthorizedFileAccessAllowlist();
+    // The useFile() allowlist only exists for Frames.
+    const authorizedFileAccess = fileRes.isShareableFrame
+      ? await fileRes.getActiveAuthorizedFileAccessAllowlist()
+      : null;
 
     return new Ok({
       file: fileRes,
@@ -1098,6 +1101,36 @@ export class FileResource extends BaseResource<FileModel> {
 
   get isShareableFrame(): boolean {
     return isFrameContentType(this.contentType);
+  }
+
+  /** The kind of share link this file supports, or null when it cannot be shared. */
+  get shareKind(): ShareableFileKind | null {
+    if (this.isShareableFrame) {
+      return "frame";
+    }
+    return null;
+  }
+
+  get isShareable(): boolean {
+    return this.shareKind !== null;
+  }
+
+  /** Ensures the share row of a shareable file exists. No-op for any other file. */
+  async ensureShareable(
+    auth: Authenticator,
+    { transaction }: { transaction?: Transaction } = {}
+  ): Promise<void> {
+    const kind = this.shareKind;
+    if (!kind) {
+      return;
+    }
+
+    switch (kind) {
+      case "frame":
+        return this.ensureShareableFrame(auth, { transaction });
+      default:
+        assertNever(kind);
+    }
   }
 
   async ensureShareableFrame(
@@ -2170,12 +2203,10 @@ export class FileResource extends BaseResource<FileModel> {
   }: {
     shareableFileToken: string;
   }): string {
-    assert(
-      this.isShareableFrame,
-      "getShareUrlForShareableFile called on a non-Frame file"
-    );
+    const kind = this.shareKind;
+    assert(kind, "getShareUrlForShareableFile called on a non-shareable file");
 
-    return `${config.getAppUrl()}/share/frame/${shareableFileToken}`;
+    return `${config.getAppUrl()}/share/${kind}/${shareableFileToken}`;
   }
 
   async setShareScope(
@@ -2183,11 +2214,11 @@ export class FileResource extends BaseResource<FileModel> {
     scope: FileShareScope,
     transaction?: Transaction
   ): Promise<void> {
-    if (!this.isShareableFrame) {
-      throw new Error("Only Frame files can be shared");
+    if (!this.isShareable) {
+      throw new Error("Only shareable files can be shared");
     }
 
-    await this.ensureShareableFrame(auth);
+    await this.ensureShareable(auth);
 
     const user = auth.getNonNullableUser();
 
@@ -2217,7 +2248,7 @@ export class FileResource extends BaseResource<FileModel> {
     sharedAt: number;
     shareUrl: string;
   } | null> {
-    if (!this.isShareableFrame) {
+    if (!this.isShareable) {
       return null;
     }
 
@@ -2276,19 +2307,19 @@ export class FileResource extends BaseResource<FileModel> {
   /**
    * @cc [owner:pmilliotte;davidebbo,label:product;security] shared-frame-with-functions-needs-workspace-user
    * A Frame v2 whose active publication declares functions must not be served to a viewer who is
-   * not an authenticated workspace user. Invocation is fail-closed on
-   * `getAuthenticatedWorkspaceUser`, so such a viewer would only ever see a Frame whose every
-   * function call errors. Every public entry point onto a shared Frame — the share metadata
-   * endpoint and the frame payload endpoint — must gate on this predicate and 404, giving the
-   * viewer the same page an unshared link gives them. Gating the payload endpoint alone is not
-   * enough: the share page renders its 404 off the metadata endpoint.
+   * not an authenticated workspace user, except as [public-frame-needs-public-function] allows.
+   * Invocation is fail-closed on `getAuthenticatedWorkspaceUser`, so such a viewer would only ever
+   * see a Frame whose every function call errors. Every public entry point onto a shared Frame
+   * (the share metadata endpoint and the frame payload endpoint) must gate on this predicate and
+   * 404, giving the viewer the same page an unshared link gives them. Gating the payload endpoint
+   * alone is not enough: the share page renders its 404 off the metadata endpoint.
    *
    * The write path carries the mirror obligation: an editor must not be able to create a share
    * whose audience this predicate would then lock out, or sharing succeeds and mints a link that
-   * 404s for everyone it reached. `checkFrameShareScopePermission` refuses `public` and
-   * `checkFrameEmailGrantPermission` refuses invites to non-members, both regardless of the
-   * workspace sharing policy and of the caller's publish/invite permission. Narrowing a scope and
-   * revoking a grant stay allowed so an over-broad earlier share can still be fixed, and
+   * 404s for everyone it reached. `checkFrameShareScopePermission` refuses `public` except as
+   * [public-frame-needs-public-function] allows, and `checkFrameEmailGrantPermission` refuses
+   * invites to non-members, both regardless of the caller's publish/invite permission. Narrowing a
+   * scope and revoking a grant stay allowed so an over-broad earlier share can still be fixed, and
    * `GET /share/grants` reports its external grants as `blockedByPolicy`.
    *
    * Whether this Frame's *active* publication declares any function. Scoped to the active
@@ -2321,6 +2352,37 @@ export class FileResource extends BaseResource<FileModel> {
         workspaceId: this.workspaceId,
         fileId: this.id,
         publicationId,
+      },
+    });
+
+    return count > 0;
+  }
+
+  /**
+   * @cc [owner:achilleburah,label:product;security] public-frame-needs-public-function
+   * A Frame v2 with active functions MAY be served to a viewer who is not a workspace user only on
+   * a `public` share, when its active publication declares a public function, the workspace
+   * sharing policy allows all scopes and the viewer holds a verified frame session
+   * (`acceptsAnyVerifiedEmail`). The share metadata endpoint then asks for email verification
+   * instead of a 404. The write path mirrors it: `checkFrameShareScopePermission` refuses `public`
+   * for a Frame whose functions are all private, and a publication with functions but no public
+   * one is refused onto a public share (`checkFramePublicFunctionSharing`).
+   *
+   * Whether this Frame's active publication declares a function with the `public` user identity
+   * policy. Takes no `Authenticator`, for the same reason as `hasActiveFrameFunctions`.
+   */
+  async hasActivePublicFrameFunctions(): Promise<boolean> {
+    const publicationId = this.framePublicationIdFor("live");
+    if (!this.isFrameV2 || !publicationId) {
+      return false;
+    }
+
+    const count = await SandboxFunctionModel.count({
+      where: {
+        workspaceId: this.workspaceId,
+        fileId: this.id,
+        publicationId,
+        userIdentity: "public",
       },
     });
 
@@ -2776,8 +2838,8 @@ export class FileResource extends BaseResource<FileModel> {
     transaction?: Transaction
   ): Promise<ShareableFileModel> {
     assert(
-      this.isShareableFrame,
-      `Shareable file access requires a Frame (file: ${this.sId})`
+      this.isShareable,
+      `Shareable file access requires a shareable file (file: ${this.sId})`
     );
 
     const shareableFile = await FileResource.shareableFileModel.findOne({
@@ -2924,7 +2986,7 @@ export class FileResource extends BaseResource<FileModel> {
     auth: Authenticator,
     { grantId }: { grantId: ModelId }
   ): Promise<Result<{ email: string }, DustError>> {
-    assert(this.isShareableFrame, "revokeSharingGrant requires a Frame file");
+    assert(this.isShareable, "revokeSharingGrant requires a shareable file");
     if (!Number.isSafeInteger(grantId) || grantId < 0) {
       return new Err(
         new DustError("file_not_found", "Sharing grant not found")
@@ -2947,7 +3009,7 @@ export class FileResource extends BaseResource<FileModel> {
   }
 
   async listAllSharingGrants(): Promise<SharingGrantType[]> {
-    assert(this.isShareableFrame, "listAllSharingGrants requires a Frame file");
+    assert(this.isShareable, "listAllSharingGrants requires a shareable file");
     const grants = await SharingGrantResource.listForFile(this, {
       includeRevoked: true,
     });

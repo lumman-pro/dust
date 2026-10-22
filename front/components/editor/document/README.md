@@ -40,6 +40,25 @@ an empty paragraph, so an empty list item saves as `- &nbsp;`. An empty heading 
 marker alone. A list directly after a list of the same type saves with the other marker, `*` or
 `1)`, so Markdown reads it as its own list.
 
+## What saving drops
+
+Saving writes the document as Markdown, reads that Markdown back, and refuses the save when the
+two differ, so a save never changes the content without anyone noticing. A few things cannot be
+written in Markdown and do not show where Markdown is displayed, so saving first drops them
+(`toMarkdownForm` in `content.ts`) and checks the Markdown against what is left:
+
+- spaces at the start or end of a line: at the edges of a paragraph, heading, list item or table
+  cell, or next to a line break, but never in a code block;
+- a line break ending a paragraph or heading, so a paragraph holding only spaces and line breaks
+  saves empty;
+- empty paragraphs ending the document;
+- a table cell's alignment where it differs from its column's;
+- the task of a list item whose first paragraph is empty.
+
+Spaces that are all a comment covers stay, so the comment keeps its place. At a heading's edge,
+where Markdown would strip them, they are written as `&#32;`, a code Markdown reads back as a
+space. Anything else that would not read back is refused, and belongs to the Markdown writers.
+
 ## Tables
 
 A GFM table opens as a table whose first row is its header, shown as column headers, at the top
@@ -62,7 +81,11 @@ GFM task items, `- [ ]` and `1. [x]`, are list items with `task` and `checked` a
 StarterKit's `listItem` (`DocumentListItem.ts`), so a list mixing tasks and plain items stays one
 list. marked's GFM lexer reads every list, numbered ones included (`DocumentOrderedList.ts`
 turns off TipTap's own numbered list tokenizer), so `a.` and `i.` numbering reads as text. A
-task shows a checkbox that editors tick and that does nothing in a read-only editor. Typing
+task shows Sparkle's task step badge, as the plan panel does: a circle in the marker's column,
+holding the task's number in a numbered list and a check when done, next to plain items that
+keep their bullet or number. Editors tick it; it does nothing in a read-only editor. The badge
+is a browser-only extension (`DocumentTaskBadges.ts`): the collab server bundles the schema
+and never draws a document, so the schema's list item holds no drawing code. Typing
 `[ ] ` or `[x] ` at the start of an item, or the Task list and Numbered task list entries of the
 `/` and list menus, makes it a task. GFM has no empty task: a task with no text on its first line
 saves as an empty item. `anchorComment` refuses an agent's comment anchor that would land on a
@@ -161,13 +184,14 @@ conversation's files only once an entry is picked.
 
 ## Frames
 
-A line holding exactly `::embed_frame{path="…"}`, or `::embed_frame{path="…" height="…"}` with a height in
-pixels, embeds a Frame: a `frameEmbed` node on its own line, keeping its path and height. Anything
-else on the line, another attribute, or the line opening a list item keeps it as text. Text reading as such a line saves as `::embed\_frame{…}`, since the editor escapes `_` in
+A line holding exactly `::embed_frame{path="…"}`, with an optional height in pixels, `height="…"`,
+and any number of props, `region="EU"`, in any order, embeds a Frame: a `frameEmbed` node on its
+own line, keeping its path, height and props. Anything else on the line, a repeated attribute, or
+the line opening a list item keeps it as text. Text reading as such a line saves as `::embed\_frame{…}`, since the editor escapes `_` in
 text, so it reopens as text. The host's optional
 `renderFrame` displays it, in the editor and in the read-only preview; events inside it go to the
 Frame, never the editor. The file preview renders the Frame inline in a box of its height, 600px
-by default, after loading it from its path through the file API, so only readers of the Frame's
+by default, its component given the props as string props, after loading it from its path through the file API, so only readers of the Frame's
 file see it (`DocumentFrameEmbed`). While editable, hovering a Frame shows a menu at its top right
 with a height slider and a remove action; the slider previews the height while dragged and saves
 it on release, each action its own undo step. Without a renderer, or for a path that is not a readable Frame,

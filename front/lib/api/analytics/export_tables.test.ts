@@ -962,6 +962,8 @@ function messageRow(messageId: string): MessageExportRow {
     assistantSettings: "published",
     assistantTags: "",
     conversationId: "conv_1",
+    spaceId: "",
+    spaceName: "",
     parentMessageId: "",
     userId: "user_1",
     userEmail: "alice@example.com",

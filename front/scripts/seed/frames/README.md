@@ -6,7 +6,7 @@ Publishes two Frames v2 covering the current feature set, each with a conversati
 - `TeamTasks`: Frame with a database and one function per caller policy, shared with the
   workspace.
 
-It enables `frames_v2` and `frames_v2_functions` and sets the workspace sharing policy to
+It enables `frames_v2_functions` and sets the workspace sharing policy to
 `all_scopes` first. Re-running republishes the Frames and keeps
 their data and existing conversations.
 

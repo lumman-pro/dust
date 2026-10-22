@@ -10,6 +10,7 @@ import type {
 } from "@app/lib/actions/mcp_internal_actions/output_schemas";
 import {
   isRunAgentQueryResourceType,
+  isRunAgentResultResourceType,
   isSearchResultResourceType,
   isToolGeneratedFile,
   isToolMarkerResourceType,
@@ -102,6 +103,11 @@ export function hideFileFromActionOutput({
   };
 }
 
+/**
+ * @cc [owner:fontanierh,label:product] sub-agent-chain-of-thought-never-sent-to-model
+ * A `run_agent` result MUST be returned without its `chainOfThought` field. The sub-agent's chain of
+ * thought stays in the stored action output but is never sent to a model.
+ */
 export function rewriteContentForModel(
   content: CallToolResult["content"][number],
   capabilities: AttachmentCapabilityContext
@@ -149,6 +155,12 @@ export function rewriteContentForModel(
     isRunAgentQueryResourceType(content)
   ) {
     return null;
+  }
+
+  // Anthropic refuses requests that carry another model's raw reasoning (reasoning_extraction).
+  if (isRunAgentResultResourceType(content)) {
+    const { chainOfThought: _chainOfThought, ...resource } = content.resource;
+    return { ...content, resource };
   }
 
   if (isSearchResultResourceType(content)) {

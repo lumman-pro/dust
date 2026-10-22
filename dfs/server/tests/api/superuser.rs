@@ -52,6 +52,7 @@ pub(crate) async fn superuser_sessions_read_and_write_despite_denies() -> Result
     let batch = client
         .apply(with_authorization(
             ApplyRequest {
+                locks: vec![],
                 operations: vec![rpc::Operation {
                     operation: Some(Operation::Create(CreateOperation {
                         parent_id: tenant.root_id,
@@ -85,6 +86,7 @@ pub(crate) async fn superuser_sessions_read_and_write_despite_denies() -> Result
         let batch = client
             .apply(with_authorization(
                 ApplyRequest {
+                    locks: vec![],
                     operations: vec![rpc::Operation {
                         operation: Some(Operation::Write(WriteOperation {
                             object_id: file_id,

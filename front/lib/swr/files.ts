@@ -467,11 +467,19 @@ export function useWriteFileContentByPath({
 export const getFilePathDownloadUrl = (
   owner: LightWorkspaceType,
   filePath: string,
-  { lastModifiedMs }: { lastModifiedMs?: number | null } = {}
+  {
+    lastModifiedMs,
+    format,
+  }: {
+    lastModifiedMs?: number | null;
+    // A Markdown document without its comments, as Markdown or printed to PDF.
+    format?: "markdown" | "pdf";
+  } = {}
 ) => {
   const encoded = filePath.split("/").map(encodeURIComponent).join("/");
   const version = lastModifiedMs ? `&v=${lastModifiedMs}` : "";
-  return `${config.getApiBaseUrl()}/api/w/${owner.sId}/files/path/${encoded}?download=1${version}`;
+  const formatParam = format ? `&format=${format}` : "";
+  return `${config.getApiBaseUrl()}/api/w/${owner.sId}/files/path/${encoded}?download=1${version}${formatParam}`;
 };
 
 export async function prepareFolderArchiveDownload({

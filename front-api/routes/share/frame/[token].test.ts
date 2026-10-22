@@ -1,10 +1,14 @@
 import type { Authenticator } from "@app/lib/auth";
 import type { UserResource } from "@app/lib/resources/user_resource";
 import { FileFactory } from "@app/tests/utils/FileFactory";
-import { createTestFrameFunction } from "@app/tests/utils/FrameFunctionFactory";
+import {
+  createTestFrameFunction,
+  enablePublicFrameFunctions,
+} from "@app/tests/utils/FrameFunctionFactory";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
 import { SharingGrantFactory } from "@app/tests/utils/SharingGrantFactory";
 import { SpaceFactory } from "@app/tests/utils/SpaceFactory";
+import type { SandboxFunctionUserIdentityPolicy } from "@app/types/api/sandbox_functions";
 import type { FileShareScope } from "@app/types/files";
 import { frameContentType, frameV2ContentType } from "@app/types/files";
 import type { LightWorkspaceType } from "@app/types/user";
@@ -179,9 +183,16 @@ describe("GET /api/share/frame/:token - Frame v2 function gating", () => {
     workspace = resources.workspace;
   });
 
-  const createFrameV2WithFunction = async (scope: FileShareScope) => {
+  const createFrameV2WithFunction = async (
+    scope: FileShareScope,
+    userIdentity?: SandboxFunctionUserIdentityPolicy
+  ) => {
     const space = await SpaceFactory.project(workspace, user.id);
-    const { frame } = await createTestFrameFunction(auth, { space });
+    const { frame } = await createTestFrameFunction(auth, {
+      space,
+      userIdentity,
+      executionMode: userIdentity === "public" ? "fast" : undefined,
+    });
     await frame.setShareScope(auth, scope);
 
     const shareInfo = await frame.getShareInfo();
@@ -229,6 +240,30 @@ describe("GET /api/share/frame/:token - Frame v2 function gating", () => {
       kind: "email",
       value: "viewer@example.com",
     });
+
+    const response = await getShareFrame(token);
+
+    expect(response.status).toBe(404);
+  });
+
+  it("offers email verification for a public frame when the workspace serves public functions", async () => {
+    await enablePublicFrameFunctions(auth);
+    const { token } = await createFrameV2WithFunction("public", "public");
+
+    const response = await getShareFrame(token);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({ requiresEmailVerification: true })
+    );
+  });
+
+  it("returns 404 for a public frame whose functions are all private", async () => {
+    await enablePublicFrameFunctions(auth);
+    const { token } = await createFrameV2WithFunction(
+      "public",
+      "workspace_user_required"
+    );
 
     const response = await getShareFrame(token);
 

@@ -1,7 +1,6 @@
 import { GovernanceSettingRowLayout } from "@app/components/pages/workspace/governance/GovernanceSettingRowLayout";
-import { useSelectableLocales } from "@app/hooks/useSelectableLocales";
 import { useWorkspaceLocale } from "@app/hooks/useWorkspaceLocale";
-import { LOCALE_LABELS } from "@app/types/locale";
+import { LOCALE_LABELS, SUPPORTED_LOCALES } from "@app/types/locale";
 import type { WorkspaceType } from "@app/types/user";
 import {
   Button,
@@ -21,7 +20,6 @@ export function WorkspaceLocalePicker({ owner }: WorkspaceLocalePickerProps) {
   const { t } = useLingui();
   const { workspaceLocale, isChanging, doUpdateWorkspaceLocale } =
     useWorkspaceLocale({ owner });
-  const selectableLocales = useSelectableLocales();
 
   return (
     <GovernanceSettingRowLayout
@@ -40,7 +38,7 @@ export function WorkspaceLocalePicker({ owner }: WorkspaceLocalePickerProps) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuRadioGroup value={workspaceLocale}>
-              {selectableLocales.map((locale) => (
+              {SUPPORTED_LOCALES.map((locale) => (
                 <DropdownMenuRadioItem
                   key={locale}
                   value={locale}

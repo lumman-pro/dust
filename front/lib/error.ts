@@ -50,6 +50,7 @@ export type DustErrorCode =
   | "name_conflict"
   | "action_not_found"
   | "action_not_blocked"
+  | "personal_tools_unavailable"
   | "action_not_editable"
   | "invalid_edited_arguments"
   | "mcp_access_token_error"
@@ -133,6 +134,8 @@ export type DustErrorCode =
   | "conversation_agent_running"
   | "conversation_locked"
   | "fork_source_message_not_found"
+  // Inference hook errors
+  | "inference_hook_checkpoint_unavailable"
   // Workspace errors (domain:workspace)
   | "api_key_name_required"
   | "usage_limit_out_of_range"

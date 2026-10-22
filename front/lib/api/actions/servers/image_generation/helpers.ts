@@ -4,6 +4,7 @@ import type {
   ToolGeneratedFilePathType,
   ToolGeneratedFileType,
 } from "@app/lib/actions/mcp_internal_actions/output_schemas";
+import type { ToolHandlerOutput } from "@app/lib/actions/mcp_internal_actions/tool_definition";
 import { resolveConversationFileRef } from "@app/lib/actions/mcp_internal_actions/utils/file_utils";
 import type {
   AgentLoopRunContext,
@@ -12,7 +13,10 @@ import type {
 } from "@app/lib/actions/types";
 import type { ReferenceImageFile } from "@app/lib/api/actions/servers/image_generation/imageGeneration";
 import { computeTokensCostForUsageInMicroUsd } from "@app/lib/api/assistant/token_pricing";
-import { writeToToolOutputsFolder } from "@app/lib/api/files/action_output_fs";
+import {
+  frameSandboxFilePathHint,
+  writeToFramePersistentFilesFolder,
+} from "@app/lib/api/files/action_output_fs";
 import { makeFileName } from "@app/lib/api/files/action_output_fs/naming";
 import { uploadBase64ImageToFileStorage } from "@app/lib/api/files/upload";
 import type { Authenticator } from "@app/lib/auth";
@@ -275,22 +279,27 @@ async function uploadAndFormatAgentLoopImageResponse(
   return new Ok(resources);
 }
 
+export type SandboxImageStructuredContent = {
+  files: Array<{
+    path: string;
+    title: string;
+    contentType: string;
+  }>;
+  hint: string;
+};
+
 async function writeSandboxFunctionImageResponse(
   auth: Authenticator,
   runContext: SandboxFunctionRunContext,
   images: Base64ImageData[],
   fileName: string
-): Promise<
-  Result<
-    Array<{ type: "resource"; resource: ToolGeneratedFilePathType }>,
-    MCPError
-  >
-> {
+): Promise<Result<ToolHandlerOutput, MCPError>> {
   const baseFileName = stripFileExtension(fileName);
   const resources: Array<{
     type: "resource";
     resource: ToolGeneratedFilePathType;
   }> = [];
+  const files: SandboxImageStructuredContent["files"] = [];
 
   for (const [index, image] of images.entries()) {
     const mimeType = image.mimeType ?? DEFAULT_IMAGE_MIME_TYPE;
@@ -311,11 +320,15 @@ async function writeSandboxFunctionImageResponse(
     });
     const base64Data = image.base64.replace(/^data:image\/[^;]+;base64,/, "");
     const content = Buffer.from(base64Data, "base64");
-    const writeResult = await writeToToolOutputsFolder(auth, runContext, {
-      fileName: outputFileName,
-      content,
-      contentType: mimeType,
-    });
+    const writeResult = await writeToFramePersistentFilesFolder(
+      auth,
+      runContext,
+      {
+        fileName: outputFileName,
+        content,
+        contentType: mimeType,
+      }
+    );
     if (writeResult.isErr()) {
       return new Err(
         new MCPError(
@@ -324,22 +337,40 @@ async function writeSandboxFunctionImageResponse(
         )
       );
     }
-    const scopedPath = writeResult.value;
+    const { sandboxPath } = writeResult.value;
 
     resources.push({
       type: "resource",
       resource: {
         mimeType: INTERNAL_MIME_TYPES.TOOL_OUTPUT.FILE_PATH,
-        uri: scopedPath,
-        path: scopedPath,
+        uri: sandboxPath,
+        path: sandboxPath,
         title: outputFileName,
         contentType: mimeType,
-        text: `Generated image: ${outputFileName}`,
+        text: `Generated image saved. Use result.json() for path(s).`,
       },
+    });
+    files.push({
+      path: sandboxPath,
+      title: outputFileName,
+      contentType: mimeType,
     });
   }
 
-  return new Ok(resources);
+  const structuredContent: SandboxImageStructuredContent = {
+    files,
+    hint:
+      files.length === 1
+        ? frameSandboxFilePathHint(files[0].path)
+        : `Read with node:fs/promises:\n${files
+            .map((f) => `await readFile(${JSON.stringify(f.path)})`)
+            .join("\n")}\nDo not pass these paths to useFile().`,
+  };
+
+  return new Ok({
+    content: resources,
+    structuredContent,
+  });
 }
 
 export async function uploadAndFormatImageResponse(
@@ -347,15 +378,7 @@ export async function uploadAndFormatImageResponse(
   toolContext: ToolContext | undefined,
   images: Base64ImageData[],
   fileName: string
-): Promise<
-  Result<
-    Array<{
-      type: "resource";
-      resource: ToolGeneratedFileType | ToolGeneratedFilePathType;
-    }>,
-    MCPError
-  >
-> {
+): Promise<Result<ToolHandlerOutput, MCPError>> {
   if (!toolContext?.runContext) {
     return new Err(
       new MCPError("No tool run context available for file upload", {

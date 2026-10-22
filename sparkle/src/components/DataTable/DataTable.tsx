@@ -469,6 +469,18 @@ function DataTableFooter<TData extends TBaseData>({
 }
 
 /**
+ * @cc [owner:aubin-tchoi,label:product;react] minimal-columns
+ * `columns` MUST contain only the columns the table's purpose requires; a new column MUST NOT be
+ * added when its data fits in an existing column (e.g. as a secondary line or description) or
+ * belongs in a details view.
+ */
+/**
+ * @cc [owner:aubin-tchoi,label:product;react] header-never-clipped
+ * In every supported locale (en-US, en-GB, fr-FR, de-DE), each rendered header label and its sort
+ * icon MUST be fully visible, without truncation or overflow, at every viewport width where its
+ * column is rendered per `columnsBreakpoints`.
+ */
+/**
  * Sortable, filterable, paginated data table built on TanStack Table, with row
  * selection and a "Load more" footer. For very long or infinite datasets prefer
  * ScrollableDataTable, which virtualizes rows.

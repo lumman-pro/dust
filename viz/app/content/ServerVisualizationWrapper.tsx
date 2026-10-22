@@ -14,15 +14,24 @@ const FRAME_MIME_TYPES = new Set([
 const MAX_PREFETCHED_FILE_BYTES = 20 * 1024 * 1024;
 const MAX_PREFETCHED_TOTAL_BYTES = 50 * 1024 * 1024;
 const PREFETCH_CONCURRENCY = 4;
+// Leave time to serialize the response before the load balancer's 30-second timeout.
+const PREFETCH_TIMEOUT_MS = 20_000;
 
 /**
  * @cc [owner:tdraier,label:performance] prefetch-size-budget
  * A single render MUST NOT hold more than `MAX_PREFETCHED_FILE_BYTES` of raw response body for one
  * file nor, at any time, more than `MAX_PREFETCHED_TOTAL_BYTES` of raw response body across all
- * fetched files, including nested frames. Bytes of a skipped file are released and stop counting.
+ * fetched files, including nested frames. Bytes of a skipped or failed file are released and stop
+ * counting.
  * The caps count raw body bytes, not the concatenated or base64-encoded copies of accepted files. A
  * file exceeding either limit MUST be skipped (left out of the returned files) and its body read
  * aborted, rather than failing the render.
+ */
+/**
+ * @cc [owner:flvndvd,label:performance;concurrency] prefetch-request-lifetime
+ * File fetches MUST opt out of Next.js request memoization with an explicit abort signal. Every
+ * unfinished response MUST be aborted when its fetch worker exits, without waiting for cancellation
+ * of a cloned response branch. Nested frames MUST share the render's prefetch deadline.
  */
 class FileRefPrefetcher {
   private readonly visited = new Set<string>();
@@ -31,7 +40,8 @@ class FileRefPrefetcher {
   constructor(
     private readonly frontApiUrl: string,
     private readonly headers: Record<string, string>,
-    private readonly identifier: string
+    private readonly identifier: string,
+    private readonly signal: AbortSignal
   ) {}
 
   async fetchRefs(text: string): Promise<PreFetchedFile[]> {
@@ -69,17 +79,20 @@ class FileRefPrefetcher {
           requestPath = ref.scopedPath;
         }
 
-        if (this.visited.has(key)) {
+        if (this.signal.aborted || this.visited.has(key)) {
           return;
         }
         this.visited.add(key);
 
         const fileEndpoint = `${this.frontApiUrl}/api/v1/viz/files/${requestPath}`;
+        const controller = new AbortController();
 
         try {
           const fileResponse = await fetch(fileEndpoint, {
             headers: this.headers,
             cache: "no-store",
+            // `no-store` alone still lets Next tee and retain the response for memoization.
+            signal: AbortSignal.any([this.signal, controller.signal]),
           });
 
           if (!fileResponse.ok) {
@@ -90,7 +103,9 @@ class FileRefPrefetcher {
             return;
           }
 
-          const body = await this.readBodyWithinBudget(fileResponse);
+          const body = await this.readBodyWithinBudget(fileResponse, () =>
+            controller.abort()
+          );
           if (!body) {
             logger.warn(
               {
@@ -117,8 +132,15 @@ class FileRefPrefetcher {
           if (FRAME_MIME_TYPES.has(mimeType)) {
             results.push(...(await this.fetchRefs(body.toString("utf-8"))));
           }
-        } catch (_err) {
-          logger.error({ key }, "Failed to fetch file ref");
+        } catch (err) {
+          logger.error(
+            { identifier: this.identifier, key, err },
+            "Failed to fetch file ref"
+          );
+        } finally {
+          // Abort the source, including unread error/oversized bodies. Awaiting cancellation of
+          // one branch of a teed response can hang until the other branch is consumed or cancelled.
+          controller.abort();
         }
       },
       { concurrency: PREFETCH_CONCURRENCY }
@@ -128,14 +150,15 @@ class FileRefPrefetcher {
   }
 
   private async readBodyWithinBudget(
-    response: Response
+    response: Response,
+    abort: () => void
   ): Promise<Buffer | null> {
     const declaredBytes = Number(response.headers.get("content-length"));
     if (
       declaredBytes > MAX_PREFETCHED_FILE_BYTES ||
       declaredBytes > this.remainingBytes
     ) {
-      await response.body?.cancel();
+      abort();
       return null;
     }
     if (!response.body) {
@@ -145,19 +168,29 @@ class FileRefPrefetcher {
     const reader = response.body.getReader();
     const chunks: Uint8Array[] = [];
     let readBytes = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) {
-        return Buffer.concat(chunks, readBytes);
+    let accepted = false;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) {
+          const body = Buffer.concat(chunks, readBytes);
+          accepted = true;
+          return body;
+        }
+        readBytes += value.byteLength;
+        this.remainingBytes -= value.byteLength;
+        if (readBytes > MAX_PREFETCHED_FILE_BYTES || this.remainingBytes < 0) {
+          return null;
+        }
+        chunks.push(value);
       }
-      readBytes += value.byteLength;
-      this.remainingBytes -= value.byteLength;
-      if (readBytes > MAX_PREFETCHED_FILE_BYTES || this.remainingBytes < 0) {
+    } finally {
+      if (!accepted) {
+        // Stop the source before another worker can reuse this file's reserved bytes.
+        abort();
         this.remainingBytes += readBytes;
-        await reader.cancel();
-        return null;
       }
-      chunks.push(value);
+      reader.releaseLock();
     }
   }
 }
@@ -183,6 +216,12 @@ interface ServerSideVisualizationWrapperProps {
  * This approach avoids the React Server Component serialization boundary issue
  * by passing plain objects instead of class instances to the client component.
  */
+/**
+ * @cc [owner:flvndvd,label:performance;concurrency] render-prefetch-deadline
+ * Fetching code and referenced files MUST share one `PREFETCH_TIMEOUT_MS` deadline. On expiry,
+ * outstanding fetches MUST be aborted and queued file fetches MUST NOT start. Completed files
+ * remain available to the client. The timer and unfinished requests MUST be cleaned up on exit.
+ */
 export async function ServerSideVisualizationWrapper({
   accessToken,
   allowedOrigins,
@@ -195,6 +234,10 @@ export async function ServerSideVisualizationWrapper({
   let prefetchedCode: string | undefined;
   let preFetchedFiles: PreFetchedFile[] = [];
   let isAuthenticatedMember = false;
+  let canInvokePublicFunctions = false;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PREFETCH_TIMEOUT_MS);
+  timeout.unref();
 
   try {
     const headers: Record<string, string> = {};
@@ -206,12 +249,14 @@ export async function ServerSideVisualizationWrapper({
     const codeResponse = await fetch(endpoint, {
       headers,
       cache: "no-store",
+      signal: controller.signal,
     });
 
     if (codeResponse.ok) {
       const responseData = await codeResponse.json();
       prefetchedCode = responseData.content;
       isAuthenticatedMember = responseData.isAuthenticatedMember ?? false;
+      canInvokePublicFunctions = responseData.canInvokePublicFunctions ?? false;
 
       if (!prefetchedCode) {
         logger.warn({ identifier }, "No code content found for visualization");
@@ -224,7 +269,8 @@ export async function ServerSideVisualizationWrapper({
       preFetchedFiles = await new FileRefPrefetcher(
         process.env.DUST_FRONT_API ?? "",
         headers,
-        identifier
+        identifier,
+        controller.signal
       ).fetchRefs(prefetchedCode);
     } else {
       logger.warn(
@@ -234,6 +280,9 @@ export async function ServerSideVisualizationWrapper({
     }
   } catch (err) {
     logger.error({ err }, "Error pre-fetching files:");
+  } finally {
+    clearTimeout(timeout);
+    controller.abort();
   }
 
   return (
@@ -246,6 +295,7 @@ export async function ServerSideVisualizationWrapper({
       prefetchedCode={prefetchedCode}
       prefetchedFiles={preFetchedFiles}
       isAuthenticatedMember={isAuthenticatedMember}
+      canInvokePublicFunctions={canInvokePublicFunctions}
       catalog={catalog}
     />
   );

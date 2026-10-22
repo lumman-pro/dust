@@ -66,10 +66,12 @@ export function useDocumentEmbeddableFiles({
   documentPath,
 }: {
   owner: LightWorkspaceType;
-  documentPath: string;
+  documentPath: string | null;
 }): DocumentEmbeddableFiles {
   const [requested, setRequested] = useState(false);
-  const scope = parseCanonicalScopedPath(documentPath)?.scope;
+  const scope = documentPath
+    ? parseCanonicalScopedPath(documentPath)?.scope
+    : undefined;
   const podId = scope?.kind === "canonical-pod" ? scope.id : null;
   const conversationId =
     scope?.kind === "canonical-conversation" ? scope.id : null;

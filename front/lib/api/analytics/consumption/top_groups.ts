@@ -1,6 +1,7 @@
 import type { ConsumptionPeriod } from "@app/lib/api/analytics/consumption/period";
 import type {
   ConsumptionScopeFilter,
+  ConsumptionTopRankBy,
   ConsumptionTopSortOrder,
 } from "@app/lib/api/analytics/consumption/scope";
 import {
@@ -52,6 +53,7 @@ export async function fetchConsumptionTopGroups(
     search,
     filter,
     sortOrder,
+    rankBy,
   }: {
     period: ConsumptionPeriod;
     limit: number;
@@ -59,6 +61,7 @@ export async function fetchConsumptionTopGroups(
     search?: string;
     filter?: ConsumptionScopeFilter;
     sortOrder?: ConsumptionTopSortOrder;
+    rankBy?: ConsumptionTopRankBy;
   }
 ): Promise<Result<ConsumptionTopGroups, ElasticsearchError>> {
   const result = await fetchConsumptionTopGroupBuckets(auth, {
@@ -69,6 +72,7 @@ export async function fetchConsumptionTopGroups(
     search,
     filter,
     sortOrder,
+    rankBy,
   });
   if (result.isErr()) {
     return result;

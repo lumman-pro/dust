@@ -94,6 +94,7 @@ export interface UsageFilterAgentOption extends UsageFilterOptionBase {
 export interface UsageFilterMemberOption extends UsageFilterOptionBase {
   kind: "member";
   image: string | null;
+  revoked?: boolean;
 }
 
 export interface UsageFilterGroupOption extends UsageFilterOptionBase {

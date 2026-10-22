@@ -710,12 +710,12 @@ async function checkDiffFiles() {
     "front/lib/api/documents/comment_signatures.ts",
     "front/types/collab.ts",
     "front/types/collab_internal.ts",
-    "front-api/collab_server.ts",
+    "front-api/lib/collab_access_errors.ts",
   ];
   const collabSharedDirectories = [
     "front/lib/markdown/dfm/",
     "front/lib/api/collab/",
-    "front-api/lib/collab/",
+    "front-api/collab/",
   ];
   const modifiedCollabSharedFiles = diffFiles.filter(
     (path) =>

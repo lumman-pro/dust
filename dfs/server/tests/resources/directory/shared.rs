@@ -3,7 +3,7 @@ use dfs_api::storage::{
     self, fdb,
     resources::{
         directory::{self, DirectoryResource},
-        object::{self, ObjectResource},
+        object::{self, ObjectResource, locks::LockTokens},
         session::SessionResource,
     },
 };
@@ -306,6 +306,7 @@ pub(crate) async fn shared_lookup_rechecks_membership_and_accepts_stale_names() 
             target_id: None,
             name: "renamed".into(),
         },
+        &LockTokens::default(),
     )
     .await?;
     tx.commit().await?;

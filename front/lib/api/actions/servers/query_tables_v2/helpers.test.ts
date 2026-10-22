@@ -10,8 +10,9 @@ import { MCPServerViewFactory } from "@app/tests/utils/MCPServerViewFactory";
 import { fileStorageMock } from "@app/tests/utils/mocks/file_storage";
 import { SandboxFunctionMCPActionFactory } from "@app/tests/utils/SandboxFunctionMCPActionFactory";
 import { createPersistedSandboxFunctionInvocationTokenTestContext } from "@app/tests/utils/SandboxTokenFactory";
+import { getFramePersistentFilesBasePath } from "@app/types/api/frame_storage";
 import { CoreAPI } from "@app/types/core/core_api";
-import { getPodFilesBasePath } from "@app/types/mount_path";
+import { getFramePersistentFilesMountPoint } from "@app/types/mount_path";
 import { Ok } from "@app/types/shared/result";
 import assert from "assert";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -21,7 +22,7 @@ describe("executeQuery", () => {
     vi.restoreAllMocks();
   });
 
-  it("writes query results to the frame function tool outputs folder", async () => {
+  it("writes query results to the Frame persistent files folder", async () => {
     const {
       auth,
       workspace,
@@ -30,6 +31,7 @@ describe("executeQuery", () => {
       podSpace,
       sandboxFunction,
     } = await createPersistedSandboxFunctionInvocationTokenTestContext();
+    const frame = sandboxFunction.frame;
     const server = await InternalMCPServerInMemoryResource.makeNew(auth, {
       name: "common_utilities",
       useCase: null,
@@ -84,26 +86,39 @@ describe("executeQuery", () => {
         queryIdentity: undefined,
       })
     );
-    const fileOutput = result.value.find(isToolGeneratedFilePath);
+    assert(!Array.isArray(result.value));
+    const { content, structuredContent } = result.value;
+    const fileOutput = content.find(isToolGeneratedFilePath);
     assert(fileOutput);
 
-    const scopedPathPrefix = `pod-${podSpace.sId}/.tool_outputs/${sandboxFunction.slug}/`;
+    const sandboxPathPrefix = `${getFramePersistentFilesMountPoint(frame.sId)}/.tool_outputs/${sandboxFunction.slug}/`;
     expect(fileOutput.resource.path).toBe(fileOutput.resource.uri);
     expect(fileOutput.resource.path).toBe(
-      `${scopedPathPrefix}${fileOutput.resource.title}`
+      `${sandboxPathPrefix}${fileOutput.resource.title}`
     );
     expect(fileOutput.resource.title).toMatch(/^\d+_query_results_.*\.csv$/);
     expect(fileOutput.resource.contentType).toBe("text/csv");
 
+    expect(structuredContent).toEqual({
+      path: fileOutput.resource.path,
+      contentType: "text/csv",
+      title: fileOutput.resource.title,
+      columns: ["name", "count"],
+      rows: [{ name: "Ada", count: 2 }],
+      rowCount: 1,
+      truncated: false,
+      hint: `Read with node:fs/promises: await readFile(${JSON.stringify(fileOutput.resource.path)}, "utf8"). Do not pass this path to useFile().`,
+    });
+
     expect(fileStorageMock.saveFileCalls).toHaveLength(1);
     const fileWrite = fileStorageMock.saveFileCalls[0];
     const relativePath = fileOutput.resource.path.slice(
-      `pod-${podSpace.sId}/`.length
+      `${getFramePersistentFilesMountPoint(frame.sId)}/`.length
     );
     expect(fileWrite.filePath).toBe(
-      `${getPodFilesBasePath({
+      `${getFramePersistentFilesBasePath({
         workspaceId: workspace.sId,
-        podId: podSpace.sId,
+        frameId: frame.sId,
       })}${relativePath}`
     );
     expect(fileWrite.content.toString()).toBe("name,count\nAda,2\n");

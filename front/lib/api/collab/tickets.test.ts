@@ -6,9 +6,9 @@ import {
 import { DustFileSystem, DustFileSystemError } from "@app/lib/api/file_system";
 import { Authenticator } from "@app/lib/auth";
 import { WorkspaceResource } from "@app/lib/resources/workspace_resource";
+import { writeConversationFile } from "@app/tests/utils/conversation_files";
 import { FeatureFlagFactory } from "@app/tests/utils/FeatureFlagFactory";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
-import { writeUserFile } from "@app/tests/utils/user_files";
 import { Err } from "@app/types/shared/result";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -25,7 +25,7 @@ describe("live tickets", () => {
       user,
     } = await createResourceTest({});
     await FeatureFlagFactory.basic(auth, "co_edition");
-    const path = await writeUserFile(auth, "notes.md", "# Notes\n");
+    const path = await writeConversationFile(auth, "notes.md", "# Notes\n");
 
     const ticket = await mintCollabTicket(auth, path);
     expect(ticket.isOk()).toBe(true);
@@ -44,7 +44,7 @@ describe("live tickets", () => {
   it("expire", async () => {
     const { authenticator: auth } = await createResourceTest({});
     await FeatureFlagFactory.basic(auth, "co_edition");
-    const path = await writeUserFile(auth, "notes.md", "# Notes\n");
+    const path = await writeConversationFile(auth, "notes.md", "# Notes\n");
     const ticket = await mintCollabTicket(auth, path);
     if (!ticket.isOk()) {
       throw new Error("No ticket.");
@@ -58,7 +58,7 @@ describe("live tickets", () => {
 
   it("are not minted without co_edition", async () => {
     const { authenticator: auth } = await createResourceTest({});
-    const path = await writeUserFile(auth, "notes.md", "# Notes\n");
+    const path = await writeConversationFile(auth, "notes.md", "# Notes\n");
 
     const ticket = await mintCollabTicket(auth, path);
 
@@ -68,7 +68,7 @@ describe("live tickets", () => {
   it("are not minted in a workspace in maintenance", async () => {
     const { authenticator: auth, workspace } = await createResourceTest({});
     await FeatureFlagFactory.basic(auth, "co_edition");
-    const path = await writeUserFile(auth, "notes.md", "# Notes\n");
+    const path = await writeConversationFile(auth, "notes.md", "# Notes\n");
     await WorkspaceResource.updateMetadata(workspace.id, {
       maintenance: "relocation",
     });
@@ -85,24 +85,29 @@ describe("live tickets", () => {
   it("are not minted for a file the live session cannot open", async () => {
     const { authenticator: auth } = await createResourceTest({});
     await FeatureFlagFactory.basic(auth, "co_edition");
-    const path = await writeUserFile(auth, "notes.txt", "Hi.\n", "text/plain");
+    const path = await writeConversationFile(
+      auth,
+      "notes.txt",
+      "Hi.\n",
+      "text/plain"
+    );
 
     const ticket = await mintCollabTicket(auth, path);
 
     expect(ticket.isErr() && ticket.error.code).toBe("not_markdown");
   });
 
-  it("are not minted for a file the user can only read", async () => {
+  it("are minted for a file the user can only read", async () => {
     const { authenticator: auth } = await createResourceTest({});
     await FeatureFlagFactory.basic(auth, "co_edition");
-    const path = await writeUserFile(auth, "notes.md", "# Notes\n");
+    const path = await writeConversationFile(auth, "notes.md", "# Notes\n");
     vi.spyOn(DustFileSystem.prototype, "checkWriteAccess").mockReturnValue(
       new Err(new DustFileSystemError("internal", "Read-only mount."))
     );
 
     const ticket = await mintCollabTicket(auth, path);
 
-    expect(ticket.isErr() && ticket.error.code).toBe("read_only");
+    expect(ticket.isOk()).toBe(true);
   });
 
   it("grant nothing for an unknown ticket", async () => {

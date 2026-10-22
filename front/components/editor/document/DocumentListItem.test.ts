@@ -10,14 +10,24 @@ import {
   stubRangeLayout,
   type,
 } from "@app/components/editor/document/editor.test_utils";
+import { Check } from "@dust-tt/sparkle";
 import type { Editor } from "@tiptap/core";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 afterEach(destroyOpenedEditors);
 
 const checkboxes = (built: Editor) =>
-  Array.from(
-    built.view.dom.querySelectorAll<HTMLInputElement>("input[type=checkbox]")
+  Array.from(built.view.dom.querySelectorAll<HTMLElement>('[role="checkbox"]'));
+
+const isChecked = (checkbox: Element | undefined) =>
+  checkbox?.getAttribute("aria-checked") === "true";
+
+/** What each task's badge shows: its number, `✓` when done, or nothing. */
+const badges = (built: Editor) =>
+  checkboxes(built).map((checkbox) =>
+    isChecked(checkbox) ? "✓" : (checkbox.textContent ?? "")
   );
 
 describe("task items", () => {
@@ -184,7 +194,7 @@ describe("task items", () => {
     checkbox.click();
     expect(mousedown.defaultPrevented).toBe(true);
     expect(markdown(built)).toBe("- [x] Milk\n- Notes");
-    expect(checkboxes(built)[0].checked).toBe(true);
+    expect(isChecked(checkboxes(built)[0])).toBe(true);
 
     await vi.waitFor(() => expect(document.activeElement).toBe(built.view.dom));
     document.activeElement?.dispatchEvent(
@@ -206,7 +216,7 @@ describe("task items", () => {
     checkbox.click();
 
     expect(built.getJSON()).toEqual(before);
-    expect(checkbox.checked).toBe(false);
+    expect(isChecked(checkbox)).toBe(false);
   });
 
   it("labels a checkbox with its item's text", () => {
@@ -222,6 +232,56 @@ describe("task items", () => {
     press(built, "Enter");
 
     expect(checkboxes(built)[1].getAttribute("aria-label")).toBe("Task");
+  });
+
+  it.each([
+    ["a bulleted task list", "- [ ] a\n- [x] b\n- c\n", ["", "✓"]],
+    [
+      "a numbered list mixing tasks and plain items",
+      "1. [ ] a\n2. b\n3. [x] c\n4. [ ] d\n",
+      ["1", "✓", "4"],
+    ],
+    ["a numbered list starting at 0", "0. [ ] zero\n1. [ ] one\n", ["0", "1"]],
+    [
+      "a numbered task list nested in a bulleted one",
+      "- [ ] parent\n  1. [ ] child\n",
+      ["", "1"],
+    ],
+  ])("numbers the badges of %s by their place in it", (_, source, shown) => {
+    expect(badges(openEditor(source))).toEqual(shown);
+  });
+
+  it("keeps a plain item's number next to tasks' badges", () => {
+    const built = openEditor("1. [ ] a\n2. b\n");
+    const [task, plain] = Array.from(built.view.dom.querySelectorAll("li"));
+
+    expect(task.classList.contains("list-none")).toBe(true);
+    expect(plain.classList.contains("list-none")).toBe(false);
+    expect(plain.querySelector('[role="checkbox"]')).toBeNull();
+  });
+
+  it("renumbers the badges when an item is added above them", () => {
+    const built = openEditor("1. a\n2. [ ] b\n");
+    caretAfter(built, "a");
+
+    press(built, "Enter");
+    type(built, "new");
+
+    expect(badges(built)).toEqual(["3"]);
+  });
+
+  it("draws Sparkle's check icon in a done task's badge", () => {
+    const built = openEditor("- [x] done\n");
+    const sparkle = new DOMParser()
+      .parseFromString(
+        renderToStaticMarkup(createElement(Check)),
+        "image/svg+xml"
+      )
+      .querySelector("path");
+
+    expect(
+      checkboxes(built)[0].querySelector("svg path")?.getAttribute("d")
+    ).toBe(sparkle?.getAttribute("d"));
   });
 
   it("renders a plain list without checkboxes", () => {

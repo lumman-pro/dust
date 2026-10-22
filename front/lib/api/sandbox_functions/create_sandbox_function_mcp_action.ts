@@ -16,7 +16,7 @@ import {
 } from "@app/lib/api/audit/workos_audit";
 import { resolveSandboxFunctionServerConfiguration } from "@app/lib/api/sandbox/company_default_configurations";
 import { buildSandboxFunctionAuditMetadata } from "@app/lib/api/sandbox_functions/audit";
-import { publishSandboxFunctionInvocationEvent } from "@app/lib/api/sandbox_functions/events";
+import { publishSandboxFunctionBlockingEvent } from "@app/lib/api/sandbox_functions/publish_blocking_event";
 import type { SandboxFunctionMcpActionServerTimingsMs } from "@app/lib/api/sandbox_functions/sandbox_function_mcp_action_server_timings";
 import { roundMs } from "@app/lib/api/sandbox_functions/sandbox_function_mcp_action_server_timings";
 import type { Authenticator } from "@app/lib/auth";
@@ -306,8 +306,8 @@ export async function createSandboxFunctionMCPAction(
         invocationId: invocation.sId,
       };
 
-      await publishSandboxFunctionInvocationEvent(approvalEvent, {
-        invocationId: invocation.sId,
+      await publishSandboxFunctionBlockingEvent(auth, approvalEvent, {
+        invocation,
       });
 
       void emitAuditLogEvent({

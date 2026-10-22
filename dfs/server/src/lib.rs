@@ -10,6 +10,7 @@ use tonic_health::ServingStatus;
 mod api;
 pub mod auth;
 pub mod clock;
+pub mod search;
 pub mod storage;
 mod sweep;
 

@@ -1,4 +1,5 @@
 import { Readable } from "node:stream";
+import { editCollabSource, readCollabSource } from "@app/lib/api/collab/client";
 import {
   editAgentDocument,
   readAgentDocument,
@@ -10,10 +11,16 @@ import {
   writeCanonicalFileContent,
 } from "@app/lib/api/files/file_system_ops";
 import type { Authenticator } from "@app/lib/auth";
-import { parseDfm } from "@app/lib/markdown/dfm";
+import { INPUT_LIMITS, parseDfm } from "@app/lib/markdown/dfm";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
 import { Err, Ok } from "@app/types/shared/result";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock(import("@app/lib/api/collab/client"), async (importOriginal) => ({
+  ...(await importOriginal()),
+  editCollabSource: vi.fn(),
+  readCollabSource: vi.fn(),
+}));
 
 vi.mock(
   import("@app/lib/api/files/file_system_ops"),
@@ -65,6 +72,7 @@ describe("readAgentDocument", () => {
       throw fileSystem.error;
     }
     dustFs = fileSystem.value;
+    vi.mocked(readCollabSource).mockResolvedValue(new Ok({ open: false }));
   });
 
   it("returns the full source, anchors and threads included", async () => {
@@ -104,6 +112,50 @@ describe("editAgentDocument", () => {
       throw fileSystem.error;
     }
     dustFs = fileSystem.value;
+    vi.mocked(readCollabSource).mockResolvedValue(new Ok({ open: false }));
+  });
+
+  /** A live session holding the document, which the file system lets the agent write. */
+  function openSession() {
+    vi.mocked(readCollabSource).mockResolvedValueOnce(
+      new Ok({ open: true, source: SOURCE })
+    );
+    vi.spyOn(DustFileSystem.prototype, "checkWriteAccess").mockReturnValue(
+      new Ok(undefined)
+    );
+    vi.spyOn(DustFileSystem.prototype, "stat").mockResolvedValue(
+      new Ok({ contentType: "text/markdown", sizeBytes: SOURCE.length })
+    );
+  }
+
+  it("reports the live session's refusal with the code it sent, writing no file", async () => {
+    openSession();
+    vi.mocked(editCollabSource).mockResolvedValue(
+      new Ok({
+        result: "edit_refused",
+        code: "string_not_found",
+        message: "The text to replace was not found.",
+      })
+    );
+
+    const result = await edit("Ship it", "Ship");
+
+    expect(result.isErr() && result.error.code).toBe("string_not_found");
+    expect(writeCanonicalFileContent).not.toHaveBeenCalled();
+  });
+
+  it("writes the file when the live session closed before applying the edit", async () => {
+    openSession();
+    vi.mocked(editCollabSource).mockResolvedValue(new Ok({ result: "closed" }));
+    vi.mocked(readCanonicalFileContent).mockResolvedValue(stored(SOURCE, "7"));
+    vi.mocked(writeCanonicalFileContent).mockResolvedValue(
+      new Ok({ created: false, revision: "8" })
+    );
+
+    const result = await edit("Ship it", "Ship");
+
+    expect(result.isOk() && result.value.replacements).toBe(1);
+    expect(written(0).revision).toBe("7");
   });
 
   const edit = (oldString: string, newString: string, expected = 1) =>
@@ -240,6 +292,68 @@ describe("editAgentDocument", () => {
     const result = await edit("", "Replaced.");
     expect(result.isErr() && result.error.code).toBe("string_not_found");
     expect(writeCanonicalFileContent).not.toHaveBeenCalled();
+  });
+
+  it("counts a replacement's CRLF line breaks as written, normalized", async () => {
+    vi.mocked(readCanonicalFileContent).mockResolvedValue(stored(SOURCE, "7"));
+    vi.mocked(writeCanonicalFileContent).mockResolvedValue(
+      new Ok({ created: false, revision: "8" })
+    );
+    // 9,800 lines: over the codec's limit with CRLF (27 characters each), within it with LF (26).
+    const replacement = ("a".repeat(25) + "\r\n").repeat(9_800);
+    expect(replacement.length).toBeGreaterThan(INPUT_LIMITS.length);
+
+    const result = await edit("Ship it", replacement);
+
+    expect(result.isOk()).toBe(true);
+  });
+
+  it("refuses a whole body longer than the codec reads, writing nothing", async () => {
+    vi.mocked(readCanonicalFileContent).mockResolvedValue(stored("", "7"));
+
+    // Exactly the limit: the line break written after the body would exceed it.
+    const result = await edit("", "a".repeat(INPUT_LIMITS.length));
+
+    expect(result.isErr() && result.error.code).toBe("too_large");
+    expect(writeCanonicalFileContent).not.toHaveBeenCalled();
+  });
+
+  it("writes a whole body that fits once its trailing line break is dropped", async () => {
+    vi.mocked(readCanonicalFileContent).mockResolvedValue(stored("", "7"));
+    vi.mocked(writeCanonicalFileContent).mockResolvedValue(
+      new Ok({ created: false, revision: "8" })
+    );
+
+    const result = await edit("", "a".repeat(INPUT_LIMITS.length - 1) + "\n");
+
+    expect(result.isOk()).toBe(true);
+  });
+
+  it("counts the source as written, not the stored file's extra line breaks", async () => {
+    vi.mocked(readCanonicalFileContent).mockResolvedValue(stored("a\n\n", "7"));
+    vi.mocked(writeCanonicalFileContent).mockResolvedValue(
+      new Ok({ created: false, revision: "8" })
+    );
+
+    // Written as the body and one line break: exactly the limit.
+    const result = await edit("a", "b".repeat(INPUT_LIMITS.length - 1));
+
+    expect(result.isOk()).toBe(true);
+  });
+
+  it("leaves the front matter out of the size, as the codec does", async () => {
+    const body = "b" + "a".repeat(INPUT_LIMITS.length - 2);
+    vi.mocked(readCanonicalFileContent).mockResolvedValue(
+      stored(`---\ntitle: Notes\n---\n\n${body}\n`, "7")
+    );
+    vi.mocked(writeCanonicalFileContent).mockResolvedValue(
+      new Ok({ created: false, revision: "8" })
+    );
+
+    // The body and its line break are exactly the limit; the front matter is not counted.
+    const result = await edit("b", "c");
+
+    expect(result.isOk()).toBe(true);
   });
 
   it("refuses an empty old_string expecting more than one replacement", async () => {

@@ -8,6 +8,7 @@ import {
 import type { BetaMessageBatchResult } from "@anthropic-ai/sdk/resources/beta/messages/batches";
 import type {
   BetaCacheCreation,
+  BetaIterationsUsage,
   BetaMessage,
   BetaMessageDeltaUsage,
   BetaRawContentBlockDeltaEvent,
@@ -16,6 +17,7 @@ import type {
   BetaRawMessageDeltaEvent,
   BetaRawMessageStartEvent,
   BetaRawMessageStreamEvent,
+  BetaRefusalStopDetails,
 } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import { parseToolArguments } from "@app/lib/model_constructors/sdk/anthropic_ai/converters/input/utils";
 import {
@@ -45,6 +47,7 @@ import type {
   ToolCallDeltaEvent,
   ToolCallEvent,
   ToolCallStartedEvent,
+  TokenUsageContent,
 } from "@app/lib/model_constructors/types/output/events";
 import { buildErrorEvent } from "@app/lib/model_constructors/utils/build_error_event";
 import {
@@ -232,7 +235,8 @@ export interface OutputEventConverters {
   ): TokenUsageEvent;
   stopReasonToErrorEvent(
     metadata: EndpointMetadata,
-    stopReason: string
+    stopReason: string,
+    stopDetails: BetaRefusalStopDetails | null
   ): ErrorEvent | null;
   streamErrorToErrorEvent(
     metadata: EndpointMetadata,
@@ -386,14 +390,60 @@ export function messageDeltaUsageToTokenUsageEvent(
       standardInput: uncachedInput,
       totalOutput: usage.output_tokens,
       ...(thinkingTokens !== undefined ? { reasoning: thinkingTokens } : {}),
+      ...fallbackUsageFields(usage.iterations),
     },
     metadata,
   };
 }
 
+/**
+ * @cc [owner:fontanierh,label:product] served-model-from-fallback-iteration
+ * Only set `servedModel` and `usageIterations` when Anthropic actually fell back to another
+ * model, i.e. when `usage.iterations` has a `fallback_message` entry. `servedModel` is the
+ * model of the last such entry: that is the model that answered.
+ * Do not guess it from `message_start.message.model` (it still names the original model)
+ * or from `fallback` blocks. Responses without a fallback, including server tool loops that
+ * also report `iterations`, must keep exactly the same token usage as before.
+ */
+function fallbackUsageFields(
+  iterations: BetaIterationsUsage | null | undefined
+): Pick<TokenUsageContent, "servedModel" | "usageIterations"> {
+  // Anthropic adds a `fallback_message` entry whenever another model answered,
+  // however the switch happened. The stream itself never says which model
+  // answered after a switch mid-answer.
+  const servingIteration = iterations
+    ?.filter((iteration) => iteration.type === "fallback_message")
+    .at(-1);
+  if (!iterations || !servingIteration) {
+    return {};
+  }
+  return {
+    servedModel: servingIteration.model,
+    usageIterations: iterations.map((iteration) => ({
+      type: iteration.type,
+      model: "model" in iteration ? iteration.model : null,
+      cacheCreated: iteration.cache_creation_input_tokens,
+      longCacheCreated:
+        iteration.cache_creation?.ephemeral_1h_input_tokens ?? 0,
+      cacheHit: iteration.cache_read_input_tokens,
+      standardInput: iteration.input_tokens,
+      totalOutput: iteration.output_tokens,
+    })),
+  };
+}
+
+/**
+ * @cc [owner:fontanierh,label:error-handling;logging] refusal-carries-stop-details
+ * For `stopReason === "refusal"`, the returned `refusal_error` event MUST carry
+ * `content.refusal` with `category` and `explanation` copied from `stopDetails`, each `null` when
+ * `stopDetails` is `null` or the field is null or absent. Category strings unknown to the SDK
+ * MUST be kept verbatim. `stopDetails` MUST NOT change the event `type`, `message` or
+ * `errorSource`, and non-refusal events MUST NOT carry `content.refusal`.
+ */
 export function stopReasonToErrorEvent(
   metadata: EndpointMetadata,
-  stopReason: string
+  stopReason: string,
+  stopDetails: BetaRefusalStopDetails | null
 ): ErrorEvent | null {
   switch (stopReason) {
     case "max_tokens":
@@ -410,6 +460,11 @@ export function stopReasonToErrorEvent(
         type: "refusal_error",
         message:
           "Claude safety filters prevented this response. Try starting a new conversation or rephrasing your request.",
+        // `stop_details` fields can be absent at runtime despite the SDK type.
+        refusal: {
+          category: stopDetails?.category ?? null,
+          explanation: stopDetails?.explanation ?? null,
+        },
       });
     default:
       return null;
@@ -805,7 +860,11 @@ export function messageDeltaToEvents(
         "Anthropic pause_turn stop reason, turn ended with partial content"
       );
     }
-    const errorEvent = converters.stopReasonToErrorEvent(metadata, stopReason);
+    const errorEvent = converters.stopReasonToErrorEvent(
+      metadata,
+      stopReason,
+      event.delta.stop_details ?? null
+    );
     if (errorEvent) {
       return [[errorEvent], event.usage];
     }
@@ -1085,7 +1144,8 @@ export function messageToEvents(
   if (message.stop_reason) {
     const errorEvent = converters.stopReasonToErrorEvent(
       metadata,
-      message.stop_reason
+      message.stop_reason,
+      message.stop_details ?? null
     );
     if (errorEvent) {
       events.push(errorEvent);

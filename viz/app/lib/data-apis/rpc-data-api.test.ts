@@ -291,7 +291,7 @@ describe("revision-aware file access", () => {
         revision: "124",
         canWrite: true,
       });
-    const api = new HybridDataAPI(cache, new RPCDataAPI(sendMessage));
+    const api = new HybridDataAPI(cache, new RPCDataAPI(sendMessage), true);
     const file = await api.fetchFile("./notes.json");
     expect(await file?.file.text()).toBe("Current content");
     expect(file).toMatchObject({ revision: "123", canWrite: true });
@@ -326,7 +326,7 @@ describe("revision-aware file access", () => {
       .fn()
       .mockResolvedValueOnce({ fileBlob: null })
       .mockResolvedValueOnce(denied);
-    const api = new HybridDataAPI(cache, new RPCDataAPI(sendMessage));
+    const api = new HybridDataAPI(cache, new RPCDataAPI(sendMessage), true);
     const file = await api.fetchFile("./notes.json");
     expect(await file?.file.text()).toBe("{}");
     expect(file).toMatchObject({ revision: null, canWrite: false });

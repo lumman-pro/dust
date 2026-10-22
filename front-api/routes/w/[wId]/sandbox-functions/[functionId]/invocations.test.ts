@@ -149,7 +149,6 @@ async function createFramePublicationFunction({
 
 async function setupFrameV2Function({
   shareScope = "workspace_and_emails",
-  withFramesV2FeatureFlag = true,
   withSandboxFunctionInvocationFeatureFlag = true,
   standalone = false,
   userIdentity = "optional",
@@ -157,7 +156,6 @@ async function setupFrameV2Function({
   withSourcePath = userIdentity === "frame_author_required",
 }: {
   shareScope?: FileShareScope;
-  withFramesV2FeatureFlag?: boolean;
   withSandboxFunctionInvocationFeatureFlag?: boolean;
   standalone?: boolean;
   userIdentity?: SandboxFunctionUserIdentityPolicy;
@@ -167,9 +165,6 @@ async function setupFrameV2Function({
   const { workspace, auth: adminAuth } = await createPrivateApiMockRequest({
     role: "admin",
   });
-  if (withFramesV2FeatureFlag) {
-    await FeatureFlagFactory.basic(adminAuth, "frames_v2");
-  }
   if (withSandboxFunctionInvocationFeatureFlag) {
     await FeatureFlagFactory.basic(adminAuth, "frames_v2_functions");
   }
@@ -439,7 +434,7 @@ describe("POST /api/w/:wId/sandbox-functions/:functionIdOrSlug/invocations", () 
     expect(launchSandboxFunctionInvocationWorkflow).not.toHaveBeenCalled();
   });
 
-  it("invokes the active Frame publication with frames_v2 and frames_v2_functions enabled", async () => {
+  it("invokes the active Frame publication with frames_v2_functions enabled", async () => {
     const { workspace, frame, sandboxFunction } = await setupFrameV2Function();
 
     const response = await postInvocation({
@@ -653,25 +648,6 @@ describe("POST /api/w/:wId/sandbox-functions/:functionIdOrSlug/invocations", () 
       functionIdOrSlug: `${frame.sId}/run-function`,
     });
     expect(allowed.status).toBe(201);
-  });
-
-  it("requires Frames v2 to be enabled", async () => {
-    const { workspace, sandboxFunction } = await setupFrameV2Function({
-      withFramesV2FeatureFlag: false,
-    });
-
-    const response = await postInvocation({
-      workspaceId: workspace.sId,
-      functionIdOrSlug: sandboxFunction.sId,
-    });
-
-    expect(response.status).toBe(403);
-    expect(await response.json()).toMatchObject({
-      error: {
-        type: "feature_not_enabled",
-        message: "Frame functions are not enabled for this workspace.",
-      },
-    });
   });
 });
 

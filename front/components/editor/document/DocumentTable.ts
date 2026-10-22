@@ -1,3 +1,4 @@
+import { cn, markdownTableClasses } from "@dust-tt/sparkle";
 import type {
   CommandProps,
   JSONContent,
@@ -17,6 +18,9 @@ import {
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
+
+// TipTap's priority for an extension that sets none.
+export const TIPTAP_DEFAULT_PRIORITY = 100;
 
 const DOCUMENT_TABLE_NODE_NAME = "table";
 export const TABLE_CELL_NODE_NAME = "tableCell";
@@ -199,7 +203,7 @@ const renderTableMarkdown = (
 export const DocumentTableCell = TableCell.extend({
   content: "paragraph",
 
-  priority: 101,
+  priority: TIPTAP_DEFAULT_PRIORITY + 1,
 
   addKeyboardShortcuts() {
     const inCell = () => this.editor.isActive(TABLE_CELL_NODE_NAME);
@@ -233,7 +237,11 @@ export const DocumentTableRow = TableRow.extend({
   content: `${TABLE_CELL_NODE_NAME}+`,
 });
 
-const HEADER_CELL_CLASS = "bg-muted-background font-semibold";
+const HEADER_CELL_CLASS = cn(
+  markdownTableClasses.headerCell,
+  "first:rounded-tl-2xl last:rounded-tr-2xl",
+  "[tr:only-child>&]:first:rounded-bl-2xl [tr:only-child>&]:last:rounded-br-2xl"
+);
 
 const headerRowKey = new PluginKey<DecorationSet>("documentTableHeaderRow");
 

@@ -2,6 +2,7 @@ import type { PersonalAuthResolutionOutcome } from "@app/components/actions/bloc
 import { PersonalAuthenticationCard } from "@app/components/actions/blocked/PersonalAuthenticationCard";
 import { useBlockedActionsContext } from "@app/components/assistant/conversation/BlockedActionsProvider";
 import type { AgentLoopBlockedToolExecution } from "@app/lib/actions/mcp";
+import { isSandboxFunctionBackedBlockedAction } from "@app/lib/actions/mcp";
 import { useAuth } from "@app/lib/auth/AuthContext";
 import { useResolveAuthentication } from "@app/lib/swr/tool_actions";
 import type { OAuthProvider } from "@app/types/oauth/lib";
@@ -35,14 +36,24 @@ export function MCPServerPersonalAuthenticationRequired({
   const handleResolve = async (
     outcome: PersonalAuthResolutionOutcome
   ): Promise<boolean> => {
-    const result = await resolveAuthentication({
-      contextType: "agent_loop",
-      kind: "authentication",
-      outcome,
-      actionId: blockedAction.actionId,
-      conversationId: blockedAction.conversationId,
-      messageId: blockedAction.messageId,
-    });
+    const result = await resolveAuthentication(
+      isSandboxFunctionBackedBlockedAction(blockedAction)
+        ? {
+            contextType: "sandbox_function",
+            sandboxFunctionId: blockedAction.sandboxFunctionId,
+            invocationId: blockedAction.invocationId,
+            actionId: blockedAction.actionId,
+            outcome,
+          }
+        : {
+            contextType: "agent_loop",
+            kind: "authentication",
+            outcome,
+            actionId: blockedAction.actionId,
+            conversationId: blockedAction.conversationId,
+            messageId: blockedAction.messageId,
+          }
+    );
 
     if (!result.success) {
       return false;

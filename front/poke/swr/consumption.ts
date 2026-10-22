@@ -189,6 +189,7 @@ export function usePokeConsumptionTop({
   search,
   filter,
   sortOrder = "desc",
+  rankBy = "credits",
   disabled,
 }: UseConsumptionTopParams) {
   const url = `/api/poke/workspaces/${workspaceId}/analytics/consumption/${CONSUMPTION_TOP_ENDPOINTS[dimension]}`;
@@ -201,6 +202,7 @@ export function usePokeConsumptionTop({
     offset,
     search: search?.trim(),
     sortOrder,
+    rankBy,
   };
 
   const { data, error, isLoading, isValidating } = useConsumptionQuery<

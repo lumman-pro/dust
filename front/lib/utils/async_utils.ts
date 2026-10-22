@@ -58,6 +58,25 @@ export async function concurrentExecutor<T, V>(
 export const setTimeoutAsync = (ms: number): Promise<"timeout"> =>
   new Promise((resolve) => setTimeout(() => resolve("timeout"), ms));
 
+/**
+ * What `promise` settles to, or "timeout" when it has not settled within `timeoutMs`. The timer
+ * never outlives the race.
+ */
+export async function raceWithTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number
+): Promise<T | "timeout"> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(() => resolve("timeout"), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 interface WithRetryOptions {
   // Total attempts = 1 + maxRetries.
   maxRetries?: number;

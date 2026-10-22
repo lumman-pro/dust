@@ -1,10 +1,12 @@
 import { Readable } from "node:stream";
 import {
+  editCollabSource,
   readCollabSource,
   writeCollabSource,
 } from "@app/lib/api/collab/client";
 import type { DfmStoredDocumentError } from "@app/lib/api/documents/read_write";
 import {
+  editLiveDocument,
   readCurrentDocumentSource,
   writeDocumentChange,
 } from "@app/lib/api/documents/read_write";
@@ -22,6 +24,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock(import("@app/lib/api/collab/client"), async (importOriginal) => ({
   ...(await importOriginal()),
+  editCollabSource: vi.fn(),
   readCollabSource: vi.fn(),
   writeCollabSource: vi.fn(),
 }));
@@ -195,5 +198,54 @@ describe("writeDocumentChange and readCurrentDocumentSource", () => {
     expect(await readCurrentDocumentSource(auth, dustFs, path)).toEqual(
       new Ok({ source: FILE_SOURCE })
     );
+  });
+});
+
+describe("editLiveDocument", () => {
+  const EDIT = {
+    oldString: "From the session.",
+    newString: "Edited.",
+    expectedReplacements: 1,
+  };
+  let auth: Authenticator;
+  let dustFs: DustFileSystem;
+  let path: string;
+
+  beforeEach(async () => {
+    vi.resetAllMocks();
+    ({ authenticator: auth } = await createResourceTest({}));
+    const fileSystem = await DustFileSystem.forUser(auth);
+    if (fileSystem.isErr()) {
+      throw fileSystem.error;
+    }
+    dustFs = fileSystem.value;
+    path = `user-${auth.getNonNullableUser().sId}/notes.md`;
+    vi.spyOn(DustFileSystem.prototype, "stat").mockResolvedValue(
+      new Ok({ contentType: "text/markdown", sizeBytes: FILE_SOURCE.length })
+    );
+    vi.mocked(readCollabSource).mockResolvedValue(
+      new Ok({ open: true, source: LIVE_SOURCE })
+    );
+  });
+
+  it("sends an edit again only while the session applied nothing, then gives up", async () => {
+    vi.mocked(editCollabSource).mockResolvedValue(new Ok({ result: "busy" }));
+
+    const result = await editLiveDocument(auth, dustFs, path, EDIT);
+
+    expect(result.isErr() && result.error.code).toBe("storage_failed");
+    expect(editCollabSource).toHaveBeenCalledTimes(3);
+  });
+
+  it("never sends again an edit that may have applied", async () => {
+    vi.mocked(editCollabSource).mockResolvedValue(
+      new Err({ code: "unavailable", message: "Timed out." })
+    );
+
+    const result = await editLiveDocument(auth, dustFs, path, EDIT);
+
+    expect(result.isErr() && result.error.code).toBe("storage_failed");
+    expect(editCollabSource).toHaveBeenCalledTimes(1);
+    expect(writeCanonicalFileContent).not.toHaveBeenCalled();
   });
 });

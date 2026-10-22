@@ -104,6 +104,25 @@ export type TokenUsageContent = {
   // Processing tier the provider reports having served this response on, which
   // is what it bills for. Absent for providers that do not report one.
   serviceTier?: ServiceTier;
+  // The model that answered, when the provider switched to another model (for
+  // example after an Anthropic refusal). Absent when the requested model
+  // answered.
+  servedModel?: string;
+  // Token usage of each model the provider tried, in order. Only set when the
+  // provider switched models.
+  usageIterations?: TokenUsageIteration[];
+};
+export type TokenUsageIteration = {
+  // Provider name for the attempt. For Anthropic, "fallback_message" is the
+  // model that answered and "message" an earlier attempt.
+  type: string;
+  model: string | null;
+  // Total cache-write tokens. longCacheCreated is the part written to the 1h cache.
+  cacheCreated: number;
+  longCacheCreated: number;
+  cacheHit: number;
+  standardInput: number;
+  totalOutput: number;
 };
 export interface TokenUsageEvent {
   type: "token_usage";
@@ -146,11 +165,19 @@ export type ErrorType = (typeof ERROR_TYPES)[number];
 export const ERROR_SOURCES = ["provider", "dust", "unknown"] as const;
 export type ErrorSource = (typeof ERROR_SOURCES)[number];
 
+// Provider-reported reason for a refusal. `category` is kept as a plain string
+// so values the provider adds before we redeploy are preserved verbatim.
+export type RefusalDetails = {
+  category: string | null;
+  explanation: string | null;
+};
+
 export type ErrorContent = {
   type: ErrorType;
   message: string;
   originalError?: unknown;
   errorSource: ErrorSource;
+  refusal?: RefusalDetails;
 };
 export interface ErrorEvent {
   type: "error";

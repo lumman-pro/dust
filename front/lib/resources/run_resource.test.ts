@@ -4,13 +4,18 @@ import { USAGE_TYPE_FREE, USAGE_TYPE_USER } from "@app/lib/metronome/constants";
 import { EUROPE } from "@app/lib/model_constructors/types/regions";
 import { RunResource } from "@app/lib/resources/run_resource";
 import { generateRandomModelSId } from "@app/lib/resources/string_ids_server";
+import logger from "@app/logger/logger";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
 import { RunFactory } from "@app/tests/utils/RunFactory";
+import {
+  CLAUDE_OPUS_4_8_DEFAULT_MODEL_CONFIG,
+  CLAUDE_OPUS_5_5_DEFAULT_MODEL_CONFIG,
+} from "@app/types/assistant/models/anthropic";
 import {
   GPT_5_4_MODEL_CONFIG,
   GPT_5_MINI_MODEL_CONFIG,
 } from "@app/types/assistant/models/openai";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 describe("RunResource reasoning token usage", () => {
   it("persists provider-reported reasoning as a subset of completion tokens", async () => {
@@ -243,6 +248,171 @@ describe("RunResource region pricing", () => {
     );
 
     expect(costMicroUsd).toBe(expectedCostMicroUsd("global"));
+  });
+});
+
+describe("RunResource server-side fallback usage", () => {
+  const REQUESTED = CLAUDE_OPUS_5_5_DEFAULT_MODEL_CONFIG;
+  const FALLBACK = CLAUDE_OPUS_4_8_DEFAULT_MODEL_CONFIG;
+
+  // The requested model refused, then the fallback model answered.
+  const refusedUsage = {
+    inputTokens: 1_000,
+    totalOutputTokens: 10,
+    totalTokens: 1_010,
+    cachedTokens: 0,
+    cacheCreationTokens: 0,
+  };
+  const answeredUsage = {
+    inputTokens: 1_200,
+    totalOutputTokens: 300,
+    totalTokens: 1_500,
+    cachedTokens: 0,
+    cacheCreationTokens: 200,
+    longCacheCreationTokens: 200,
+  };
+
+  function priced(
+    modelId: typeof REQUESTED.modelId,
+    usage: typeof refusedUsage & { longCacheCreationTokens?: number }
+  ) {
+    return Math.round(
+      computeTokensCostForUsageInMicroUsd({
+        modelId,
+        promptTokens: usage.inputTokens,
+        completionTokens: usage.totalOutputTokens,
+        cachedTokens: usage.cachedTokens,
+        cacheCreationTokens: usage.cacheCreationTokens,
+        longCacheCreationTokens: usage.longCacheCreationTokens,
+      })
+    );
+  }
+
+  async function makeRun() {
+    const { authenticator: auth, workspace } = await createResourceTest({});
+    const { run, runUsageModelId } = await RunResource.makeNewWithPendingUsage(
+      {
+        appId: null,
+        dustRunId: generateRandomModelSId(),
+        runType: "deploy",
+        useWorkspaceCredentials: false,
+        workspaceId: workspace.id,
+      },
+      {
+        inferenceProvider: "anthropic",
+        modelId: REQUESTED.modelId,
+        providerId: REQUESTED.providerId,
+        reasoningEffort: REQUESTED.defaultReasoningEffort,
+        region: "global",
+        usageType: USAGE_TYPE_USER,
+        useWorkspaceCredentials: false,
+      }
+    );
+    return { auth, run, runUsageModelId };
+  }
+
+  it("records one row at the requested model without iterations", async () => {
+    const { auth, run, runUsageModelId } = await makeRun();
+
+    const costMicroUsd = await run.finalizePendingTokenUsage(
+      auth,
+      runUsageModelId,
+      answeredUsage,
+      REQUESTED.modelId,
+      { region: null }
+    );
+
+    const usages = await run.listRunUsages(auth);
+    expect(usages).toHaveLength(1);
+    expect(usages[0]).toMatchObject({
+      modelId: REQUESTED.modelId,
+      promptTokens: 1_200,
+      completionTokens: 300,
+      costMicroUsd: priced(REQUESTED.modelId, answeredUsage),
+    });
+    expect(costMicroUsd).toBe(priced(REQUESTED.modelId, answeredUsage));
+  });
+
+  it("records one row per iteration, each at its own model's price", async () => {
+    const { auth, run, runUsageModelId } = await makeRun();
+
+    const costMicroUsd = await run.finalizePendingTokenUsage(
+      auth,
+      runUsageModelId,
+      {
+        ...answeredUsage,
+        servedModel: FALLBACK.modelId,
+        usageIterations: [
+          { model: REQUESTED.modelId, usage: refusedUsage },
+          { model: FALLBACK.modelId, usage: answeredUsage },
+        ],
+      },
+      REQUESTED.modelId,
+      { region: null }
+    );
+
+    const usages = await run.listRunUsages(auth);
+    expect(
+      usages.map(({ modelId, promptTokens, costMicroUsd }) => ({
+        modelId,
+        promptTokens,
+        costMicroUsd,
+      }))
+    ).toEqual(
+      expect.arrayContaining([
+        {
+          modelId: REQUESTED.modelId,
+          promptTokens: 1_000,
+          costMicroUsd: priced(REQUESTED.modelId, refusedUsage),
+        },
+        {
+          modelId: FALLBACK.modelId,
+          promptTokens: 1_200,
+          costMicroUsd: priced(FALLBACK.modelId, answeredUsage),
+        },
+      ])
+    );
+    expect(usages).toHaveLength(2);
+    expect(costMicroUsd).toBe(
+      priced(REQUESTED.modelId, refusedUsage) +
+        priced(FALLBACK.modelId, answeredUsage)
+    );
+  });
+
+  it("prices an unknown iteration model at the requested model and logs it", async () => {
+    const { auth, run, runUsageModelId } = await makeRun();
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => logger);
+
+    const costMicroUsd = await run.finalizePendingTokenUsage(
+      auth,
+      runUsageModelId,
+      {
+        ...answeredUsage,
+        servedModel: "claude-unknown-9",
+        usageIterations: [
+          { model: REQUESTED.modelId, usage: refusedUsage },
+          { model: "claude-unknown-9", usage: answeredUsage },
+        ],
+      },
+      REQUESTED.modelId,
+      { region: null }
+    );
+
+    const usages = await run.listRunUsages(auth);
+    expect(usages).toHaveLength(2);
+    expect(usages.every((u) => u.modelId === REQUESTED.modelId)).toBe(true);
+    expect(costMicroUsd).toBe(
+      priced(REQUESTED.modelId, refusedUsage) +
+        priced(REQUESTED.modelId, answeredUsage)
+    );
+    expect(warn).toHaveBeenCalledWith(
+      {
+        requestedModelId: REQUESTED.modelId,
+        iterationModelId: "claude-unknown-9",
+      },
+      expect.any(String)
+    );
+    warn.mockRestore();
   });
 });
 

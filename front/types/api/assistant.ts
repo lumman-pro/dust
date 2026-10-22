@@ -20,6 +20,8 @@ const UserMentionSchema = z.object({
 // from a request body.
 const UserMessageOriginSchema = z.enum(CLIENT_MESSAGE_ORIGINS);
 
+const MAX_HOST_SELECTION_LENGTH = 256;
+
 const MessageBaseSchema = z.object({
   content: z.string(),
   mentions: z.array(z.union([AgentMentionSchema, UserMentionSchema])),
@@ -31,6 +33,7 @@ const MessageBaseSchema = z.object({
     selectedSpaceIds: z.array(z.string()).optional(),
     originMessageId: z.string().optional(),
     origin: UserMessageOriginSchema.optional(),
+    hostSelection: z.string().max(MAX_HOST_SELECTION_LENGTH).optional(),
   }),
   // Optional per-message model override from the input-bar model picker (an
   // explicit model pick). Resolved to a concrete model server-side at send time;

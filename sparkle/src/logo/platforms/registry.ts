@@ -32,6 +32,7 @@ import DeepseekLogo from "./Deepseek";
 import DiscordLogo from "./Discord";
 import DocLogo from "./Doc";
 import DriveLogo from "./Drive";
+import DropboxLogo from "./Dropbox";
 import FathomLogo from "./Fathom";
 import FigmaLogo from "./Figma";
 import FirefliesLogo from "./Fireflies";
@@ -55,6 +56,7 @@ import GoogleDocLogo from "./GoogleDoc";
 import GooglePdfLogo from "./GooglePdf";
 import GoogleSlideLogo from "./GoogleSlide";
 import GoogleSpreadsheetLogo from "./GoogleSpreadsheet";
+import GrafanaLogo from "./Grafana";
 import GranolaLogo from "./Granola";
 import GrokLogo from "./Grok";
 import GuruLogo from "./Guru";
@@ -80,6 +82,7 @@ import MicrosoftWordLogo from "./MicrosoftWord";
 import MinimaxLogo from "./Minimax";
 import MiroLogo from "./Miro";
 import MistralLogo from "./Mistral";
+import MobbinLogo from "./Mobbin";
 import ModjoLogo from "./Modjo";
 import MondayLogo from "./Monday";
 import MoonshotLogo from "./Moonshot";
@@ -168,6 +171,7 @@ export const PLATFORM_LOGOS = {
   DiscordLogo,
   DocLogo,
   DriveLogo,
+  DropboxLogo,
   FathomLogo,
   FigmaLogo,
   FirefliesLogo,
@@ -191,6 +195,7 @@ export const PLATFORM_LOGOS = {
   GooglePdfLogo,
   GoogleSlideLogo,
   GoogleSpreadsheetLogo,
+  GrafanaLogo,
   GranolaLogo,
   GrokLogo,
   GuruLogo,
@@ -216,6 +221,7 @@ export const PLATFORM_LOGOS = {
   MinimaxLogo,
   MiroLogo,
   MistralLogo,
+  MobbinLogo,
   ModjoLogo,
   MondayLogo,
   MoonshotLogo,

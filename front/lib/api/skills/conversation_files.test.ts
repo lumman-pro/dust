@@ -5,7 +5,6 @@ import { SkillResource } from "@app/lib/resources/skill/skill_resource";
 import { SKILL_ICON } from "@app/lib/skill";
 import { AgentConfigurationFactory } from "@app/tests/utils/AgentConfigurationFactory";
 import { ConversationFactory } from "@app/tests/utils/ConversationFactory";
-import { FeatureFlagFactory } from "@app/tests/utils/FeatureFlagFactory";
 import { FileFactory } from "@app/tests/utils/FileFactory";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
 import { fileStorageMock } from "@app/tests/utils/mocks/file_storage";
@@ -70,55 +69,48 @@ async function createSkillFileAttachment(
 }
 
 describe("upsertSkillFilesToConversation", () => {
-  it.each([{ framesV2: false }, { framesV2: true }])(
-    "loads Frame attachments with frames_v2=$framesV2",
-    async ({ framesV2 }) => {
-      const { auth, workspace, conversation } =
-        await setupConversationAndSkillPermissions();
+  it("loads Frame attachments", async () => {
+    const { auth, workspace, conversation } =
+      await setupConversationAndSkillPermissions();
 
-      if (framesV2) {
-        await FeatureFlagFactory.basic(auth, "frames_v2");
-      }
+    const skill = await SkillResource.fetchById(auth, "frames");
+    assert(skill);
+    expect(skill.getCodeDefinedFiles()).toEqual(FRAME_SKILL_FILES);
+    fileStorageMock.setFileExists(() => false);
 
-      const skill = await SkillResource.fetchById(auth, "frames");
-      assert(skill);
-      expect(skill.getCodeDefinedFiles()).toEqual(FRAME_SKILL_FILES);
-      fileStorageMock.setFileExists(() => false);
+    const result = await upsertSkillFilesToConversation(auth, {
+      skill,
+      conversation,
+    });
 
-      const result = await upsertSkillFilesToConversation(auth, {
-        skill,
-        conversation,
+    assert(result.isOk());
+    expect(result.value.loadedPaths).toEqual(
+      [
+        "lint.sh",
+        "tsconfig.json",
+        "oxlintrc.json",
+        "frame-rules.cjs",
+        "theme.ts",
+        "slideshow.example.tsx",
+      ].map(
+        (fileName) =>
+          `conversation-${conversation.sId}/skills/Create Frames/${fileName}`
+      )
+    );
+    for (const file of skill.getCodeDefinedFiles()) {
+      expect(fileStorageMock.saveFileCalls).toContainEqual({
+        filePath: gcsPathForSkillFile({
+          workspaceId: workspace.sId,
+          conversationId: conversation.sId,
+          skillName: skill.name,
+          fileName: file.fileName,
+        }),
+        content: Buffer.from(file.content),
+        contentType: file.contentType,
       });
-
-      assert(result.isOk());
-      expect(result.value.loadedPaths).toEqual(
-        [
-          "lint.sh",
-          "tsconfig.json",
-          "oxlintrc.json",
-          "frame-rules.cjs",
-          "theme.ts",
-          "slideshow.example.tsx",
-        ].map(
-          (fileName) =>
-            `conversation-${conversation.sId}/skills/Create Frames/${fileName}`
-        )
-      );
-      for (const file of skill.getCodeDefinedFiles()) {
-        expect(fileStorageMock.saveFileCalls).toContainEqual({
-          filePath: gcsPathForSkillFile({
-            workspaceId: workspace.sId,
-            conversationId: conversation.sId,
-            skillName: skill.name,
-            fileName: file.fileName,
-          }),
-          content: Buffer.from(file.content),
-          contentType: file.contentType,
-        });
-      }
-      expect(fileStorageMock.readStreamCalls).toHaveLength(0);
     }
-  );
+    expect(fileStorageMock.readStreamCalls).toHaveLength(0);
+  });
 
   it("writes every missing skill file and returns their scoped paths", async () => {
     const { auth, user, workspace, conversation } =

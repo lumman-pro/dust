@@ -1,4 +1,5 @@
 import { buildCollabExtensions } from "@app/components/editor/document/collabExtensions";
+import { isWritableThread } from "@app/components/editor/document/dfm_persistence";
 import { getMarkedCommentIds } from "@app/components/editor/document/DocumentCommentAnchor";
 import {
   documentCommentsPluginKey,
@@ -7,7 +8,11 @@ import {
 import type { ActiveCommentBinding } from "@app/components/editor/document/types";
 import { useDocumentComments } from "@app/components/editor/document/useDocumentComments";
 import { useDocumentEditor } from "@app/components/editor/document/useDocumentEditor";
-import { dfmToYDoc, yDocToDfm } from "@app/lib/api/collab/ydoc";
+import {
+  anchorYDocComment,
+  dfmToYDoc,
+  yDocToDfm,
+} from "@app/lib/api/collab/ydoc";
 import type { CommentChannel } from "@app/lib/client/collab/comments";
 import type { DfmMessageVerifier } from "@app/lib/client/dfm_signatures";
 import type { DfmAuthor, DfmComment, DfmMessage } from "@app/lib/markdown/dfm";
@@ -37,6 +42,7 @@ import {
   onTestFinished,
   vi,
 } from "vitest";
+import type * as Y from "yjs";
 
 const AUTHOR: DfmAuthor = { kind: "user", id: "usr_tom", name: "Tom" };
 const AT = "2026-09-25T14:16:32.380Z";
@@ -65,7 +71,12 @@ async function renderCommentedEditor(
   }
   let currentEditor: Editor | null = null;
   const session =
-    live === null ? undefined : (live ?? acceptingSession(() => currentEditor));
+    live === null
+      ? undefined
+      : anchoringSession(
+          live ?? acceptingSession(() => currentEditor),
+          shared.value.doc
+        );
   const extensions = buildCollabExtensions({
     t: (descriptor) => descriptor.id ?? "",
     document: shared.value.doc,
@@ -159,6 +170,38 @@ const sessionThread = (id: string, body: string): DfmComment => ({
     },
   ],
 });
+
+/**
+ * As the server does, an accepted `add` first marks its anchor in the shared document. The server
+ * only accepts threads the codec writes.
+ */
+function anchoringSession(channel: CommentChannel, doc: Y.Doc): CommentChannel {
+  return {
+    ...channel,
+    send: async (command) => {
+      const answered = await channel.send(command);
+      if (
+        answered.isErr() ||
+        !answered.value ||
+        !isWritableThread(answered.value) ||
+        command.type !== "add" ||
+        !command.anchor
+      ) {
+        return answered;
+      }
+      const anchored = anchorYDocComment(
+        doc,
+        {
+          commentId: command.commentId,
+          anchor: command.anchor,
+          comments: [answered.value],
+        },
+        { source: "local", context: null }
+      );
+      return anchored.isErr() ? new Err(anchored.error) : answered;
+    },
+  };
+}
 
 /**
  * A live session accepting every command: it creates each new thread as `sessionThread`, and
@@ -346,11 +389,7 @@ describe("useDocumentComments", () => {
     act(() => {
       select(editor, "brave new world");
       result.current.comments.startDraft();
-    });
-    await act(async () => {
-      expect((await result.current.comments.submitDraft("Hi")).isOk()).toBe(
-        true
-      );
+      editor.commands.addComment(sessionThread("c2", "Hi"));
     });
 
     expect(steps.filter((step) => step instanceof AddMarkStep)).toHaveLength(1);
@@ -519,7 +558,7 @@ describe("useDocumentComments", () => {
   });
 
   describe("in a live session", () => {
-    it("has the session create the thread, then anchors it", async () => {
+    it("has the session create and anchor the thread", async () => {
       const { channel, send } = liveChannel(
         (command) =>
           new Ok(
@@ -553,7 +592,11 @@ describe("useDocumentComments", () => {
         commentId: expect.any(String),
         body: "Too bold?",
         quote: "brave",
+        anchor: { first: expect.any(Object), last: expect.any(Object) },
       });
+      expect(result.current.comments.quotes.get(command.commentId)).toBe(
+        "brave"
+      );
       expect(getMarkedCommentIds(editor.getJSON())).toEqual(
         new Set([command.commentId])
       );
@@ -562,7 +605,7 @@ describe("useDocumentComments", () => {
       ]);
     });
 
-    it("deletes the session's thread when the draft can no longer take it", async () => {
+    it("keeps the thread the session anchored when the draft goes meanwhile", async () => {
       const { channel, send } = liveChannel(
         (command) =>
           new Ok(
@@ -594,12 +637,39 @@ describe("useDocumentComments", () => {
 
       await act(async () => {
         expect(
-          (await result.current.comments.submitDraft("Too bold?")).isErr()
+          (await result.current.comments.submitDraft("Too bold?")).isOk()
         ).toBe(true);
       });
 
-      const [[added], [deleted]] = send.mock.calls;
-      expect(deleted).toEqual({ type: "delete", commentId: added.commentId });
+      const [[added]] = send.mock.calls;
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(getMarkedCommentIds(editor.getJSON())).toEqual(
+        new Set([added.commentId])
+      );
+    });
+
+    it("reports a thread the session could not anchor", async () => {
+      const { channel } = liveChannel(() => new Err("unanchored"));
+      const { result } = await renderCommentedEditor("Hello brave world.\n", {
+        live: channel,
+      });
+      const editor = result.current.document.editor;
+      if (!editor) {
+        throw new Error("Editor did not mount.");
+      }
+      act(() => {
+        select(editor, "brave");
+        result.current.comments.startDraft();
+      });
+
+      let submitted: Result<void, string> | undefined;
+      await act(async () => {
+        submitted = await result.current.comments.submitDraft("Too bold?");
+      });
+
+      expect(submitted?.isErr() && submitted.error).toBe(
+        "The selected text can no longer take a comment. Select other text to comment."
+      );
       expect(getMarkedCommentIds(editor.getJSON()).size).toBe(0);
     });
 
@@ -678,10 +748,41 @@ describe("useDocumentComments", () => {
         expect(
           (await result.current.comments.submitDraft("Too bold?")).isErr()
         ).toBe(true);
-        expect(
-          (await result.current.comments.reply("c1", "Not at all.")).isErr()
-        ).toBe(true);
+        const replied = await result.current.comments.reply(
+          "c1",
+          "Not at all."
+        );
+        expect(replied.isErr() && replied.error).toBe(
+          "This comment can't be saved in this document. Try shortening or simplifying it."
+        );
       });
+      expect(send).not.toHaveBeenCalled();
+    });
+
+    it("blames the document, not the comment, when the document already fails to save", async () => {
+      const { channel, send } = liveChannel(() => new Ok(null));
+      const { result } = await renderCommentedEditor(SOURCE, {
+        live: channel,
+        isSavable: () => false,
+      });
+      const editor = result.current.document.editor;
+      if (!editor) {
+        throw new Error("Editor did not mount.");
+      }
+
+      act(() => {
+        select(editor, "Hi");
+        result.current.comments.startDraft();
+      });
+      let submitted: Result<void, string> | undefined;
+      let replied: Result<void, string> | undefined;
+      await act(async () => {
+        submitted = await result.current.comments.submitDraft("Too bold?");
+        replied = await result.current.comments.reply("c1", "Not at all.");
+      });
+      const message = "This document can't be saved right now.";
+      expect(submitted?.isErr() && submitted.error).toBe(message);
+      expect(replied?.isErr() && replied.error).toBe(message);
       expect(send).not.toHaveBeenCalled();
     });
 

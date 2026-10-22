@@ -507,7 +507,7 @@ export function ConversationContainerVirtuoso({
           <div
             className={
               isDiscoveryHomepage
-                ? "flex h-panel w-full shrink-0 flex-col items-center"
+                ? "flex h-panel-sm w-full shrink-0 flex-col items-center md:h-panel"
                 : "contents"
             }
           >

@@ -1,6 +1,6 @@
 import type { CollabStatus } from "@app/components/editor/document/types";
 import type { AgentEvent } from "@app/lib/client/collab/agents";
-import type { AgentActivity } from "@app/types/collab";
+import type { WorkingAgentActivity } from "@app/types/collab";
 import { assertNever } from "@app/types/shared/utils/assert_never";
 import {
   AlertCircle,
@@ -71,12 +71,16 @@ export const CollabStatusIndicator = ({
 };
 
 const AGENT_ACTIVITIES: Record<
-  AgentActivity,
+  WorkingAgentActivity,
   {
     label: MessageDescriptor;
     describe: (name: string) => MessageDescriptor;
   }
 > = {
+  thinking: {
+    label: msg`thinking…`,
+    describe: (name) => msg`${name} is thinking`,
+  },
   reading: {
     label: msg`reading…`,
     describe: (name) => msg`${name} is reading`,
@@ -88,7 +92,7 @@ const AGENT_ACTIVITIES: Record<
 };
 
 interface CollabAgentIndicatorProps {
-  activity: AgentEvent;
+  activity: AgentEvent<WorkingAgentActivity>;
   avatar: ReactNode;
 }
 

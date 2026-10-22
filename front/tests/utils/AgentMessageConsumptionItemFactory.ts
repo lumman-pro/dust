@@ -2,11 +2,55 @@ import { buildLatestMessageConsumptionAllocation } from "@app/lib/api/assistant/
 import { AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION } from "@app/lib/api/assistant/agent_message_consumption_attribution/attribution_builder";
 import type { Authenticator } from "@app/lib/auth";
 import { AgentMCPActionResource } from "@app/lib/resources/agent_mcp_action_resource";
+import type { CompletedAgentMessageConsumptionItem } from "@app/lib/resources/agent_message_consumption_item_resource";
 import { AgentMessageConsumptionItemResource } from "@app/lib/resources/agent_message_consumption_item_resource";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { RunResource } from "@app/lib/resources/run_resource";
+import type { ModelId } from "@app/types/shared/model_id";
 
 export class AgentMessageConsumptionItemFactory {
+  // Stores items of the current attribution version, and optionally reconciles each one at its
+  // gross amount, regardless of the message's bill.
+  static async createItems(
+    auth: Authenticator,
+    {
+      agentMessageModelId,
+      conversation,
+      reconciled,
+      records,
+    }: {
+      agentMessageModelId: ModelId;
+      conversation: ConversationResource;
+      reconciled: boolean;
+      records: CompletedAgentMessageConsumptionItem[];
+    }
+  ): Promise<void> {
+    await AgentMessageConsumptionItemResource.recordItemsIdempotently(auth, {
+      conversation,
+      agentMessageModelId,
+      attributionVersion: AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION,
+      records,
+      pendingToolItems: [],
+    });
+    if (!reconciled) {
+      return;
+    }
+
+    const items =
+      await AgentMessageConsumptionItemResource.listByAgentMessageModelIds(
+        auth,
+        {
+          agentMessageModelIds: [agentMessageModelId],
+          maxAttributionVersion: AGENT_MESSAGE_CONSUMPTION_ATTRIBUTION_VERSION,
+        }
+      );
+    await AgentMessageConsumptionItemResource.setReconciledCreditAmounts(auth, {
+      reconciledCreditAmountByItem: new Map(
+        items.map((item) => [item, item.grossAttributedCreditAmountMicro])
+      ),
+    });
+  }
+
   // Reconciles the stored items of the current attribution version against the message's bill, as
   // the attribution activity does, without rebuilding their evidence. A version that does not
   // reconcile keeps its previously reconciled amounts.

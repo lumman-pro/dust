@@ -85,23 +85,7 @@ msgid "Remove"
 msgstr ""
 
 #: front/components/pod/PodFileTabPreview.tsx
-msgid "Failed to save file"
-msgstr ""
-
-#: front/components/pod/PodFileTabPreview.tsx
-msgid "File saved"
-msgstr ""
-
-#: front/components/pod/PodFileTabPreview.tsx
 msgid "Revert"
-msgstr ""
-
-#: front/components/pod/PodFileTabPreview.tsx
-msgid "This file is too large to preview ({fileSize})."
-msgstr ""
-
-#: front/components/pod/PodFileTabPreview.tsx
-msgid "Unable to preview this file."
 msgstr ""
 
 #: front/components/pod/PodHeaderActions.tsx

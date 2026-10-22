@@ -66,8 +66,10 @@ msgid "Name"
 msgstr "Name"
 
 #: front/components/workspace/analytics/consumption/ConsumptionAttributionTable.tsx
-msgid "Active / total members"
-msgstr "Active / total members"
+#: front/components/workspace/analytics/consumption/ConsumptionChart.tsx
+#: front/components/workspace/analytics/consumption/ConsumptionSummary.tsx
+msgid "Active users"
+msgstr "Active users"
 
 #: front/components/workspace/analytics/consumption/ConsumptionAttributionTable.tsx
 msgid "Vs workspace avg"
@@ -78,9 +80,10 @@ msgid "Consumption share"
 msgstr "Consumption share"
 
 #: front/components/workspace/analytics/consumption/ConsumptionAttributionTable.tsx
-#: front/components/workspace/analytics/consumption/ConsumptionConversationAttribution.tsx
-msgid "Total credits"
-msgstr "Total credits"
+#: front/components/workspace/analytics/consumption/ConsumptionBurnUpChart.tsx
+#: front/components/workspace/analytics/consumption/ConsumptionChart.tsx
+msgid "Credits"
+msgstr "Credits"
 
 #: front/components/workspace/analytics/consumption/ConsumptionAttributionTable.tsx
 msgid "Vs prev"
@@ -154,11 +157,6 @@ msgstr "{deltaCreditCount, plural, one {{deltaAmount} credit behind target} othe
 msgid "Failed to load consumption."
 msgstr "Failed to load consumption."
 
-#: front/components/workspace/analytics/consumption/ConsumptionBurnUpChart.tsx
-#: front/components/workspace/analytics/consumption/ConsumptionChart.tsx
-msgid "Credits"
-msgstr "Credits"
-
 #: front/components/workspace/analytics/consumption/ConsumptionChart.tsx
 msgid "Today (partial)"
 msgstr "Today (partial)"
@@ -184,11 +182,6 @@ msgid "{creditCount, plural, one {{total} credit so far this month} other {{tota
 msgstr "{creditCount, plural, one {{total} credit so far this month} other {{total} credits so far this month}}"
 
 #: front/components/workspace/analytics/consumption/ConsumptionChart.tsx
-#: front/components/workspace/analytics/consumption/ConsumptionSummary.tsx
-msgid "Active users"
-msgstr "Active users"
-
-#: front/components/workspace/analytics/consumption/ConsumptionChart.tsx
 msgid "{creditCount, plural, one {{total} credit total} other {{total} credits total}}"
 msgstr "{creditCount, plural, one {{total} credit total} other {{total} credits total}}"
 
@@ -207,6 +200,10 @@ msgstr "Conversation"
 #: front/components/workspace/analytics/consumption/ConsumptionConversationAttribution.tsx
 msgid "Untitled conversation"
 msgstr "Untitled conversation"
+
+#: front/components/workspace/analytics/consumption/ConsumptionConversationAttribution.tsx
+msgid "Total credits"
+msgstr "Total credits"
 
 #: front/components/workspace/analytics/consumption/ConsumptionConversationAttribution.tsx
 msgid "Open conversation"
@@ -329,8 +326,8 @@ msgid "Invocations"
 msgstr "Invocations"
 
 #: front/components/workspace/analytics/consumption/consumptionDimensions.ts
-msgid "Credits / message"
-msgstr "Credits / message"
+msgid "Credit / msg"
+msgstr "Credit / msg"
 
 #: front/components/workspace/analytics/consumption/consumptionDimensions.ts
 msgid "Credits / invocation"

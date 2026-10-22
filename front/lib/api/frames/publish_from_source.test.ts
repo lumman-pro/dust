@@ -23,6 +23,7 @@ import { SandboxResource } from "@app/lib/resources/sandbox_resource";
 import { ConversationFactory } from "@app/tests/utils/ConversationFactory";
 import { FeatureFlagFactory } from "@app/tests/utils/FeatureFlagFactory";
 import { FileFactory } from "@app/tests/utils/FileFactory";
+import { enablePublicFrameFunctions } from "@app/tests/utils/FrameFunctionFactory";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
 import { fileStorageMock } from "@app/tests/utils/mocks/file_storage";
 import { SpaceFactory } from "@app/tests/utils/SpaceFactory";
@@ -37,7 +38,6 @@ import {
   getConversationFilesBasePath,
   getPodFilesBasePath,
 } from "@app/types/mount_path";
-import type { WhitelistableFeature } from "@app/types/shared/feature_flags";
 import { Err, Ok } from "@app/types/shared/result";
 import assert from "assert";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -558,7 +558,6 @@ describe("publishFrameFromSource replacing a legacy Frame", () => {
         "databases/items.db.ts": "export const items = {};",
       },
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     await FeatureFlagFactory.basic(auth, "frames_v2_functions");
 
     const sandbox = await SandboxResource.makeNew(auth, {
@@ -675,6 +674,79 @@ describe("publishFrameFromSource replacing a legacy Frame", () => {
       result.value.kind === "v2" ? result.value.publicationId : undefined
     );
   });
+
+  it("leaves a public legacy Frame untouched when its replacement has no public function", async () => {
+    const replacementManifest = JSON.stringify({
+      version: 1,
+      description: "Sales with a private function.",
+      functions: [
+        {
+          name: "run",
+          description: "Run it.",
+          entryPoint: "functions/run.ts",
+        },
+      ],
+    });
+    const { auth, conversation, legacyFrame, legacyPath, manifestPath } =
+      await setupLegacyFrameReplacement({
+        scope: "conversation",
+        replacementManifest,
+        extraSources: functionSources,
+      });
+    await enablePublicFrameFunctions(auth);
+    await legacyFrame.setShareScope(auth, "public");
+
+    const sandbox = await SandboxResource.makeNew(auth, {
+      providerId: "test-provider-id",
+      status: "running",
+      baseImage: "dust-base",
+      version: "0.0.0-test",
+    });
+    const stagedRelativePaths = [
+      FRAME_MANIFEST_FILE,
+      "index.tsx",
+      "theme.ts",
+      "functions/run.ts",
+    ];
+    vi.spyOn(sandbox, "writeFile").mockResolvedValue(new Ok(undefined));
+    vi.spyOn(sandbox, "execRoot").mockResolvedValue(
+      new Ok({
+        exitCode: 0,
+        stdout: `${computeFrameSourcePathSetSha256(stagedRelativePaths)}  -\n`,
+        stderr: "",
+      })
+    );
+    vi.mocked(ensureConversationSandboxReadyWithScope).mockResolvedValue(
+      new Ok({
+        sandbox,
+        freshlyCreated: false,
+        scope: { spaceId: null },
+      })
+    );
+    vi.mocked(buildSandboxFunctionOnReadySandbox).mockResolvedValue(
+      new Ok({
+        bundleCode: "export default true;",
+        userIdentity: "workspace_user_required",
+        inputSchema: { type: "object" },
+        outputSchema: { type: "object" },
+      })
+    );
+
+    const result = await publishFrameFromSource(auth, {
+      conversation,
+      publishedByAgentConfigurationId: "test-agent",
+      sourcePath: manifestPath,
+      replacesPath: legacyPath,
+    });
+
+    assert(result.isErr(), "Expected the replacement to be refused");
+    expect(result.error).toMatchObject({ code: "sharing_conflict" });
+    expect(ensureFrameSandboxReady).not.toHaveBeenCalled();
+    const frame = await FileResource.fetchById(auth, legacyFrame.sId);
+    assert(frame, "Frame not found");
+    expect(frame.isFrameV2).toBe(false);
+    expect(frame.toScopedPath(auth)).toBe(legacyPath);
+  });
 });
 
 describe("publishFrameV2FromSource", () => {
@@ -724,19 +796,16 @@ describe("publishFrameV2FromSource", () => {
 
   it.each<{
     declares: string;
-    flags: WhitelistableFeature[];
     manifestContent: string;
     extraSources: Record<string, string>;
   }>([
     {
       declares: "functions",
-      flags: [],
       manifestContent: functionManifest,
       extraSources: functionSources,
     },
     {
       declares: "databases",
-      flags: ["frames_v2"],
       manifestContent: JSON.stringify({
         version: 1,
         description: "Store items.",
@@ -744,22 +813,13 @@ describe("publishFrameV2FromSource", () => {
       }),
       extraSources: { "databases/items.db.ts": "export {};" },
     },
-    {
-      declares: "functions",
-      flags: ["frames_v2_functions"],
-      manifestContent: functionManifest,
-      extraSources: functionSources,
-    },
   ])(
-    "rejects a manifest declaring $declares with flags $flags",
-    async ({ flags, manifestContent, extraSources }) => {
+    "rejects a manifest declaring $declares without Frame functions",
+    async ({ manifestContent, extraSources }) => {
       const { auth, conversation, frame, manifestPath } = await setup({
         manifestContent,
         extraSources,
       });
-      for (const flag of flags) {
-        await FeatureFlagFactory.basic(auth, flag);
-      }
 
       const result = await publishFrameV2FromSource(auth, {
         conversation,
@@ -776,6 +836,45 @@ describe("publishFrameV2FromSource", () => {
       expect(reloaded?.useCaseMetadata?.activePublicationId).toBeUndefined();
     }
   );
+
+  it("rejects a manifest declaring schedules without the schedules flag", async () => {
+    const { auth, conversation, frame, manifestPath } = await setup({
+      manifestContent: JSON.stringify({
+        version: 1,
+        description: "Run a function on a schedule.",
+        functions: [
+          {
+            name: "run",
+            description: "Run it.",
+            entryPoint: "functions/run.ts",
+            schedules: [
+              {
+                cron: "0 * * * *",
+                timezone: "UTC",
+                input: {},
+              },
+            ],
+          },
+        ],
+      }),
+      extraSources: functionSources,
+    });
+    await FeatureFlagFactory.basic(auth, "frames_v2_functions");
+
+    const result = await publishFrameV2FromSource(auth, {
+      conversation,
+      frame,
+      manifestPath,
+    });
+
+    assert(result.isErr());
+    expect(result.error).toMatchObject({ code: "invalid_manifest" });
+    expect(result.error.message).toContain("Frame schedules are not enabled");
+    expect(ensureFrameSandboxReady).not.toHaveBeenCalled();
+    expect(ensureConversationSandboxReadyWithScope).not.toHaveBeenCalled();
+    const reloaded = await FileResource.fetchById(auth, frame.sId);
+    expect(reloaded?.useCaseMetadata?.activePublicationId).toBeUndefined();
+  });
 
   it("infers TSX source content type from its extension", async () => {
     const { auth, conversation, frame, manifestPath } = await setup({

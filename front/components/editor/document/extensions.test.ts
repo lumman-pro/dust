@@ -1,4 +1,9 @@
 import { getMarkedCommentIds } from "@app/components/editor/document/DocumentCommentAnchor";
+import {
+  destroyOpenedEditors,
+  openEditor,
+  saved,
+} from "@app/components/editor/document/editor.test_utils";
 import { buildDocumentEditorExtensions } from "@app/components/editor/document/editorExtensions";
 import type { MessageDescriptor } from "@lingui/core";
 import { Editor } from "@tiptap/core";
@@ -200,5 +205,28 @@ describe("pasted code blocks", () => {
     current.commands.clearContent();
     pasteHTML(current, dom.innerHTML);
     expect(current.state.doc.firstChild?.textContent).toBe("a\n");
+  });
+});
+
+describe("inline code", () => {
+  afterEach(destroyOpenedEditors);
+
+  it.each([
+    ["strike", "~~`x`~~", "<code><s>x</s></code>"],
+    ["underline", "++`x`++", "<code><u>x</u></code>"],
+    ["bold", "**`x`**", "<code><strong>x</strong></code>"],
+    ["strike and underline", "~~++`x`++~~", "<code><s><u>x</u></s></code>"],
+  ])("renders outside %s, and saves inside it", (_, source, html) => {
+    const built = openEditor(`${source}\n`);
+    const code = built.view.dom.querySelector("code");
+
+    expect(code?.outerHTML.replace(/ class="[^"]*"/g, "")).toBe(html);
+    expect(saved(built)).toBe(`${source}\n`);
+  });
+
+  it("saves inside text struck around it", () => {
+    const source = "~~before `x` after~~\n";
+
+    expect(saved(openEditor(source))).toBe(source);
   });
 });

@@ -71,6 +71,12 @@ class PhasedSequelizeStorage {
   }
 }
 
+/**
+ * @cc [owner:sfriquet,label:security] no-password-in-psql-args
+ * The database password MUST NOT be passed in `psql`'s command-line arguments: `execFileSync`
+ * errors print the full command, which would leak the password to the operator's output and logs.
+ * It MUST be passed through the `PGPASSWORD` environment variable instead.
+ */
 function createUmzug(
   sequelize: Sequelize,
   getDatabaseURI: () => string,
@@ -100,10 +106,19 @@ function createUmzug(
               "psql is not available — install the PostgreSQL client tools."
             );
           }
+          const databaseURL = new URL(getDatabaseURI());
+          const password =
+            decodeURIComponent(databaseURL.password) ||
+            (databaseURL.searchParams.get("password") ?? "");
+          databaseURL.password = "";
+          databaseURL.searchParams.delete("password");
           execFileSync(
             "psql",
-            [getDatabaseURI(), "-v", "ON_ERROR_STOP=1", "-f", filePath],
-            { stdio: "inherit" }
+            [databaseURL.toString(), "-v", "ON_ERROR_STOP=1", "-f", filePath],
+            {
+              stdio: "inherit",
+              env: { ...process.env, PGPASSWORD: password },
+            }
           );
         },
         // Down migrations are intentionally not supported. The expand/contract

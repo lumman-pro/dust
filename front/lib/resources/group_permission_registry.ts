@@ -77,8 +77,8 @@ interface RoleDefinition {
  * @cc [owner:flvndvd,label:security;product] frame-publish-capability
  * `publish` on the `frame` type means creating a public link. Setting a frame's share scope to
  * `public` MUST require `hasWorkspacePermission("publish", "frame")` (see
- * `checkFrameShareScopePermission`), on top of the workspace sharing policy allowing all scopes
- * and the frame having no active functions. Other scopes need no capability.
+ * `checkFrameShareScopePermission`), on top of the workspace sharing policy allowing all scopes.
+ * Other scopes need no capability.
  */
 /**
  * @cc [owner:flvndvd,label:security;product] frame-invite-capability

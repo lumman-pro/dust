@@ -85,24 +85,8 @@ msgid "Remove"
 msgstr "Entfernen"
 
 #: front/components/pod/PodFileTabPreview.tsx
-msgid "Failed to save file"
-msgstr "Die Datei konnte nicht gespeichert werden."
-
-#: front/components/pod/PodFileTabPreview.tsx
-msgid "File saved"
-msgstr "Datei gespeichert"
-
-#: front/components/pod/PodFileTabPreview.tsx
 msgid "Revert"
 msgstr "Zurücksetzen"
-
-#: front/components/pod/PodFileTabPreview.tsx
-msgid "This file is too large to preview ({fileSize})."
-msgstr "Diese Datei ist zu groß für eine Vorschau ({fileSize})."
-
-#: front/components/pod/PodFileTabPreview.tsx
-msgid "Unable to preview this file."
-msgstr "Für diese Datei ist keine Vorschau möglich."
 
 #: front/components/pod/PodHeaderActions.tsx
 msgid "Pod options"

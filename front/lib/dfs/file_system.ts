@@ -35,12 +35,21 @@ export interface DfsListedEntry {
   object?: DfsResolvedObject;
 }
 
+/** What a session can do on an object, from its effective grants. */
+export interface DfsPermissions {
+  read: boolean;
+  write: boolean;
+}
+
 // Server limit for one `Read`.
 const MAX_READ_CHUNK_BYTES = 1024 * 1024;
 // Keep headroom for operation metadata within the 4 MiB RPC request limit.
 const MAX_WRITE_CHUNK_BYTES = 4 * 1024 * 1024 - 64 * 1024;
 const LIST_PAGE_LIMIT = 4096;
 const MAX_REMOVALS_PER_APPLY = 512;
+// The owner read and write bits of `DfsAttr.mode` (see `Attr.mode` in `dfs/design-docs/API.md`).
+const ATTR_MODE_READ = 0o400;
+const ATTR_MODE_WRITE = 0o200;
 
 function isDirectory(attr: DfsAttr): boolean {
   return attr.kind === "directory";
@@ -446,6 +455,25 @@ export class DfsFileSystem {
   async exists(uri: string): Promise<Result<boolean, DfsError>> {
     const attr = await this.resolve(uri);
     return attr.isErr() ? attr : new Ok(attr.value !== null);
+  }
+
+  /** The permissions of this file system's session on the object at `uri`. */
+  /**
+   * @cc [owner:aubin-tchoi,label:security] permissions-from-mode
+   * The permissions MUST be decoded from the owner bits of the object's `DfsAttr.mode` as seen by
+   * this session: `read` from `0o400` and `write` from `0o200`. An object the session can't
+   * resolve (missing or unreadable) MUST have neither.
+   */
+  async permissions(uri: string): Promise<Result<DfsPermissions, DfsError>> {
+    const attr = await this.resolve(uri);
+    if (attr.isErr()) {
+      return attr;
+    }
+    const mode = attr.value?.mode ?? 0;
+    return new Ok({
+      read: (mode & ATTR_MODE_READ) !== 0,
+      write: (mode & ATTR_MODE_WRITE) !== 0,
+    });
   }
 
   /**

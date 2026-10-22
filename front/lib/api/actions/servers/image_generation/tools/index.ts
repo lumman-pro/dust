@@ -1,6 +1,8 @@
 import { MCPError } from "@app/lib/actions/mcp_errors";
 import type {
-  ToolDefinition,
+  RegistrableToolDefinition,
+  ToolHandlerExtra,
+  ToolHandlerResultWithStructuredContent,
   ToolHandlers,
 } from "@app/lib/actions/mcp_internal_actions/tool_definition";
 import { buildTools } from "@app/lib/actions/mcp_internal_actions/tool_definition";
@@ -31,8 +33,13 @@ import assert from "assert";
 export function createImageGenerationTools(
   auth: Authenticator,
   toolContext?: ToolContext
-): ToolDefinition[] {
-  const handlers: ToolHandlers<typeof IMAGE_GENERATION_TOOLS_METADATA> = {
+): RegistrableToolDefinition[] {
+  const handlers: ToolHandlers<
+    typeof IMAGE_GENERATION_TOOLS_METADATA,
+    (typeof IMAGE_GENERATION_TOOLS_METADATA)[number]["name"],
+    ToolHandlerExtra,
+    ToolHandlerResultWithStructuredContent
+  > = {
     generate_image: async (
       { prompt, outputName, aspectRatio, referenceImages, quality },
       { sendNotification, _meta }

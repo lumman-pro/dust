@@ -73,7 +73,7 @@ interface ConsumptionDimensionConfig {
 
 export const MESSAGE_COUNT_LABEL = msg`Messages`;
 const INVOCATION_COUNT_LABEL = msg`Invocations`;
-const MESSAGE_AVG_LABEL = msg`Credits / message`;
+const MESSAGE_AVG_LABEL = msg`Credit / msg`;
 const INVOCATION_AVG_LABEL = msg`Credits / invocation`;
 
 export const CONSUMPTION_DIMENSION_CONFIG: Record<

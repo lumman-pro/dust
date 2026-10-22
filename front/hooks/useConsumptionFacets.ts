@@ -68,6 +68,7 @@ export function toConsumptionFacetOptions(
       ...baseOption(facet),
       kind: "member",
       image: facet.pictureUrl,
+      revoked: facet.revoked,
     })),
     group: data.facets.group.map<UsageFilterGroupOption>((facet) => ({
       ...baseOption(facet),

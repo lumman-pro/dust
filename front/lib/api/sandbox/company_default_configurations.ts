@@ -1,5 +1,4 @@
 import type { ServerSideMCPServerConfigurationType } from "@app/lib/actions/mcp";
-import { getMCPServerRequirements } from "@app/lib/actions/mcp_internal_actions/input_configuration";
 import {
   buildCompanyDataConfiguration,
   buildCompanyDataWarehousesConfiguration,
@@ -9,6 +8,7 @@ import type { PrefetchedDataSourcesType } from "@app/lib/api/assistant/global_ag
 import type { MCPServerViewType } from "@app/lib/api/mcp";
 import type { Authenticator } from "@app/lib/auth";
 import { generateRandomModelSId } from "@app/lib/resources/string_ids_server";
+import { mcpToolsRequireConfiguration } from "@app/lib/utils/json_schemas";
 
 function viewRef(view: MCPServerViewType): {
   sId: string;
@@ -65,44 +65,26 @@ export function emptySandboxFunctionServerConfiguration(
 }
 
 /**
- * True when a function-token listing should include this view: either the server needs no
- * configuration, or Dust company defaults can supply the required data sources / warehouses.
- * Soft mayRequire* fields stay model-fillable. Call still allows tools that fail this check
- * when the caller supplies configuration URIs in rawInputs (backward compatible).
+ * True when a function-token listing should include this view.
+ *
+ * Shares the required-path check with JIT attachability
+ * ({@link mcpToolsRequireConfiguration}): optional Dust inputs (e.g. pod_manager's
+ * dustPod) do not block listing. When tools do force required Dust configuration,
+ * Dust company defaults can still satisfy data sources / warehouses.
+ *
+ * Call still allows tools that fail this check when the caller supplies configuration
+ * URIs in rawInputs (backward compatible).
  */
 export function canConfigureSandboxFunctionView(
   view: MCPServerViewType,
   companyConfig: ServerSideMCPServerConfigurationType | null
 ): boolean {
-  const requirements = getMCPServerRequirements(view);
-  if (requirements.noRequirement) {
+  if (!mcpToolsRequireConfiguration(view.server.tools)) {
     return true;
   }
 
-  if (
-    requirements.requiresChildAgentConfiguration ||
-    requirements.requiresDustAppConfiguration ||
-    requirements.requiresDustProjectConfiguration ||
-    requirements.requiresTableConfiguration ||
-    requirements.developerSecretSelection ||
-    requirements.requiredStrings.some((c) => c.default === null) ||
-    requirements.requiredNumbers.some((c) => c.default === null) ||
-    requirements.requiredBooleans.some((c) => c.default === null) ||
-    Object.values(requirements.requiredEnums).some((c) => c.default === null) ||
-    Object.values(requirements.requiredLists).some((c) => c.default === null)
-  ) {
-    return false;
-  }
-
-  if (
-    requirements.requiresDataWarehouseConfiguration ||
-    requirements.requiresDataSourceConfiguration
-  ) {
-    return (companyConfig?.dataSources?.length ?? 0) > 0;
-  }
-
-  // Only soft mayRequire* (time frame, JSON schema) remain — the model can fill those.
-  return true;
+  // Company defaults can satisfy required data source / warehouse inputs.
+  return (companyConfig?.dataSources?.length ?? 0) > 0;
 }
 
 /**

@@ -58,29 +58,16 @@ export async function getAuthenticatedWorkspaceUser(
   return Authenticator.isMember(role) ? user : null;
 }
 
-type FrameServesPublicFunctionsInput = {
+type DoesWorkspaceServePublicFunctionsInput = {
   workspace: WorkspaceType;
   plan: PlanType | null;
-  frame: FileResource;
 };
 
-/**
- * @cc [owner:achilleburah,label:security;product] public-share-in-enabled-workspace
- * True MUST be returned only when the Frame's current share scope is `public`, the workspace
- * sharing policy is `all_scopes` and public Frame functions are enabled for it (see
- * isFramesV2PublicFunctionsEnabled). Every condition MUST be read when called, so a revoked share,
- * policy or flag refuses the next call.
- */
-export async function frameServesPublicFunctions({
+export async function doesWorkspaceServePublicFunctions({
   workspace,
   plan,
-  frame,
-}: FrameServesPublicFunctionsInput): Promise<boolean> {
-  const shareInfo = await frame.getShareInfo();
-  if (
-    shareInfo?.scope !== "public" ||
-    workspace.sharingPolicy !== "all_scopes"
-  ) {
+}: DoesWorkspaceServePublicFunctionsInput): Promise<boolean> {
+  if (workspace.sharingPolicy !== "all_scopes") {
     return false;
   }
 
@@ -89,9 +76,34 @@ export async function frameServesPublicFunctions({
   );
 }
 
-type AuthorizePublicFrameFunctionCallInput = FrameServesPublicFunctionsInput & {
-  userIdentity: SandboxFunctionUserIdentityPolicy | null;
-};
+type DoesFrameServePublicFunctionsInput =
+  DoesWorkspaceServePublicFunctionsInput & {
+    frame: FileResource;
+  };
+
+/**
+ * @cc [owner:achilleburah,label:security;product] public-share-in-enabled-workspace
+ * True MUST be returned only when the Frame's current share scope is `public` and the workspace
+ * sharing policy is `all_scopes`. Every condition MUST be read when called, so a revoked share or
+ * policy refuses the next call.
+ */
+export async function doesFrameServePublicFunctions({
+  workspace,
+  plan,
+  frame,
+}: DoesFrameServePublicFunctionsInput): Promise<boolean> {
+  const shareInfo = await frame.getShareInfo();
+  if (shareInfo?.scope !== "public") {
+    return false;
+  }
+
+  return doesWorkspaceServePublicFunctions({ workspace, plan });
+}
+
+type AuthorizePublicFrameFunctionCallInput =
+  DoesFrameServePublicFunctionsInput & {
+    userIdentity: SandboxFunctionUserIdentityPolicy | null;
+  };
 
 export async function authorizePublicFrameFunctionCall({
   workspace,
@@ -105,7 +117,7 @@ export async function authorizePublicFrameFunctionCall({
     );
   }
 
-  if (!(await frameServesPublicFunctions({ workspace, plan, frame }))) {
+  if (!(await doesFrameServePublicFunctions({ workspace, plan, frame }))) {
     return authorizationError("This Frame does not serve public functions.");
   }
 

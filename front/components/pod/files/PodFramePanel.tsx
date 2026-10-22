@@ -8,6 +8,7 @@ import { FrameToolConsentGate } from "@app/components/assistant/conversation/int
 import { PreviewActionButtons } from "@app/components/assistant/conversation/interactive_content/frame/PreviewActionButtons";
 import { useFrameEditSession } from "@app/components/assistant/conversation/interactive_content/frame/useFrameEditSession";
 import { useLiveFrameEditing } from "@app/components/assistant/conversation/interactive_content/frame/useLiveFrameEditing";
+import { useSidePanelFrameTracking } from "@app/components/assistant/conversation/interactive_content/useFrameTracking";
 import { useSidePanelFullScreen } from "@app/components/assistant/conversation/useSidePanelFullScreen";
 import { useAuth } from "@app/lib/auth/AuthContext";
 import {
@@ -39,8 +40,21 @@ export function PodFramePanel({ fileId, owner, pod }: PodFramePanelProps) {
   const isMobile = useIsMobile();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [showCode, setShowCode] = useState(false);
-  const { isFullScreen, enterFullScreen, exitFullScreen, closePanel } =
-    useSidePanelFullScreen(DEFAULT_FRAME_PANEL_SIZE);
+  const {
+    canEnterFullScreen,
+    isFullScreen,
+    enterFullScreen,
+    exitFullScreen,
+    closePanel,
+  } = useSidePanelFullScreen(DEFAULT_FRAME_PANEL_SIZE);
+
+  useSidePanelFrameTracking({
+    frameId: fileId,
+    location: { type: "pod", id: pod.sId },
+    uiElement: "pod_files",
+    isFullScreen,
+    canEnterFullScreen,
+  });
 
   const { fileContent, mutateFileContent } = useFileContent({
     fileId,

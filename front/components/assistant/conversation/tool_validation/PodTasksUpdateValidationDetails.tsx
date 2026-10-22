@@ -1,8 +1,9 @@
 import { usePodLabel } from "@app/components/assistant/conversation/tool_validation/usePodLabel";
+import type { InternalMCPToolInputType } from "@app/lib/actions/mcp_internal_actions/constants";
 import type {
-  PodTasksUpdateTaskItemInput,
-  PodTasksUpdateTasksInput,
-} from "@app/lib/api/actions/servers/pod_tasks/types";
+  POD_TASKS_SERVER_NAME,
+  UPDATE_TASKS_TOOL_NAME,
+} from "@app/lib/api/actions/servers/pod_tasks/metadata";
 import type { MemberDisplayInfo } from "@app/lib/swr/assistants";
 import { useMemberDetails } from "@app/lib/swr/assistants";
 import { useWorkspacePodTask } from "@app/lib/swr/pods";
@@ -16,6 +17,11 @@ import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import { useMemo } from "react";
 
 type Translate = (descriptor: MessageDescriptor) => string;
+
+type PodTasksUpdateTasksInput = InternalMCPToolInputType<
+  typeof POD_TASKS_SERVER_NAME,
+  typeof UPDATE_TASKS_TOOL_NAME
+>;
 
 interface PodTasksUpdateValidationDetailsProps {
   input: PodTasksUpdateTasksInput;
@@ -40,7 +46,7 @@ interface AssigneeChangeRowProps {
 
 interface TaskUpdateRowProps {
   workspaceId: string;
-  taskInput: PodTasksUpdateTaskItemInput;
+  taskInput: PodTasksUpdateTasksInput["tasks"][number];
   user: UserType;
 }
 

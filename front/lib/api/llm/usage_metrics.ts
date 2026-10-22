@@ -51,3 +51,19 @@ export function emitTokenUsageMetrics(usage: TokenUsage, tags: string[]): void {
     );
   }
 }
+
+/**
+ * @cc [owner:fontanierh,label:logging] fallback-metric-only-on-served-model
+ * Increments `llm_fallback.count` once per response that has `servedModel`, i.e. when another
+ * model answered instead of the requested one. Does nothing when `servedModel` is absent. Tags
+ * stay low cardinality: the caller's tags plus `served_model_id`, never workspace or user IDs.
+ */
+export function emitFallbackMetrics(usage: TokenUsage, tags: string[]): void {
+  if (usage.servedModel === undefined) {
+    return;
+  }
+  statsDMetrics.increment("llm_fallback.count", 1, [
+    ...tags,
+    `served_model_id:${usage.servedModel}`,
+  ]);
+}

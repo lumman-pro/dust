@@ -25,6 +25,7 @@ interface ServerVisualizationWrapperClientProps {
   allowedOrigins: string[];
   identifier: string;
   isAuthenticatedMember?: boolean;
+  canInvokePublicFunctions?: boolean;
   isFullHeight?: boolean;
   isPdfMode?: boolean;
   frameProps?: FrameProps;
@@ -46,14 +47,16 @@ interface ServerVisualizationWrapperClientProps {
  * instead of class instances.
  */
 /**
- * @cc [owner:flvndvd,label:security] shared-frame-data-api-selection
- * Only server-confirmed workspace members MAY use the authenticated RPC bridge.
- * Anonymous views and PDF exports MUST use the read-only cache without RPC access.
+ * @cc [owner:flvndvd;achilleburah,label:security] shared-frame-data-api-selection
+ * A shared Frame MUST pick its data API from what the server confirmed about the viewer: a
+ * workspace member gets the RPC bridge, a visitor allowed to call public functions sends only
+ * function calls over it, and every other view, PDF exports included, reads from the cache.
  */
 export function ServerVisualizationWrapperClient({
   identifier,
   allowedOrigins,
   isAuthenticatedMember = false,
+  canInvokePublicFunctions = false,
   isFullHeight = false,
   isPdfMode = false,
   frameProps,
@@ -63,20 +66,24 @@ export function ServerVisualizationWrapperClient({
 }: ServerVisualizationWrapperClientProps) {
   const dataAPI = useMemo(() => {
     const cache = new CacheDataAPI(prefetchedFiles, prefetchedCode);
-    if (!isAuthenticatedMember || isPdfMode) {
+    if (isPdfMode || (!isAuthenticatedMember && !canInvokePublicFunctions)) {
       return cache;
     }
 
-    // Members use live file permissions while the published code stays cached.
     const sendMessage = makeSendCrossDocumentMessage({
       allowedOrigins,
       identifier,
     });
-    return new HybridDataAPI(cache, new RPCDataAPI(sendMessage));
+    return new HybridDataAPI(
+      cache,
+      new RPCDataAPI(sendMessage),
+      isAuthenticatedMember
+    );
   }, [
     prefetchedCode,
     prefetchedFiles,
     isAuthenticatedMember,
+    canInvokePublicFunctions,
     isPdfMode,
     allowedOrigins,
     identifier,

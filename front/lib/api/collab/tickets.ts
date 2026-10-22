@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { CollabAccessError } from "@app/lib/api/collab/access";
-import { checkCollabAccess } from "@app/lib/api/collab/access";
+import { checkCollabReadAccess } from "@app/lib/api/collab/access";
 import { runOnRedis } from "@app/lib/api/redis";
 import type { Authenticator } from "@app/lib/auth";
 import type { Result } from "@app/types/shared/result";
@@ -24,15 +24,15 @@ const ticketKey = (ticket: string) =>
 
 /**
  * @cc [owner:PopDaph,label:security] collab-ticket-minting
- * A ticket MUST be minted only when `checkCollabAccess` lets the user open the file, and MUST grant
- * only that user, workspace and file. It MUST expire after `COLLAB_TICKET_TTL_SECONDS` and be
+ * A ticket MUST be minted only when `checkCollabReadAccess` lets the user open the file, and MUST
+ * grant only that user, workspace and file. It MUST expire after `COLLAB_TICKET_TTL_SECONDS` and be
  * unguessable.
  */
 export async function mintCollabTicket(
   auth: Authenticator,
   canonicalPath: string
 ): Promise<Result<string, CollabAccessError>> {
-  const file = await checkCollabAccess(auth, canonicalPath);
+  const file = await checkCollabReadAccess(auth, canonicalPath);
   if (file.isErr()) {
     return new Err(file.error);
   }

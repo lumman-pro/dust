@@ -5,6 +5,7 @@ import {
   presenceClass,
   usePresence,
 } from "@app/components/editor/document/usePresence";
+import type { AgentEvent } from "@app/lib/client/collab/agents";
 import type { DfmComment } from "@app/lib/markdown/dfm";
 import {
   Button,
@@ -25,6 +26,7 @@ import { useEffect, useRef } from "react";
 interface DocumentCommentsListProps {
   id: string;
   comments: DocumentCommentsController;
+  commentAgents?: ReadonlyMap<string, AgentEvent>;
   renderCommentBody: (body: string) => ReactNode;
   commentInputExtensions?: Extensions;
   mountPortalContainer?: HTMLElement;
@@ -54,12 +56,14 @@ const neighbourId = (list: DfmComment[], id: string): string | null => {
  */
 /**
  * @cc [owner:tdraier,label:react;performance] document-comment-avatars
- * The host's `renderAuthorAvatar` MUST be called only for messages shown in the floating card or
- * the open comments list, so avatars that load data load it only for threads on screen.
+ * The host's `renderAuthorAvatar` MUST be called only for messages and agent activities
+ * (`document-comment-agent-activity`) shown in the floating card or the open comments list, so
+ * avatars that load data load it only for threads on screen.
  */
 export const DocumentCommentsList = ({
   id,
   comments,
+  commentAgents,
   renderCommentBody,
   commentInputExtensions,
   mountPortalContainer,
@@ -135,6 +139,7 @@ export const DocumentCommentsList = ({
         variant="list"
         comment={comment}
         quote={quotes.get(comment.id)}
+        agentActivity={commentAgents?.get(comment.id)}
         active={comment.id === activeId}
         canWrite={canWrite}
         busy={busyThreadIds.has(comment.id)}

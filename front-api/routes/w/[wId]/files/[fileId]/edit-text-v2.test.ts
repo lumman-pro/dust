@@ -7,7 +7,6 @@ import {
 } from "@app/lib/api/frames/publish_from_source";
 import { FileResource } from "@app/lib/resources/file_resource";
 import { ConversationFactory } from "@app/tests/utils/ConversationFactory";
-import { FeatureFlagFactory } from "@app/tests/utils/FeatureFlagFactory";
 import { FileFactory } from "@app/tests/utils/FileFactory";
 import { createPrivateApiMockRequest } from "@app/tests/utils/generic_private_api_tests";
 import { fileStorageMock } from "@app/tests/utils/mocks/file_storage";
@@ -52,7 +51,6 @@ describe("POST /api/w/:wId/files/:fileId/edit-text for Frames v2", () => {
       method: "POST",
       role: "admin",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const conversation = await ConversationFactory.create(auth, {
       agentConfigurationId: "test-agent",
       messagesCreatedAt: [],
@@ -183,7 +181,6 @@ describe("POST /api/w/:wId/files/:fileId/edit-text for Frames v2", () => {
       method: "POST",
       role: "admin",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const conversation = await ConversationFactory.create(auth, {
       agentConfigurationId: "test-agent",
       messagesCreatedAt: [],
@@ -260,7 +257,6 @@ describe("POST /api/w/:wId/files/:fileId/edit-text for Frames v2", () => {
       method: "POST",
       role: "admin",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const conversation = await ConversationFactory.create(auth, {
       agentConfigurationId: "test-agent",
       messagesCreatedAt: [],
@@ -358,7 +354,6 @@ describe("POST /api/w/:wId/files/:fileId/edit-text for Frames v2", () => {
       method: "POST",
       role: "admin",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const conversation = await ConversationFactory.create(auth, {
       agentConfigurationId: "test-agent",
       messagesCreatedAt: [],
@@ -422,7 +417,6 @@ describe("POST /api/w/:wId/files/:fileId/edit-text for Frames v2", () => {
       method: "POST",
       role: "admin",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const conversation = await ConversationFactory.create(auth, {
       agentConfigurationId: "test-agent",
       messagesCreatedAt: [],
@@ -454,7 +448,6 @@ describe("POST /api/w/:wId/files/:fileId/edit-text for Frames v2", () => {
       method: "POST",
       role: "admin",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const conversation = await ConversationFactory.create(auth, {
       agentConfigurationId: "test-agent",
       messagesCreatedAt: [],

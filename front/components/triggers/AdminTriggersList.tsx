@@ -129,6 +129,7 @@ export const AdminTriggersList = ({
         },
       },
       {
+        id: "provider",
         header: t`Provider`,
         accessorKey: "webhookSource.provider",
         cell: (info) => {
@@ -154,6 +155,7 @@ export const AdminTriggersList = ({
         },
       },
       {
+        id: "usedBy",
         header: t`Used by`,
         accessorFn: (row) => row.webhookSource.usage?.count ?? 0,
         cell: (info) => (
@@ -168,7 +170,7 @@ export const AdminTriggersList = ({
           </DataTable.CellContent>
         ),
         meta: {
-          className: "w-24",
+          className: "w-36",
         },
       },
       {
@@ -244,7 +246,7 @@ export const AdminTriggersList = ({
           );
         },
         meta: {
-          className: "w-64",
+          className: "w-48",
         },
       }
     );
@@ -299,6 +301,11 @@ export const AdminTriggersList = ({
             className="pb-4"
             filterColumn="name"
             filter={filter}
+            columnsBreakpoints={{
+              access: "lg",
+              provider: "xl",
+              lastUpdated: "xl",
+            }}
           />
         </>
       )}

@@ -172,6 +172,18 @@ const tablesContent = `
 | October 31  | 19                    | 10                   |
 
 
+### Table with long text
+
+| Date        | High (°C) | Low temperature recorded overnight at the city weather station (°C) | Weather condition |
+|-------------|-----------|----------------------------------------------------------------------|-------------------|
+| October 25  | 19        | 14 | Passing showers in the morning, clearing to long sunny spells by mid-afternoon, with a light westerly breeze and cooler air arriving after sunset |
+| October 26  | 17        | 12 | Light showers, overcast |
+| October 27  | 16        | 10 | Overcast |
+| October 28  | 16        | 9  | Increasing cloudiness |
+| October 29  | 17        | 8  | Scattered clouds |
+| October 30  | 19        | 8  | Sunny |
+| October 31  | 19        | 10 | Sunny |
+
 ### Wide Table
 
 | Date        | High Temperature (°C) | Low Temperature (°C) | Weather Condition             | Date        | High Temperature (°C) | Low Temperature (°C) | Weather Condition             | Date        | High Temperature (°C) | Low Temperature (°C) | Weather Condition             |
@@ -186,9 +198,10 @@ const tablesContent = `
 `;
 
 /**
- * GFM tables at two widths: a compact table that fits the message column,
- * and a very wide one exercising horizontal overflow handling.
- * @summary Compact and overflowing tables.
+ * GFM tables: a compact table that fits the message column, one with a long
+ * header and a long cell that wrap, and a very wide one exercising horizontal
+ * overflow handling.
+ * @summary Compact, wrapping and overflowing tables.
  */
 export const Tables: Story = {
   args: {

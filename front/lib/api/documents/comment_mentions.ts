@@ -2,6 +2,10 @@ import {
   createConversation,
   postUserMessage,
 } from "@app/lib/api/assistant/conversation";
+import {
+  showCommentActivity,
+  toCollabAgent,
+} from "@app/lib/api/documents/comment_activity";
 import type { NewCommentMessage } from "@app/lib/api/documents/comment_signatures";
 import {
   DustFileSystem,
@@ -12,6 +16,7 @@ import { executeWithLockResult } from "@app/lib/lock";
 import { getFileNameFromScopedPath } from "@app/lib/markdown/file_preview";
 import { extractFromString } from "@app/lib/mentions/format";
 import { notifyNewProjectConversation } from "@app/lib/notifications/triggers/project-new-conversation";
+import { AgentResource } from "@app/lib/resources/agent_resource";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { SpaceResource } from "@app/lib/resources/space_resource";
 import { concurrentExecutor } from "@app/lib/utils/async_utils";
@@ -20,9 +25,11 @@ import { launchDocumentCommentMentionWorkflow } from "@app/temporal/mentions_que
 import { serializeDocumentCommentDirective } from "@app/types/assistant/document_comment";
 import type { AgentMention } from "@app/types/assistant/mentions";
 import { isAgentMention } from "@app/types/assistant/mentions";
+import type { AgentActivity, CollabAgent } from "@app/types/collab";
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
 import { assertNever } from "@app/types/shared/utils/assert_never";
+import { normalizeError } from "@app/types/shared/utils/error_utils";
 
 /**
  * Comments that mention an agent reach it the way a conversation message does: each one is
@@ -30,20 +37,24 @@ import { assertNever } from "@app/types/shared/utils/assert_never";
  * are notified apart, never through the conversation.
  */
 
+type DocumentConversationLookup =
+  | { kind: "conversation"; conversation: ConversationResource }
+  | {
+      kind: "pod";
+      pod: SpaceResource;
+      conversation: ConversationResource | null;
+    };
+
 /**
- * @cc [owner:tdraier,label:product] document-conversation
- * A file in a conversation's files MUST use that conversation. A file in a pod MUST use the
- * pod's conversation linked to its normalized path, created in the pod on first use without
- * notifying the pod, and `isPodDocument` MUST tell this second case; callers MUST hold the
- * document's lock, so concurrent posts share one conversation. Any other file has no conversation.
+ * @cc [owner:adrien,label:product] document-conversation-lookup
+ * A file in a conversation's files MUST find that conversation. A file in a pod MUST find the pod
+ * and its conversation linked to its normalized path, if any. Any other file, or one whose
+ * conversation or pod cannot be fetched, MUST find none. It MUST NOT create anything.
  */
-async function getDocumentConversation(
+async function fetchDocumentConversation(
   auth: Authenticator,
   documentPath: string
-): Promise<{
-  conversation: ConversationResource;
-  isPodDocument: boolean;
-} | null> {
+): Promise<DocumentConversationLookup | null> {
   const scope = parseScopedPrefix(documentPath);
   if (!scope) {
     return null;
@@ -52,35 +63,126 @@ async function getDocumentConversation(
   switch (scope.kind) {
     case "conversation": {
       const conversation = await ConversationResource.fetchById(auth, scope.id);
-      return conversation ? { conversation, isPodDocument: false } : null;
+      return conversation ? { kind: "conversation", conversation } : null;
     }
     case "pod": {
       const pod = await SpaceResource.fetchById(auth, scope.id);
       if (!pod) {
         return null;
       }
-      const existing = await ConversationResource.fetchLatestForDocument(auth, {
-        space: pod,
-        documentPath,
-      });
-      if (existing) {
-        return { conversation: existing, isPodDocument: true };
-      }
-      const conversation = await createConversation(auth, {
-        title: `Comments · ${getFileNameFromScopedPath(documentPath)}`,
-        visibility: "unlisted",
-        spaceId: pod.id,
-        metadata: { dfmDocumentPath: documentPath },
-        notifyPodMembers: false,
-      });
-      return { conversation, isPodDocument: true };
+      const conversation = await ConversationResource.fetchLatestForDocument(
+        auth,
+        { space: pod, documentPath }
+      );
+      return { kind: "pod", pod, conversation };
     }
     case "conversation_metadata":
     case "user":
+    case "frame":
       return null;
     default:
       return assertNever(scope);
   }
+}
+
+/**
+ * @cc [owner:tdraier,label:product] document-conversation
+ * A file MUST use the conversation `fetchDocumentConversation` finds. A file in a pod without one
+ * MUST use a conversation linked to its normalized path, created in the pod without notifying the
+ * pod, and `isPodDocument` MUST tell a pod's file; callers MUST hold the document's lock, so
+ * concurrent posts share one conversation. Any other file has no conversation.
+ */
+async function getDocumentConversation(
+  auth: Authenticator,
+  documentPath: string
+): Promise<{
+  conversation: ConversationResource;
+  isPodDocument: boolean;
+} | null> {
+  const found = await fetchDocumentConversation(auth, documentPath);
+  if (!found) {
+    return null;
+  }
+  if (found.kind === "conversation") {
+    return { conversation: found.conversation, isPodDocument: false };
+  }
+  if (found.conversation) {
+    return { conversation: found.conversation, isPodDocument: true };
+  }
+  const conversation = await createConversation(auth, {
+    title: `Comments · ${getFileNameFromScopedPath(documentPath)}`,
+    visibility: "unlisted",
+    spaceId: found.pod.id,
+    metadata: { dfmDocumentPath: documentPath },
+    notifyPodMembers: false,
+  });
+  return { conversation, isPodDocument: true };
+}
+
+/**
+ * @cc [owner:adrien,label:product] comment-mentioned-agent
+ * The agent MUST be the one `getAgentMentionFromComment` keeps from `newMessage`'s body, named as
+ * its configuration, working for `auth`'s user in `newMessage`'s thread, as `toCollabAgent` gives
+ * it once its message is posted. A message mentioning no agent, an agent `auth` cannot fetch, or an
+ * `auth` without a user, MUST give none.
+ */
+async function commentMentionedAgent(
+  auth: Authenticator,
+  { commentId, message }: NewCommentMessage
+): Promise<CollabAgent | null> {
+  const { agent: mention } = getAgentMentionFromComment(message.body);
+  const user = auth.user();
+  if (!mention || !user) {
+    return null;
+  }
+  const agent = await AgentResource.fetchById(auth, mention.configurationId);
+  if (!agent) {
+    return null;
+  }
+  return {
+    agentId: agent.sId,
+    name: agent.name,
+    userId: user.sId,
+    userName: user.fullName() || user.username,
+    commentId,
+  };
+}
+
+/**
+ * @cc [owner:adrien,label:product] comment-mention-start
+ * For a message `postCommentMention` would post, its agent (`comment-mentioned-agent`) MUST be
+ * given as waiting while an agent or a compaction runs in the document's conversation, and as
+ * thinking otherwise, a pod's file without a conversation yet included. A message mentioning no
+ * agent, or a file without a conversation to post to, MUST give none. It MUST NOT create anything.
+ */
+export async function getCommentMentionStart(
+  auth: Authenticator,
+  {
+    documentPath,
+    newMessage,
+  }: { documentPath: string; newMessage: NewCommentMessage }
+): Promise<{
+  agent: CollabAgent;
+  activity: Extract<AgentActivity, "thinking" | "waiting">;
+} | null> {
+  const agent = await commentMentionedAgent(auth, newMessage);
+  if (!agent) {
+    return null;
+  }
+  const found = await fetchDocumentConversation(auth, documentPath);
+  if (!found) {
+    return null;
+  }
+  if (!found.conversation) {
+    return { agent, activity: "thinking" };
+  }
+  const { runningAgentMessage, runningCompactionMessage } =
+    await found.conversation.getInFlightMessages(auth);
+  return {
+    agent,
+    activity:
+      runningAgentMessage || runningCompactionMessage ? "waiting" : "thinking",
+  };
 }
 
 /**
@@ -182,7 +284,10 @@ export class DocumentConversationBusyError extends Error {
  * lock cannot be taken, it MUST return a `DocumentConversationBusyError` having posted nothing, so
  * each comment gets its own turn instead of steering a running agent. A pod document's
  * conversation MUST notify the pod when its first message is posted, never before. Any other
- * failure MUST be logged and the message dropped.
+ * failure MUST be logged and the message dropped. In the comment's thread, its first mentioned
+ * agent (`comment-mentioned-agent`) MUST be shown waiting when busy and, once posted, the posted
+ * agent thinking (`collab-agent-of-run`), all after the lock is released; a failure to find the
+ * waiting agent MUST be logged and MUST NOT change the busy result.
  */
 export async function postCommentMention(
   auth: Authenticator,
@@ -217,14 +322,16 @@ export async function postCommentMention(
 
   const locked = await executeWithLockResult(
     `dfm_document_conversation_${workspaceId}_${documentPath}`,
-    async (): Promise<Result<undefined, DocumentConversationBusyError>> => {
+    async (): Promise<
+      Result<CollabAgent | null, DocumentConversationBusyError>
+    > => {
       const found = await getDocumentConversation(auth, documentPath);
       if (!found) {
         logger.warn(
           { workspaceId, scopedPath: documentPath },
           "No conversation for a document comment with mentions."
         );
-        return new Ok(undefined);
+        return new Ok(null);
       }
       const { conversation, isPodDocument } = found;
 
@@ -257,7 +364,7 @@ export async function postCommentMention(
           },
           "Failed to post a document comment with mentions."
         );
-        return new Ok(undefined);
+        return new Ok(null);
       }
 
       if (isPodDocument && posted.value.userMessage.rank === 0) {
@@ -265,8 +372,46 @@ export async function postCommentMention(
           conversation: conversation.toJSON(),
         });
       }
-      return new Ok(undefined);
+      const [agentMessage] = posted.value.agentMessages;
+      return new Ok(
+        agentMessage
+          ? toCollabAgent({
+              agentConfiguration: agentMessage.configuration,
+              userMessage: posted.value.userMessage,
+            })
+          : null
+      );
     }
   );
-  return locked.isErr() ? new Err(new DocumentConversationBusyError()) : locked;
+  if (locked.isErr()) {
+    const waiting = await commentMentionedAgent(auth, newMessage).catch(
+      (err) => {
+        logger.warn(
+          {
+            err: normalizeError(err),
+            workspaceId,
+            commentId: newMessage.commentId,
+          },
+          "Could not find the agent a document comment runs"
+        );
+        return null;
+      }
+    );
+    if (waiting) {
+      await showCommentActivity(auth, {
+        canonicalPath: documentPath,
+        agent: waiting,
+        activity: "waiting",
+      });
+    }
+    return new Err(new DocumentConversationBusyError());
+  }
+  if (locked.value) {
+    await showCommentActivity(auth, {
+      canonicalPath: documentPath,
+      agent: locked.value,
+      activity: "thinking",
+    });
+  }
+  return new Ok(undefined);
 }

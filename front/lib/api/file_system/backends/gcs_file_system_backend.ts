@@ -21,6 +21,7 @@ import {
   DustFileSystemError,
   SCOPED_PREFIX_CONVERSATION,
   SCOPED_PREFIX_CONVERSATION_METADATA,
+  SCOPED_PREFIX_FRAME,
   SCOPED_PREFIX_POD,
   SCOPED_PREFIX_USER,
 } from "@app/types/file_system";
@@ -41,7 +42,7 @@ import type { FileSystemBackend } from "./file_system_backend";
 // ---------------------------------------------------------------------------
 
 type ParsedScopedPath = {
-  kind: "conversation" | "conversation_metadata" | "pod" | "user";
+  kind: "conversation" | "conversation_metadata" | "pod" | "user" | "frame";
   id: string;
   /** Path component after `<kind>-<id>/`, empty string for a root listing. */
   rel: string;
@@ -80,6 +81,11 @@ function parseScopedPath(scopedPath: string): ParsedScopedPath | null {
     return id ? { kind: "user", id, rel } : null;
   }
 
+  if (prefix.startsWith(SCOPED_PREFIX_FRAME)) {
+    const id = prefix.slice(SCOPED_PREFIX_FRAME.length);
+    return id ? { kind: "frame", id, rel } : null;
+  }
+
   return null;
 }
 
@@ -97,6 +103,7 @@ const GCS_LIST_PAGE_SIZE = 200;
  *   `conversation-{cId}/{rel}` -> `w/{wId}/conversations/{cId}/files/{rel}`
  *   `conversation_metadata-{cId}/{rel}` -> `w/{wId}/conversations/{cId}/{rel}` (`files` reserved)
  *   `pod-{pId}/{rel}`          -> `w/{wId}/pods/{pId}/files/{rel}`
+ *   `frame-{frameId}/{rel}`    -> `w/{wId}/frames/{frameId}/state/files/{rel}`
  */
 export class GCSFileSystemBackend implements FileSystemBackend {
   constructor(
@@ -129,6 +136,12 @@ export class GCSFileSystemBackend implements FileSystemBackend {
       case "user":
         return `w/${this.workspaceId}/users/${p.id}/files/${p.rel}`;
 
+      case "frame":
+        return getFramePersistentFilesBasePath({
+          workspaceId: this.workspaceId,
+          frameId: p.id,
+        }).concat(p.rel);
+
       default:
         assertNever(p.kind);
     }
@@ -156,6 +169,11 @@ export class GCSFileSystemBackend implements FileSystemBackend {
       return `${SCOPED_PREFIX_USER}${user[1]}/${user[2]}`;
     }
 
+    const frame = rest.match(/^frames\/([^/]+)\/state\/files\/(.*)$/);
+    if (frame) {
+      return `${SCOPED_PREFIX_FRAME}${frame[1]}/${frame[2]}`;
+    }
+
     return null;
   }
 
@@ -173,6 +191,12 @@ export class GCSFileSystemBackend implements FileSystemBackend {
 
       case "user":
         return `w/${this.workspaceId}/users/${mount.id}/files`;
+
+      case "frame":
+        return getFramePersistentFilesBasePath({
+          workspaceId: this.workspaceId,
+          frameId: mount.id,
+        }).replace(/\/$/, "");
 
       default:
         assertNever(mount.kind);

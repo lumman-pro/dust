@@ -80,11 +80,14 @@ export function ExtensionInputBarProvider({
     void platform.messaging?.sendMessage({ type: "SNAPSHOT_TAB_STATE" });
   }, [platform.messaging]);
 
+  const hostSelection = platform.useInputBarSelection();
+
   return (
     <InputBarContextProvider
       captureActions={captureActions}
       fileUploaderService={fileUploaderService}
       onBeforeSubmit={handleBeforeSubmit}
+      hostSelection={hostSelection}
     >
       <QueryParamHandler workspaceId={workspace.sId} />
       {children}

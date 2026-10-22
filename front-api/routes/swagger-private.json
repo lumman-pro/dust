@@ -446,7 +446,7 @@
             "in": "query",
             "name": "table",
             "required": true,
-            "description": "The analytics table to export:\n- \"usage_metrics\": Messages, conversations, and active users over time.\n- \"active_users\": Daily, weekly, and monthly active user counts.\n- \"source\": Message volume by context origin (web, slack, etc.).\n- \"agents\": Top agents by message count, including credits.\n- \"users\": Top users by message count, including credits, last login date and membership status (active, revoked, unregistered).\n- \"skills\": Skill metadata catalog.\n- \"skill_usage\": Skill executions and unique users over time.\n- \"tool_usage\": Tool executions and unique users over time.\n- \"messages\": Detailed message-level logs, including comma-separated lists of tools (as \"server__tool\") and skills used per message, and the cost in credits of each message. The time range must not exceed 90 days.\n- \"feedback\": Detailed message-level feedback (thumbs, content, conversation URL).\n",
+            "description": "The analytics table to export:\n- \"usage_metrics\": Messages, conversations, and active users over time.\n- \"active_users\": Daily, weekly, and monthly active user counts.\n- \"source\": Message volume by context origin (web, slack, etc.).\n- \"agents\": Top agents by message count, including credits.\n- \"users\": Top users by message count, including credits, last login date and membership status (active, revoked, unregistered).\n- \"skills\": Skill metadata catalog.\n- \"skill_usage\": Skill executions and unique users over time.\n- \"tool_usage\": Tool executions and unique users over time.\n- \"messages\": Detailed message-level logs, including the ID and name of the space (such as a pod) the conversation belongs to, comma-separated lists of tools (as \"server__tool\") and skills used per message, and the cost in credits of each message. The time range must not exceed 90 days.\n- \"feedback\": Detailed message-level feedback (thumbs, content, conversation URL).\n",
             "schema": {
               "type": "string",
               "enum": [
@@ -8693,6 +8693,11 @@
                         "items": {
                           "type": "string"
                         }
+                      },
+                      "hostSelection": {
+                        "type": "string",
+                        "maxLength": 256,
+                        "description": "What the user had selected in the app hosting Dust when sending the message, e.g. `Sheet1!C5:D6` in Excel. Stored with the message and shown to the agent in that message's metadata."
                       }
                     }
                   },
@@ -9327,6 +9332,11 @@
                             "items": {
                               "type": "string"
                             }
+                          },
+                          "hostSelection": {
+                            "type": "string",
+                            "maxLength": 256,
+                            "description": "What the user had selected in the app hosting Dust when sending the message, e.g. `Sheet1!C5:D6` in Excel. Stored with the message and shown to the agent in that message's metadata."
                           }
                         }
                       }
@@ -11355,6 +11365,10 @@
               "ultra"
             ],
             "description": "Default reasoning-effort tier, for known model facets."
+          },
+          "revoked": {
+            "type": "boolean",
+            "description": "Set on user facets whose workspace membership was revoked."
           }
         }
       },
@@ -12165,6 +12179,11 @@
               "fair_use_downgrade"
             ],
             "description": "How resolvedModel was chosen - agent (configured model), user (per-message picker), auto/auto_fast/auto_complex (routed through a model stream), or fair_use_downgrade (premium allowance spent, ran the Standard stream instead). Null (legacy)."
+          },
+          "fallbackModelId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Model that answered instead of the requested one after a provider-side fallback. Null when the requested model answered."
           }
         }
       },
@@ -12366,6 +12385,11 @@
               "fair_use_downgrade"
             ],
             "description": "How resolvedModel was chosen - agent (configured model), user (per-message picker), auto/auto_fast/auto_complex (routed through a model stream), or fair_use_downgrade (premium allowance spent, ran the Standard stream instead). Null (legacy)."
+          },
+          "fallbackModelId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Model that answered instead of the requested one after a provider-side fallback. Null when the requested model answered."
           },
           "activitySteps": {
             "type": "array",
@@ -13631,6 +13655,11 @@
             "items": {
               "type": "string"
             }
+          },
+          "hostSelection": {
+            "type": "string",
+            "nullable": true,
+            "description": "What the user had selected in the app hosting Dust when sending the message, e.g. `Sheet1!C5:D6` in Excel. Stored with the message and shown to the agent in that message's metadata."
           }
         }
       },
@@ -15323,6 +15352,11 @@
             "items": {
               "type": "string"
             }
+          },
+          "hostSelection": {
+            "type": "string",
+            "nullable": true,
+            "description": "What the user had selected in the app hosting Dust when sending the message, e.g. `Sheet1!C5:D6` in Excel. Stored with the message and shown to the agent in that message's metadata."
           },
           "agenticMessageData": {
             "type": "object",

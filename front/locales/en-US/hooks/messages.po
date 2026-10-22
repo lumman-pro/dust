@@ -133,6 +133,18 @@ msgstr "The feedback has been marked as seen."
 msgid "The feedback has been marked as unseen."
 msgstr "The feedback has been marked as unseen."
 
+#: front/hooks/useDownloadPdf.ts
+msgid "PDF export failed"
+msgstr "PDF export failed"
+
+#: front/hooks/useDownloadPdf.ts
+msgid "PDF exported"
+msgstr "PDF exported"
+
+#: front/hooks/useDownloadPdf.ts
+msgid "Your PDF has been downloaded."
+msgstr "Your PDF has been downloaded."
+
 #: front/hooks/useDustMcpServerSettings.ts
 msgid "Failed to update the Dust MCP server settings"
 msgstr "Failed to update the Dust MCP server settings"
@@ -176,6 +188,10 @@ msgstr "Enable"
 #: front/hooks/useEnableBrowserNotification.tsx
 msgid "Later"
 msgstr "Later"
+
+#: front/hooks/useEnterFrameDraftMode.ts
+msgid "Could not turn on draft mode"
+msgstr "Could not turn on draft mode"
 
 #: front/hooks/useExtensionMcpToolsToggle.ts
 msgid "Failed to update the extension MCP tools setting"
@@ -276,6 +292,10 @@ msgstr "Changes are live"
 #: front/hooks/useMakeFrameDraftLive.ts
 msgid "The share link now shows this version."
 msgstr "The share link now shows this version."
+
+#: front/hooks/useMakeFrameDraftLive.ts
+msgid "Draft mode is off"
+msgstr "Draft mode is off"
 
 #: front/hooks/useMarkAllConversationsAsRead.ts
 msgid "All conversations marked as read"

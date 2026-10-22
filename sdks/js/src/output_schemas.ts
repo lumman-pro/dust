@@ -573,6 +573,7 @@ export function isMCPProgressNotificationType(
 export const OAuthProviderSchema = FlexibleEnumSchema<
   | "confluence"
   | "confluence_tools"
+  | "dropbox"
   | "fathom"
   | "freshservice"
   | "github"
@@ -650,6 +651,7 @@ export const UserQuestionItemSchema = z.object({
     })
   ),
   multiSelect: z.boolean(),
+  format: z.enum(["list"]).catch("list"),
 });
 
 export type UserQuestionItemType = z.infer<typeof UserQuestionItemSchema>;

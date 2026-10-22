@@ -14,6 +14,11 @@ export type FrameFunctionReferenceScope =
 
 export type FrameFunctionReferenceKind = FrameFunctionReferenceScope["kind"];
 
+export interface FrameFunctionReference {
+  frameId: string;
+  functionName: string;
+}
+
 /** Classify only known Frame MIME types. Missing metadata must never imply a legacy Frame. */
 export function getFrameFunctionReferenceKind(
   contentType: string | null | undefined
@@ -31,7 +36,7 @@ export function getFrameFunctionReferenceKind(
 export function resolveFrameFunctionReference(
   reference: string,
   scope: FrameFunctionReferenceScope
-): Result<string, Error> {
+): Result<FrameFunctionReference, Error> {
   switch (scope.kind) {
     case "v2":
       if (!BARE_FUNCTION_NAME_REGEX.test(reference)) {
@@ -41,7 +46,7 @@ export function resolveFrameFunctionReference(
           )
         );
       }
-      return new Ok(`${scope.frameId}/${reference}`);
+      return new Ok({ frameId: scope.frameId, functionName: reference });
     case "legacy":
       return new Err(
         new Error("Function calls are not available in this Frame.")

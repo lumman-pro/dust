@@ -25,6 +25,7 @@ use crate::{
 
 mod apply;
 mod hints;
+pub mod locks;
 mod modes;
 mod shared;
 mod stat;
@@ -52,6 +53,9 @@ const GRANT_MODE_MASK: u32 = GRANT_READ_MODE | GRANT_WRITE_MODE;
 #[derive(Debug)]
 pub enum Error {
     TimestampGeneration,
+    InvalidLockId,
+    WouldBlock,
+    LockLost,
     AlreadyExists,
     MissingMetadata,
     InvalidXattrName,
@@ -77,6 +81,9 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidLockId => f.write_str("invalid lock ID"),
+            Self::WouldBlock => f.write_str("object locked"),
+            Self::LockLost => f.write_str("lock lost"),
             Self::TimestampGeneration => f.write_str("object timestamp generation failed"),
             Self::AlreadyExists => f.write_str("object already exists"),
             Self::MissingMetadata => f.write_str("object metadata missing"),
@@ -442,8 +449,8 @@ impl ObjectResource {
     /**
      * @cc [owner:spolu,label:backend] object-remove-storage
      * Callers MUST fetch the object and authorize its removal in this transaction and verify directory
-     * emptiness before removal. Removal MUST clear attributes, metadata, xattrs, file blocks, and
-     * all forward and reverse grants in the caller's transaction. Stored grants MUST be decoded
+     * emptiness before removal. Removal MUST clear attributes, metadata, xattrs, file blocks, its
+     * lock and expiry index, and all forward and reverse grants in the caller's transaction. Stored grants MUST be decoded
      * before staging writes. The caller MUST remove the parent binding in the same transaction.
      */
     pub(in crate::storage::resources) async fn remove(
@@ -451,6 +458,10 @@ impl ObjectResource {
         tx: &Transaction,
     ) -> Result<(), storage::Error<Error>> {
         let grants = self.load_grants(tx).await?;
+        let lock = Self::fetch_lock(tx, &self.tenant.tenant_id, self.object_id).await?;
+        if let Some(lock) = lock {
+            Self::clear_lock(tx, &self.tenant.tenant_id, self.object_id, &lock);
+        }
         for grant in grants {
             self.write_grant(tx, &grant, true)?;
         }

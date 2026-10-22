@@ -11,7 +11,8 @@ use super::types::{
     interpret_call_tool_post_response, parse_action_poll_response, ActionPollResponse,
     CallToolPostOutcome, CallToolPostResponse, CallToolRequest, CallToolResponse, CallToolResult,
     FrameCallByIdRequest, FrameCallFromSourceRequest, FrameCallResponse, FrameDatabaseListResponse,
-    FrameDatabaseQueryRequest, FrameDatabaseQueryResponse, FramePublishRequest,
+    FrameDatabaseQueryRequest, FrameDatabaseQueryResponse, FrameDraftModeRequest,
+    FrameDraftModeResponse, FrameMakeLiveRequest, FrameMakeLiveResponse, FramePublishRequest,
     FramePublishResponse, FrameShareLinkResponse, MCPServerView, SandboxServerViewsResponse,
 };
 
@@ -25,6 +26,9 @@ const POLL_SLOW_INTERVAL: Duration = Duration::from_millis(500);
 // Hard cap so a wedged action can't pin the CLI forever.
 const POLL_MAX_DURATION: Duration = Duration::from_secs(10 * 60);
 const HTTP_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+// Draft mode and make-live build nothing, but the server may wait up to ~30s on the Frame's source or
+// publish lock, which would race the default request timeout.
+const FRAME_LOCK_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
 // Polling must survive sandbox pause/resume cycles. When the host pauses the
 // sandbox via betaPause, in-flight TCP sockets may be closed by the front
@@ -172,6 +176,30 @@ impl DustApiClient {
                 replaces_path,
             },
             POLL_MAX_DURATION,
+        )
+        .await
+    }
+
+    pub async fn make_live_frame(
+        &self,
+        manifest_path: &str,
+    ) -> anyhow::Result<FrameMakeLiveResponse> {
+        self.post_with_timeout(
+            "sandbox/frames/make-live",
+            &FrameMakeLiveRequest { manifest_path },
+            FRAME_LOCK_REQUEST_TIMEOUT,
+        )
+        .await
+    }
+
+    pub async fn enter_frame_draft_mode(
+        &self,
+        manifest_path: &str,
+    ) -> anyhow::Result<FrameDraftModeResponse> {
+        self.post_with_timeout(
+            "sandbox/frames/draft-mode",
+            &FrameDraftModeRequest { manifest_path },
+            FRAME_LOCK_REQUEST_TIMEOUT,
         )
         .await
     }
@@ -444,6 +472,8 @@ mod tests {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
 
+    use crate::api::DustApiError;
+
     use super::{
         pending_poll_interval, DustApiClient, POLL_FAST_INTERVAL, POLL_FAST_WINDOW,
         POLL_SLOW_INTERVAL,
@@ -499,6 +529,132 @@ mod tests {
             .expect("Frame database listing should override the default request timeout");
 
         assert!(response.items.is_empty());
+        server.await.expect("test server completes");
+    }
+
+    /// Spawns a one-shot HTTP server that asserts on the request line and body, then answers with
+    /// `status_line` and `response_body`. Returns the client and the server task.
+    async fn one_shot_mock(
+        expected_request_line: &'static str,
+        expected_body: &'static str,
+        status_line: &'static str,
+        response_body: &'static str,
+    ) -> (DustApiClient, tokio::task::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind test server");
+        let address = listener.local_addr().expect("read test server address");
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.expect("accept request");
+            let mut request = [0_u8; 4096];
+            let bytes_read = stream.read(&mut request).await.expect("read request");
+            let request = String::from_utf8_lossy(&request[..bytes_read]).to_string();
+            assert!(
+                request.starts_with(expected_request_line),
+                "unexpected request line: {request}"
+            );
+            assert!(
+                request.ends_with(expected_body),
+                "unexpected request body: {request}"
+            );
+            let response = format!(
+                "HTTP/1.1 {status_line}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{response_body}",
+                response_body.len()
+            );
+            let _ = stream.write_all(response.as_bytes()).await;
+        });
+        let api = DustApiClient {
+            client: reqwest::Client::new(),
+            base_url: format!("http://{address}"),
+        };
+        (api, server)
+    }
+
+    #[tokio::test]
+    async fn make_live_frame_posts_the_manifest_path_and_parses_the_response() {
+        let (api, server) = one_shot_mock(
+            "POST /sandbox/frames/make-live ",
+            r#"{"manifestPath":"conversation-c/App/manifest.json"}"#,
+            "200 OK",
+            r#"{"frameId":"fil_abc123","publicationId":"pub-1"}"#,
+        )
+        .await;
+
+        let response = api
+            .make_live_frame("conversation-c/App/manifest.json")
+            .await
+            .expect("make-live succeeds");
+
+        assert_eq!(response.frame_id, "fil_abc123");
+        assert_eq!(response.publication_id, "pub-1");
+        server.await.expect("test server completes");
+    }
+
+    #[tokio::test]
+    async fn make_live_frame_surfaces_the_api_error_message() {
+        let message = "This Frame changed or is being updated. Refresh it and try again.";
+        let (api, server) = one_shot_mock(
+            "POST /sandbox/frames/make-live ",
+            r#"{"manifestPath":"conversation-c/App/manifest.json"}"#,
+            "409 Conflict",
+            r#"{"error":{"type":"frame_draft_conflict","message":"This Frame changed or is being updated. Refresh it and try again."}}"#,
+        )
+        .await;
+
+        let error = api
+            .make_live_frame("conversation-c/App/manifest.json")
+            .await
+            .expect_err("a 409 must fail");
+
+        let api_error = error
+            .downcast_ref::<DustApiError>()
+            .expect("typed API error");
+        assert_eq!(api_error.status, Some(409));
+        assert_eq!(api_error.message, message);
+        assert!(format!("{error:#}").contains(message));
+        server.await.expect("test server completes");
+    }
+
+    #[tokio::test]
+    async fn enter_frame_draft_mode_posts_the_manifest_path_and_parses_the_response() {
+        let (api, server) = one_shot_mock(
+            "POST /sandbox/frames/draft-mode ",
+            r#"{"manifestPath":"conversation-c/App/manifest.json"}"#,
+            "200 OK",
+            r#"{"frameId":"fil_abc123"}"#,
+        )
+        .await;
+
+        let response = api
+            .enter_frame_draft_mode("conversation-c/App/manifest.json")
+            .await
+            .expect("draft mode succeeds");
+
+        assert_eq!(response.frame_id, "fil_abc123");
+        server.await.expect("test server completes");
+    }
+
+    #[tokio::test]
+    async fn enter_frame_draft_mode_surfaces_the_api_error_message() {
+        let message = "This Frame has no live version yet.";
+        let (api, server) = one_shot_mock(
+            "POST /sandbox/frames/draft-mode ",
+            r#"{"manifestPath":"conversation-c/App/manifest.json"}"#,
+            "409 Conflict",
+            r#"{"error":{"type":"frame_not_published","message":"This Frame has no live version yet."}}"#,
+        )
+        .await;
+
+        let error = api
+            .enter_frame_draft_mode("conversation-c/App/manifest.json")
+            .await
+            .expect_err("a 409 must fail");
+
+        let api_error = error
+            .downcast_ref::<DustApiError>()
+            .expect("typed API error");
+        assert_eq!(api_error.status, Some(409));
+        assert_eq!(api_error.message, message);
         server.await.expect("test server completes");
     }
 }

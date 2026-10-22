@@ -11,7 +11,7 @@ import {
 } from "@app/lib/api/audit/workos_audit";
 import { getRedisHybridManager } from "@app/lib/api/redis-hybrid-manager";
 import { buildSandboxFunctionAuditMetadata } from "@app/lib/api/sandbox_functions/audit";
-import { getSandboxFunctionInvocationChannelId } from "@app/lib/api/sandbox_functions/events";
+import { getSandboxFunctionBlockingEventChannel } from "@app/lib/api/sandbox_functions/publish_blocking_event";
 import type { Authenticator } from "@app/lib/auth";
 import { SandboxFunctionInvocationResource } from "@app/lib/resources/sandbox_function_invocation_resource";
 import { SandboxFunctionMCPActionResource } from "@app/lib/resources/sandbox_function_mcp_action_resource";
@@ -196,8 +196,8 @@ export async function validateSandboxFunctionAction(
     },
   });
 
-  // Remove the pending approval event from the invocation channel so SSE history replay does not
-  // resurface the approval card.
+  // Remove the pending approval event from whichever channel it was published on so history
+  // replay does not resurface the approval card.
   await getRedisHybridManager().removeEvent(
     (event) => {
       const payload = JSON.parse(event.message["payload"]);
@@ -205,7 +205,7 @@ export async function validateSandboxFunctionAction(
         ? payload.actionId === actionId
         : false;
     },
-    getSandboxFunctionInvocationChannelId({ invocationId: invocation.sId })
+    await getSandboxFunctionBlockingEventChannel(invocation)
   );
 
   if (approvalState !== "rejected") {

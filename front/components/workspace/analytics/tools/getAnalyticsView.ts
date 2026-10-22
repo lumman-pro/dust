@@ -1,9 +1,11 @@
 import type { AnalyticsViewInput } from "@app/components/workspace/analytics/analyticsView";
 import { describeAnalyticsView } from "@app/components/workspace/analytics/analyticsView";
 import { usageFilterToIds } from "@app/components/workspace/analytics/usageFilter";
+import { DUST_CLIENT_SIDE_MCP_SERVER_NAMES } from "@app/lib/actions/constants";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-export const ANALYTICS_PANEL_SERVER_NAME = "analytics-panel-client";
+export const ANALYTICS_PANEL_SERVER_NAME =
+  DUST_CLIENT_SIDE_MCP_SERVER_NAMES.analyticsPanel;
 export const GET_ANALYTICS_VIEW_TOOL_NAME = "get_analytics_view";
 
 const DESCRIPTION = `Read the period and filters the user currently has applied on the workspace \

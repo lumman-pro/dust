@@ -1164,6 +1164,12 @@ export class SpaceResource extends BaseResource<SpaceModel> {
    * `editorGroupIds` are each overwritten, and a dimension `params` leaves out is emptied.
    */
   /**
+   * @cc [owner:fabiencelier,label:security] permissions-update-through-util
+   * Callers outside this class MUST NOT call `updatePermissions` directly: they MUST go through
+   * `updateSpacePermissions` (`lib/api/spaces.ts`), which also reflects a pod's new permissions on
+   * its dfs folder. A direct call leaves the pod folder's grants stale.
+   */
+  /**
    * @cc [owner:fabiencelier,label:security] global-space-permissions-update
    * On the global space, this must reject `isRestricted: true` with `invalid_request_error` and
    * keep the workspace global group's `reader` grant: Company Data is always readable by the whole

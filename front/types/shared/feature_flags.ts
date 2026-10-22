@@ -1,4 +1,10 @@
 export const WHITELISTABLE_FEATURES_CONFIG = {
+  dfs_gcs_replication: {
+    description:
+      "Replicate this workspace's GCS pod and conversation files into DFS",
+    stage: "dust_only",
+    owner: "flvndvd",
+  },
   dust_lean_agent: {
     description:
       "Enable @dust-lean, a Dust agent that starts without tools, skills, or company knowledge",
@@ -13,7 +19,7 @@ export const WHITELISTABLE_FEATURES_CONFIG = {
   },
   inference_hooks: {
     description:
-      "Evaluate model inputs and outputs with workspace inference hook policies",
+      "Evaluate model inputs and outputs with workspace inference hooks",
     stage: "dust_only",
     owner: "frankaloia",
   },
@@ -28,27 +34,15 @@ export const WHITELISTABLE_FEATURES_CONFIG = {
     stage: "ask_owner",
     owner: "rfrenoy",
   },
-  frames_v2: {
-    description: "Enable Frames v2",
-    stage: "self_serve",
-    owner: "fontanierh",
-  },
-  disable_frames_v2: {
-    description:
-      "Make the workspace behave as if frames_v2 were off, overriding its global rollout. " +
-      "Existing Frames v2 Frames stop rendering while it is on.",
-    stage: "ask_owner",
-    owner: "davidebbo",
-  },
   frames_v2_functions: {
     description:
-      "Let Frames v2 declare server functions, databases and persistent files (requires frames_v2)",
+      "Let Frames v2 declare server functions, databases and persistent files",
     stage: "ask_owner",
     owner: "davidebbo",
   },
   frames_v2_drafts: {
     description:
-      "Let agents publish Frames v2 changes as drafts that go live only when made live (requires frames_v2)",
+      "Let agents publish Frames v2 changes as drafts that go live only when made live",
     stage: "ask_owner",
     owner: "davidebbo",
   },
@@ -57,6 +51,12 @@ export const WHITELISTABLE_FEATURES_CONFIG = {
       "Let Frames v2 declare public functions that anonymous visitors of a public share can call (requires frames_v2_functions)",
     stage: "dust_only",
     owner: "achilleburah",
+  },
+  frames_v2_schedules: {
+    description:
+      "Let Frames v2 declare schedules on durable functions (requires frames_v2_functions)",
+    stage: "dust_only",
+    owner: "smb2268",
   },
   advanced_notion_management: {
     description:
@@ -382,6 +382,12 @@ export const WHITELISTABLE_FEATURES_CONFIG = {
     stage: "dust_only",
     owner: "frankaloia",
   },
+  dust_file_system: {
+    description:
+      "Mirror Pods and their permissions in the Dust File System (dfs): each Pod gets a folder whose grants follow the Pod's access",
+    stage: "dust_only",
+    owner: "fabiencelier",
+  },
   user_memory: {
     description:
       "Enable the user_memory internal MCP server: agents can store and retrieve per-user memory in a user-scoped filesystem.",
@@ -459,12 +465,6 @@ export const WHITELISTABLE_FEATURES_CONFIG = {
     stage: "self_serve",
     owner: "adrsimon",
   },
-  "localisation_de-DE": {
-    description:
-      "Let members and admins pick German (Deutsch) as their language",
-    stage: "ask_owner",
-    owner: "sfriquet",
-  },
   co_edition: {
     description: "Collaborative editing features",
     stage: "dust_only",
@@ -514,42 +514,25 @@ export const WHITELISTABLE_FEATURES = Object.keys(
   WHITELISTABLE_FEATURES_CONFIG
 ) as WhitelistableFeature[];
 
-const FRAMES_V2_FEATURE = "frames_v2" as const satisfies WhitelistableFeature;
 const FRAMES_V2_FUNCTIONS_FEATURE =
   "frames_v2_functions" as const satisfies WhitelistableFeature;
+const FRAMES_V2_DRAFTS_FEATURE =
+  "frames_v2_drafts" as const satisfies WhitelistableFeature;
 const FRAMES_V2_PUBLIC_FUNCTIONS_FEATURE =
   "frames_v2_public_functions" as const satisfies WhitelistableFeature;
-const DISABLE_FRAMES_V2_FEATURE =
-  "disable_frames_v2" as const satisfies WhitelistableFeature;
+const FRAMES_V2_SCHEDULES_FEATURE =
+  "frames_v2_schedules" as const satisfies WhitelistableFeature;
 
-/**
- * @cc [owner:davidebbo,label:product] disable-frames-v2-overrides-frames-v2
- * When `featureFlags` include `disable_frames_v2`, the returned flags MUST NOT include
- * `frames_v2`, whether it came from a workspace flag or a global rollout. Other flags MUST be
- * returned unchanged.
- */
-export function applyFeatureFlagOverrides(
-  featureFlags: WhitelistableFeature[]
-): WhitelistableFeature[] {
-  if (!featureFlags.includes(DISABLE_FRAMES_V2_FEATURE)) {
-    return featureFlags;
-  }
-
-  return featureFlags.filter((flag) => flag !== FRAMES_V2_FEATURE);
-}
-
-/**
- * @cc [owner:davidebbo,label:product] frames-v2-functions-requires-frames-v2
- * Frame functions MUST be reported enabled only when both frames_v2 and frames_v2_functions are
- * on; frames_v2_functions alone MUST NOT enable anything.
- */
 export function isFramesV2FunctionsEnabled(
   featureFlags: WhitelistableFeature[]
 ): boolean {
-  return (
-    featureFlags.includes(FRAMES_V2_FEATURE) &&
-    featureFlags.includes(FRAMES_V2_FUNCTIONS_FEATURE)
-  );
+  return featureFlags.includes(FRAMES_V2_FUNCTIONS_FEATURE);
+}
+
+export function isFramesV2DraftsEnabled(
+  featureFlags: WhitelistableFeature[]
+): boolean {
+  return featureFlags.includes(FRAMES_V2_DRAFTS_FEATURE);
 }
 
 /**
@@ -563,6 +546,20 @@ export function isFramesV2PublicFunctionsEnabled(
   return (
     isFramesV2FunctionsEnabled(featureFlags) &&
     featureFlags.includes(FRAMES_V2_PUBLIC_FUNCTIONS_FEATURE)
+  );
+}
+
+/**
+ * @cc [owner:smb2268,label:product] frames-v2-schedules-requires-frames-v2-functions
+ * Frame schedules MUST be reported enabled only when Frame functions are enabled (see
+ * isFramesV2FunctionsEnabled) and frames_v2_schedules is on.
+ */
+export function isFramesV2SchedulesEnabled(
+  featureFlags: WhitelistableFeature[]
+): boolean {
+  return (
+    isFramesV2FunctionsEnabled(featureFlags) &&
+    featureFlags.includes(FRAMES_V2_SCHEDULES_FEATURE)
   );
 }
 

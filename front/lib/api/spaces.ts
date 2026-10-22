@@ -7,6 +7,10 @@ import {
 } from "@app/lib/api/agent_data_sources";
 import { getWebhookSourcesUsage } from "@app/lib/api/agent_triggers";
 import { hardDeleteApp } from "@app/lib/api/apps";
+import {
+  reflectPodCreationOnDfs,
+  reflectPodPermissionsOnDfs,
+} from "@app/lib/api/dfs/pods";
 import { createDataSourceAndConnectorForProject } from "@app/lib/api/projects/connector";
 import { deleteOwnerPolicy } from "@app/lib/api/sandbox/egress_policy";
 import { getWorkspaceAdministrationVersionLock } from "@app/lib/api/workspace";
@@ -574,6 +578,23 @@ export async function hardDeleteSpace(
   return new Ok(undefined);
 }
 
+/**
+ * Updates the permissions of `space` (see `SpaceResource.updatePermissions`) and, for a pod,
+ * reflects its stored grants on its dfs folder (see `reflectPodPermissionsOnDfs`), whether the
+ * update succeeded or not.
+ */
+export async function updateSpacePermissions(
+  auth: Authenticator,
+  space: SpaceResource,
+  params: Parameters<SpaceResource["updatePermissions"]>[1]
+): ReturnType<SpaceResource["updatePermissions"]> {
+  const updated = await space.updatePermissions(auth, params);
+  // Also on an error: `updatePermissions` can rewrite the space's grants before returning one. The
+  // sync reads the grants as stored, so it is right either way.
+  await reflectPodPermissionsOnDfs(auth, space);
+  return updated;
+}
+
 export async function createSpaceAndGroup(
   auth: Authenticator,
   params: {
@@ -816,6 +837,8 @@ export async function createSpaceAndGroup(
     await auth.refresh();
 
     const space = result.value;
+    // The creator becomes the pod folder's owner.
+    await reflectPodCreationOnDfs(auth, space);
     if (space.kind === "project") {
       // If this is a project space, create the dust_project connector
       // Create connector outside transaction to avoid long-running transaction

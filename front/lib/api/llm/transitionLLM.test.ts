@@ -572,6 +572,87 @@ describe("convertToOldEvent — token_usage", () => {
     });
   });
 
+  it("passes the served model and per-model usage through", () => {
+    expect(
+      convertToOldEvent(
+        {
+          type: "token_usage",
+          content: {
+            cacheCreated: 20,
+            longCacheCreated: 0,
+            shortCacheCreated: 0,
+            cacheHit: 0,
+            standardInput: 110,
+            totalOutput: 30,
+            servedModel: "claude-opus-4-8",
+            usageIterations: [
+              {
+                type: "message",
+                model: "claude-opus-5-5",
+                cacheCreated: 0,
+                longCacheCreated: 0,
+                cacheHit: 50,
+                standardInput: 100,
+                totalOutput: 7,
+              },
+              {
+                type: "fallback_message",
+                model: "claude-opus-4-8",
+                cacheCreated: 20,
+                longCacheCreated: 15,
+                cacheHit: 0,
+                standardInput: 110,
+                totalOutput: 30,
+              },
+            ],
+          },
+          metadata: endpointMetadata,
+        },
+        llmMetadata
+      )
+    ).toEqual({
+      type: "token_usage",
+      content: {
+        inputTokens: 130,
+        totalOutputTokens: 30,
+        totalTokens: 160,
+        cachedTokens: 0,
+        cacheCreationTokens: 20,
+        uncachedInputTokens: 110,
+        servedModel: "claude-opus-4-8",
+        usageIterations: [
+          {
+            model: "claude-opus-5-5",
+            usage: {
+              inputTokens: 150,
+              totalOutputTokens: 7,
+              totalTokens: 157,
+              cachedTokens: 50,
+              cacheCreationTokens: 0,
+              longCacheCreationTokens: 0,
+              shortCacheCreationTokens: 0,
+              uncachedInputTokens: 100,
+            },
+          },
+          {
+            model: "claude-opus-4-8",
+            usage: {
+              inputTokens: 130,
+              totalOutputTokens: 30,
+              totalTokens: 160,
+              cachedTokens: 0,
+              cacheCreationTokens: 20,
+              longCacheCreationTokens: 15,
+              shortCacheCreationTokens: 5,
+              uncachedInputTokens: 110,
+            },
+          },
+        ],
+      },
+      metadata: llmMetadata,
+    });
+  });
+
   it("rejects reasoning tokens that are not a subset of output tokens", () => {
     expect(() =>
       convertToOldEvent(
@@ -778,6 +859,31 @@ describe("convertToOldEvent — errors", () => {
         type: "invalid_request_error",
         errorSource: "dust",
         isRetryable: false,
+      },
+    });
+  });
+
+  it("keeps refusal details on a non-retryable refusal_error", () => {
+    expect(
+      convertToOldEvent(
+        {
+          type: "error",
+          content: {
+            type: "refusal_error",
+            message: "refused",
+            errorSource: "dust",
+            refusal: { category: "cyber", explanation: null },
+          },
+          metadata: endpointMetadata,
+        },
+        llmMetadata
+      )
+    ).toMatchObject({
+      type: "error",
+      content: {
+        type: "refusal_error",
+        isRetryable: false,
+        refusal: { category: "cyber", explanation: null },
       },
     });
   });

@@ -548,6 +548,8 @@ export function convertToOldEvent(
         shortCacheCreated,
         reasoning,
         serviceTier,
+        servedModel,
+        usageIterations,
       } = event.content;
       // `cacheCreated` is only set when the provider reports a flat total with
       // no per-duration breakdown. Otherwise the split lives in long/short.
@@ -581,6 +583,32 @@ export function convertToOldEvent(
             : {}),
           uncachedInputTokens: standardInput,
           ...(serviceTier !== undefined ? { serviceTier } : {}),
+          ...(servedModel !== undefined ? { servedModel } : {}),
+          ...(usageIterations !== undefined
+            ? {
+                usageIterations: usageIterations.map((iteration) => {
+                  const iterationInput =
+                    iteration.standardInput +
+                    iteration.cacheHit +
+                    iteration.cacheCreated;
+                  return {
+                    model: iteration.model,
+                    usage: {
+                      inputTokens: iterationInput,
+                      totalOutputTokens: iteration.totalOutput,
+                      totalTokens: iterationInput + iteration.totalOutput,
+                      cachedTokens: iteration.cacheHit,
+                      cacheCreationTokens: iteration.cacheCreated,
+                      longCacheCreationTokens: iteration.longCacheCreated,
+                      shortCacheCreationTokens:
+                        iteration.cacheCreated - iteration.longCacheCreated,
+                      uncachedInputTokens: iteration.standardInput,
+                      ...(serviceTier !== undefined ? { serviceTier } : {}),
+                    },
+                  };
+                }),
+              }
+            : {}),
         },
         metadata,
       };
@@ -630,6 +658,7 @@ export function convertToOldEvent(
           isRetryable,
           originalError: event.content.originalError,
           errorSource: event.content.errorSource,
+          refusal: event.content.refusal,
         },
         metadata
       );

@@ -201,4 +201,55 @@ describe("submitCreateMCPServerDialogForm", () => {
       })
     );
   });
+
+  it("connects an oauth-static-dust-app preset without discovery", async () => {
+    vi.mocked(setupOAuthConnection).mockResolvedValue(
+      new Ok({
+        connection_id: "connection-id",
+        created: 0,
+        metadata: {},
+        provider: "notion",
+        status: "finalized",
+      })
+    );
+    const discoverOAuthMetadata = vi.fn();
+    const createWithURL = vi
+      .fn()
+      .mockResolvedValue(new Ok({ success: true, server }));
+
+    const result = await submitCreateMCPServerDialogForm({
+      owner,
+      values: { ...values, authMethod: "oauth-static-dust-app" },
+      authorization: {
+        provider: "notion",
+        supported_use_cases: ["platform_actions", "personal_actions"],
+      },
+      remoteMCPServerOAuthDiscoveryDone: false,
+      oauthConnectionId: null,
+      discoverOAuthMetadata,
+      createWithURL,
+      createInternalMCPServer: vi.fn(),
+      onBeforeCreateServer: vi.fn(),
+      cellInfo: null,
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(discoverOAuthMetadata).not.toHaveBeenCalled();
+    expect(setupOAuthConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "notion",
+        useCase: "platform_actions",
+        extraConfig: {},
+      })
+    );
+    expect(createWithURL).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: values.remoteServerUrl,
+        oauthConnection: {
+          connectionId: "connection-id",
+          useCase: "platform_actions",
+        },
+      })
+    );
+  });
 });

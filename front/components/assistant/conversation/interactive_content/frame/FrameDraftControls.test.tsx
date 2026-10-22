@@ -1,116 +1,184 @@
 import { FrameDraftControls } from "@app/components/assistant/conversation/interactive_content/frame/FrameDraftControls";
-import { formatDateTime } from "@app/lib/i18n/format";
 import { LightWorkspaceFactory } from "@app/tests/utils/LightWorkspaceFactory";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  makeDraftLive: vi.fn(async (_draftPublicationId: string) => true),
+  enterDraftMode: vi.fn(async () => true),
+  makeDraftLive: vi.fn(
+    async (_publicationId: string, _options: { hasChanges: boolean }) => true
+  ),
 }));
 
+vi.mock("@app/hooks/useEnterFrameDraftMode", () => ({
+  useEnterFrameDraftMode: () => mocks.enterDraftMode,
+}));
 vi.mock("@app/hooks/useMakeFrameDraftLive", () => ({
   useMakeFrameDraftLive: () => mocks.makeDraftLive,
 }));
 
 const owner = LightWorkspaceFactory.build({ sId: "workspace-sid" });
 
+function renderControls({
+  canEnterDraftMode = true,
+  draftMode,
+  draftPublicationId = null,
+  onDraftModeChanged = async () => undefined,
+}: {
+  canEnterDraftMode?: boolean;
+  draftMode: boolean;
+  draftPublicationId?: string | null;
+  onDraftModeChanged?: () => Promise<unknown>;
+}) {
+  return render(
+    <FrameDraftControls
+      owner={owner}
+      frameId="frame-sid"
+      canEnterDraftMode={canEnterDraftMode}
+      draftMode={draftMode}
+      draftPublicationId={draftPublicationId}
+      livePublicationId="publication-live"
+      hideLabels={false}
+      onDraftModeChanged={onDraftModeChanged}
+    />
+  );
+}
+
 describe("FrameDraftControls", () => {
+  // Radix menus measure their content, which jsdom cannot.
+  beforeAll(() => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+  });
+
   beforeEach(() => {
+    mocks.enterDraftMode.mockClear();
     mocks.makeDraftLive.mockClear();
   });
 
-  it("makes the shown draft live, then refreshes the panel", async () => {
-    const user = userEvent.setup();
-    let finishMakingLive: (madeLive: boolean) => void = () => {};
-    mocks.makeDraftLive.mockImplementationOnce(
-      () =>
-        new Promise<boolean>((resolve) => {
-          finishMakingLive = resolve;
-        })
-    );
-    const onMadeLive = vi.fn(async () => undefined);
-    render(
-      <FrameDraftControls
-        owner={owner}
-        frameId="frame-sid"
-        draftPublicationId="publication-draft"
-        livePublishedAt={null}
-        hideLabels={false}
-        onMadeLive={onMadeLive}
-      />
-    );
+  describe("outside draft mode", () => {
+    it("turns draft mode on from the more menu, then refreshes", async () => {
+      const user = userEvent.setup();
+      let finishEntering: (entered: boolean) => void = () => {};
+      mocks.enterDraftMode.mockImplementationOnce(
+        () =>
+          new Promise<boolean>((resolve) => {
+            finishEntering = resolve;
+          })
+      );
+      const onDraftModeChanged = vi.fn(async () => undefined);
+      renderControls({ draftMode: false, onDraftModeChanged });
 
-    await user.click(screen.getByRole("button", { name: "Make live" }));
+      await user.click(screen.getByRole("button", { name: "More actions" }));
+      await user.click(
+        await screen.findByRole("menuitem", { name: "Activate draft mode" })
+      );
 
-    expect(mocks.makeDraftLive).toHaveBeenCalledWith("publication-draft");
-    expect(onMadeLive).not.toHaveBeenCalled();
-    finishMakingLive(true);
-    await waitFor(() => expect(onMadeLive).toHaveBeenCalledTimes(1));
+      expect(mocks.enterDraftMode).toHaveBeenCalledTimes(1);
+      expect(onDraftModeChanged).not.toHaveBeenCalled();
+      await act(async () => {
+        finishEntering(true);
+      });
+      await waitFor(() => expect(onDraftModeChanged).toHaveBeenCalledTimes(1));
+    });
+
+    it("does not refresh when turning draft mode on fails", async () => {
+      const user = userEvent.setup();
+      mocks.enterDraftMode.mockResolvedValueOnce(false);
+      const onDraftModeChanged = vi.fn(async () => undefined);
+      renderControls({ draftMode: false, onDraftModeChanged });
+
+      await user.click(screen.getByRole("button", { name: "More actions" }));
+      await user.click(
+        await screen.findByRole("menuitem", { name: "Activate draft mode" })
+      );
+
+      await waitFor(() =>
+        expect(mocks.enterDraftMode).toHaveBeenCalledTimes(1)
+      );
+      expect(onDraftModeChanged).not.toHaveBeenCalled();
+    });
+
+    it("shows nothing when draft mode cannot be entered", () => {
+      renderControls({ draftMode: false, canEnterDraftMode: false });
+
+      expect(
+        screen.queryByRole("button", { name: "More actions" })
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Validate draft" })
+      ).not.toBeInTheDocument();
+    });
   });
 
-  it("still refreshes the panel when making live fails (a newer draft replaced it)", async () => {
-    const user = userEvent.setup();
-    mocks.makeDraftLive.mockResolvedValueOnce(false);
-    const onMadeLive = vi.fn(async () => undefined);
-    render(
-      <FrameDraftControls
-        owner={owner}
-        frameId="frame-sid"
-        draftPublicationId="publication-draft"
-        livePublishedAt={null}
-        hideLabels={false}
-        onMadeLive={onMadeLive}
-      />
-    );
+  describe("in draft mode", () => {
+    it("makes the pending draft live, then refreshes", async () => {
+      const user = userEvent.setup();
+      let finishValidating: (madeLive: boolean) => void = () => {};
+      mocks.makeDraftLive.mockImplementationOnce(
+        () =>
+          new Promise<boolean>((resolve) => {
+            finishValidating = resolve;
+          })
+      );
+      const onDraftModeChanged = vi.fn(async () => undefined);
+      renderControls({
+        draftMode: true,
+        draftPublicationId: "publication-draft",
+        onDraftModeChanged,
+      });
 
-    await user.click(screen.getByRole("button", { name: "Make live" }));
+      expect(
+        screen.queryByRole("button", { name: "More actions" })
+      ).not.toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Validate draft" }));
 
-    await waitFor(() => expect(onMadeLive).toHaveBeenCalledTimes(1));
-    expect(mocks.makeDraftLive).toHaveBeenCalledWith("publication-draft");
-    expect(screen.getByRole("button", { name: "Make live" })).toBeEnabled();
-  });
+      expect(mocks.makeDraftLive).toHaveBeenCalledWith("publication-draft", {
+        hasChanges: true,
+      });
+      expect(onDraftModeChanged).not.toHaveBeenCalled();
+      await act(async () => {
+        finishValidating(true);
+      });
+      await waitFor(() => expect(onDraftModeChanged).toHaveBeenCalledTimes(1));
+    });
 
-  it("explains which version the share link shows when a version is live", async () => {
-    const user = userEvent.setup();
-    const livePublishedAt = Date.UTC(2026, 9, 1);
-    render(
-      <FrameDraftControls
-        owner={owner}
-        frameId="frame-sid"
-        draftPublicationId="publication-draft"
-        livePublishedAt={livePublishedAt}
-        hideLabels
-        onMadeLive={async () => undefined}
-      />
-    );
+    it("names the live publication when nothing changed, which only ends draft mode", async () => {
+      const user = userEvent.setup();
+      const onDraftModeChanged = vi.fn(async () => undefined);
+      renderControls({ draftMode: true, onDraftModeChanged });
 
-    await user.hover(screen.getByText("Draft"));
+      await user.click(screen.getByRole("button", { name: "Validate draft" }));
 
-    const tooltip = await screen.findByRole("tooltip");
-    expect(tooltip).toHaveTextContent(
-      `Not live yet. The share link shows the version from ${formatDateTime(livePublishedAt)}.`
-    );
-  });
+      await waitFor(() => expect(onDraftModeChanged).toHaveBeenCalledTimes(1));
+      expect(mocks.makeDraftLive).toHaveBeenCalledWith("publication-live", {
+        hasChanges: false,
+      });
+    });
 
-  it("falls back to a generic explanation when nothing is live yet", async () => {
-    const user = userEvent.setup();
-    render(
-      <FrameDraftControls
-        owner={owner}
-        frameId="frame-sid"
-        draftPublicationId="publication-draft"
-        livePublishedAt={null}
-        hideLabels
-        onMadeLive={async () => undefined}
-      />
-    );
+    it("still refreshes when validating fails (a newer draft replaced it)", async () => {
+      const user = userEvent.setup();
+      mocks.makeDraftLive.mockResolvedValueOnce(false);
+      const onDraftModeChanged = vi.fn(async () => undefined);
+      renderControls({
+        draftMode: true,
+        draftPublicationId: "publication-draft",
+        onDraftModeChanged,
+      });
 
-    await user.hover(screen.getByText("Draft"));
+      await user.click(screen.getByRole("button", { name: "Validate draft" }));
 
-    const tooltip = await screen.findByRole("tooltip");
-    expect(tooltip).toHaveTextContent(
-      "Not live yet. The share link shows the live version."
-    );
+      await waitFor(() => expect(onDraftModeChanged).toHaveBeenCalledTimes(1));
+      expect(
+        screen.getByRole("button", { name: "Validate draft" })
+      ).toBeEnabled();
+    });
   });
 });

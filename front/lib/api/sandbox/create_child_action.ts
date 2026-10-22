@@ -6,6 +6,10 @@ import {
 import { getAugmentedInputs } from "@app/lib/actions/mcp_execution";
 import type { AgentLoopMCPApproveExecutionEvent } from "@app/lib/actions/mcp_internal_actions/events";
 import { validateToolInputs } from "@app/lib/actions/mcp_utils";
+import {
+  isServerUsableForMessage,
+  PERSONAL_SERVER_UNUSABLE_MESSAGE,
+} from "@app/lib/actions/personal_actions";
 import { isToolExecutionStatusFinal } from "@app/lib/actions/statuses";
 import { makeMCPApproveExecutionEventBase } from "@app/lib/actions/tool_approval_events";
 import { tryGetPrefixedToolName } from "@app/lib/actions/tool_name_utils";
@@ -20,6 +24,7 @@ import { resolveSkillMCPServers } from "@app/lib/api/assistant/skill_actions";
 import { createMCPAction } from "@app/lib/api/mcp/create_mcp";
 import { pauseSandboxBashForBlockedChild } from "@app/lib/api/sandbox/sandbox_child_block";
 import type { Authenticator } from "@app/lib/auth";
+import { DustError } from "@app/lib/error";
 import { getSupportedModelConfig } from "@app/lib/llms/model_configurations";
 import { notifyManualActionRequired } from "@app/lib/notifications/triggers/manual-action-required";
 import { AgentMCPActionResource } from "@app/lib/resources/agent_mcp_action_resource";
@@ -116,6 +121,19 @@ export async function createSandboxChildAction(
   );
   if (!userMessageRow?.userMessage) {
     return new Err(new Error("User message not found."));
+  }
+
+  if (
+    !isServerUsableForMessage(view, {
+      isWithoutConcreteUser: userMessageRow.userMessage.userId === null,
+    })
+  ) {
+    return new Err(
+      new DustError(
+        "personal_tools_unavailable",
+        PERSONAL_SERVER_UNUSABLE_MESSAGE
+      )
+    );
   }
 
   const agentConfiguration = await getPinnedAgentToolingForAgentMessage(auth, {

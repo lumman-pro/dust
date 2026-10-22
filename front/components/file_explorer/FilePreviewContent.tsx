@@ -25,6 +25,7 @@ import { AuthContext } from "@app/lib/auth/AuthContext";
 import { caretColor } from "@app/lib/client/collab/messages";
 import type { ProcessedContent } from "@app/lib/file_content_utils";
 import { processFileContent } from "@app/lib/file_content_utils";
+import type { FrameEmbedProps } from "@app/lib/markdown/frame_embed";
 import { getFileProcessedUrl, useFileContentByUrl } from "@app/lib/swr/files";
 import { toSessionName } from "@app/types/collab";
 import type { FilePreviewCategory } from "@app/types/file_preview";
@@ -407,7 +408,9 @@ function RichMarkdownDocument({
   });
   const commentInputExtensions = useMemo(() => {
     // Suggestions rank the conversation's participants, or the pod's members, first.
-    const scope = parseCanonicalScopedPath(editor.path)?.scope;
+    const scope = editor.path
+      ? parseCanonicalScopedPath(editor.path)?.scope
+      : undefined;
     return [
       MentionExtension.configure({
         owner,
@@ -427,30 +430,37 @@ function RichMarkdownDocument({
   });
   const resolveImageSource = useResolveMarkdownImageUrl(owner);
   const renderFrame = useCallback(
-    (path: string, height: number) => (
-      <DocumentFrameEmbed owner={owner} path={path} height={height} />
+    (path: string, height: number, frameProps: FrameEmbedProps) => (
+      <DocumentFrameEmbed
+        owner={owner}
+        path={path}
+        height={height}
+        frameProps={frameProps}
+      />
     ),
     [owner]
   );
 
   const getCollabTicket = useCollabTicket({ owner, filePath: editor.path });
-  const live = user
-    ? {
-        url: editor.collabUrl,
-        documentName: toSessionName(owner.sId, editor.path),
-        getTicket: getCollabTicket,
-        user: {
-          id: user.sId,
-          name: user.fullName,
-          color: caretColor(user.sId),
-        },
-      }
-    : undefined;
+  const live =
+    user && editor.path && getCollabTicket
+      ? {
+          url: editor.collabUrl,
+          documentName: toSessionName(owner.sId, editor.path),
+          getTicket: getCollabTicket,
+          user: {
+            id: user.sId,
+            name: user.fullName,
+            color: caretColor(user.sId),
+          },
+        }
+      : undefined;
 
   return (
     <FilePreviewProvider owner={owner} keepCurrentPanel>
       <DocumentEditor
         initialContent={editor.initialContent}
+        readOnly={editor.readOnly}
         headerControlsContainer={headerControlsContainer}
         statusContainer={statusContainer}
         activeComment={activeComment}

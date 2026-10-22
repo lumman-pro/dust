@@ -1,4 +1,5 @@
 import { getConversationRankVersionLock } from "@app/lib/api/assistant/conversation/lock";
+import { reflectConversationParticipationOnDfs } from "@app/lib/api/dfs/conversation_grants";
 import type { Authenticator } from "@app/lib/auth";
 import { ConversationMCPServerViewModel } from "@app/lib/models/agent/actions/conversation_mcp_server_view";
 import {
@@ -3470,6 +3471,40 @@ export class ConversationResource extends BaseResource<ConversationModel> {
     return count > 0;
   }
 
+  /** Whether `user` participates in this conversation. */
+  async isParticipant(
+    auth: Authenticator,
+    user: UserResource
+  ): Promise<boolean> {
+    return ConversationResource.isConversationParticipant(auth, {
+      conversation: this,
+      user,
+    });
+  }
+
+  /**
+   * Calls `reflectConversationParticipationOnDfs` on the conversation and user as currently stored,
+   * once a participation change is committed. Re-read: the folder may have been stored since the
+   * conversation was fetched, and leaving a soft-deleted conversation must still revoke the grant.
+   */
+  private static async reflectParticipationOnDfs(
+    auth: Authenticator,
+    {
+      conversationModelId,
+      userModelId,
+    }: { conversationModelId: ModelId; userModelId: ModelId }
+  ): Promise<void> {
+    const [conversation] = await ConversationResource.fetchByModelIds(
+      auth,
+      [conversationModelId],
+      { includeDeleted: true }
+    );
+    const user = await UserResource.fetchByModelId(userModelId);
+    if (conversation && user) {
+      await reflectConversationParticipationOnDfs(auth, { conversation, user });
+    }
+  }
+
   static async upsertParticipation(
     auth: Authenticator,
     {
@@ -3530,6 +3565,12 @@ export class ConversationResource extends BaseResource<ConversationModel> {
           { transaction: t }
         );
         status = "added";
+        t.afterCommit(() =>
+          ConversationResource.reflectParticipationOnDfs(auth, {
+            conversationModelId: conversation.id,
+            userModelId: user.id,
+          })
+        );
       }
 
       if (lastReadAt) {
@@ -5353,6 +5394,12 @@ export class ConversationResource extends BaseResource<ConversationModel> {
           conversationId: this.id,
           userId: user.id,
         },
+      });
+    }
+    if (affectedCount > 0) {
+      await ConversationResource.reflectParticipationOnDfs(auth, {
+        conversationModelId: this.id,
+        userModelId: user.id,
       });
     }
 

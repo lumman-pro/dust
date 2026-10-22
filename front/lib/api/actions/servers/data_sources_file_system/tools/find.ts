@@ -1,14 +1,12 @@
 import { MCPError } from "@app/lib/actions/mcp_errors";
+import type { DataSourcesToolConfigurationType } from "@app/lib/actions/mcp_internal_actions/input_schemas";
 import { renderSearchResults } from "@app/lib/actions/mcp_internal_actions/rendering";
 import { checkConflictingTags } from "@app/lib/actions/mcp_internal_actions/tools/tags/utils";
 import {
   getAgentDataSourceConfigurations,
   makeCoreSearchNodesFilters,
 } from "@app/lib/actions/mcp_internal_actions/tools/utils";
-import type {
-  DataSourceFilesystemFindInputType,
-  TagsInputType,
-} from "@app/lib/actions/mcp_internal_actions/types";
+import type { TagsInputType } from "@app/lib/actions/mcp_internal_actions/types";
 import config from "@app/lib/api/config";
 import type { Authenticator } from "@app/lib/auth";
 import logger from "@app/logger/logger";
@@ -31,7 +29,14 @@ export async function find(
     mimeTypes,
     tagsIn,
     tagsNot,
-  }: DataSourceFilesystemFindInputType & TagsInputType,
+  }: {
+    query?: string;
+    dataSources: DataSourcesToolConfigurationType;
+    limit?: number;
+    nextPageCursor?: string;
+    rootNodeId?: string;
+    mimeTypes?: string[];
+  } & TagsInputType,
   { auth }: { auth: Authenticator }
 ): Promise<Result<CallToolResult["content"], MCPError>> {
   const effectiveRootNodeId = !!rootNodeId ? rootNodeId : null;

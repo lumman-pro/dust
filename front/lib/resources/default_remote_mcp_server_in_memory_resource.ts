@@ -3,6 +3,7 @@ import { remoteMCPServerNameToSId } from "@app/lib/actions/mcp_helper";
 import type { DefaultRemoteMCPServerConfig } from "@app/lib/actions/mcp_internal_actions/remote_servers";
 import {
   DEFAULT_REMOTE_MCP_SERVERS,
+  getDefaultRemoteMCPServerAuthorization,
   getDefaultRemoteMCPServerById,
 } from "@app/lib/actions/mcp_internal_actions/remote_servers";
 import type { RemoteMCPServerType } from "@app/lib/api/mcp";
@@ -91,19 +92,7 @@ export class DefaultRemoteMCPServerInMemoryResource {
       version: DEFAULT_MCP_ACTION_VERSION,
       description: this.config.description,
       icon: this.config.icon,
-      authorization:
-        this.config.authMethod === "oauth-dynamic"
-          ? {
-              provider: "mcp" as const,
-              supported_use_cases: this.config.supportedOAuthUseCases ?? [],
-              scope: this.config.scope,
-            }
-          : this.config.authMethod === "oauth-static"
-            ? {
-                provider: "mcp_static" as const,
-                supported_use_cases: this.config.supportedOAuthUseCases ?? [],
-              }
-            : null,
+      authorization: getDefaultRemoteMCPServerAuthorization(this.config),
       tools: [], // There are no predefined tools for default remote servers
       documentationUrl: this.config.documentationUrl || null,
       availability: "manual" as const,

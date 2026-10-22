@@ -4,6 +4,7 @@ import type { ElasticsearchBaseDocument } from "@app/lib/api/elasticsearch";
 import { searchConsumptionAnalytics } from "@app/lib/api/elasticsearch";
 import { MICRO_CREDITS_PER_CREDIT } from "@app/lib/credits/units";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
+import { SpaceFactory } from "@app/tests/utils/SpaceFactory";
 import { TagFactory } from "@app/tests/utils/TagFactory";
 import { Ok } from "@app/types/shared/result";
 import type { estypes } from "@elastic/elasticsearch";
@@ -39,8 +40,11 @@ async function collectMessageExportRows(
 
 describe("generateMessageExportRows (consumption index)", () => {
   it("maps a composite aggregation response to MessageExportRow fields", async () => {
-    const { authenticator, workspace } = await createResourceTest({
+    const { authenticator, workspace, user } = await createResourceTest({
       role: "admin",
+    });
+    const pod = await SpaceFactory.project(workspace, user.id, {
+      name: "Pod Alpha",
     });
 
     const [tagZeta, tagAlpha] = await Promise.all([
@@ -77,6 +81,9 @@ describe("generateMessageExportRows (consumption index)", () => {
                 },
                 conversation_id: {
                   buckets: [{ key: "conv_xyz", doc_count: 3 }],
+                },
+                space_id: {
+                  buckets: [{ key: pod.sId, doc_count: 3 }],
                 },
                 parent_message_id: {
                   buckets: [{ key: "msg_parent", doc_count: 3 }],
@@ -144,6 +151,8 @@ describe("generateMessageExportRows (consumption index)", () => {
     expect(row.assistantId).toBe("agent_abc");
     expect(row.assistantTags).toBe("Alpha,Zeta");
     expect(row.conversationId).toBe("conv_xyz");
+    expect(row.spaceId).toBe(pod.sId);
+    expect(row.spaceName).toBe("Pod Alpha");
     expect(row.parentMessageId).toBe("msg_parent");
     expect(row.userId).toBe("user_99");
     expect(row.source).toBe("slack");

@@ -1,4 +1,5 @@
 import { PublicInteractiveContentContainer } from "@app/components/assistant/conversation/interactive_content/PublicInteractiveContentContainer";
+import { useFrameTracking } from "@app/components/assistant/conversation/interactive_content/useFrameTracking";
 import Custom404 from "@app/components/pages/Custom404";
 import CustomErrorPage from "@app/components/pages/CustomErrorPage";
 import { EmailVerificationFlow } from "@app/components/pages/share/EmailVerificationFlow";
@@ -15,7 +16,6 @@ import type { GetShareFrameMetadataResponseBody } from "@app/types/api/files/sha
 import { getFramePropsFromUrlParams } from "@app/types/assistant/visualization";
 import { LogIn01, Spinner } from "@dust-tt/sparkle";
 import { useLingui } from "@lingui/react/macro";
-import { usePostHog } from "posthog-js/react";
 import { useEffect, useMemo, useState } from "react";
 import { useCookies } from "react-cookie";
 
@@ -26,6 +26,30 @@ const EMBEDDED_ORIGINS = ["https://dust.tt/blog/"];
 function buildLoginUrl() {
   const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   return `${config.getApiBaseUrl()}/api/workos/login?returnTo=${encodeURIComponent(returnTo)}`;
+}
+
+// Shown once the share metadata and the frame have loaded.
+// Takes the objects as returned by their hooks so the null checks stay out of SharedFramePage.
+function useTrackSharedFrameOpen({
+  frameMetadata,
+  shareMetadata,
+}: {
+  frameMetadata: ReturnType<typeof usePublicFrame>["frameMetadata"];
+  shareMetadata: ReturnType<typeof useShareFrameMetadata>["shareMetadata"];
+}) {
+  useFrameTracking({
+    frameId: frameMetadata?.sId ?? null,
+    location: { type: "public_share" },
+    openedFrom: { source: "user", uiElement: "shared_link" },
+    isVisible: !!shareMetadata,
+    // Viewers are often anonymous, so the workspace is not attached to the event on its own.
+    extra: shareMetadata
+      ? {
+          workspace_id: shareMetadata.workspaceId,
+          requires_email_verification: shareMetadata.requiresEmailVerification,
+        }
+      : undefined,
+  });
 }
 
 /**
@@ -43,7 +67,6 @@ export function SharedFramePage() {
   const { t } = useLingui();
   const token = usePathParam("token");
   const { query } = useAppRouter();
-  const posthog = usePostHog();
 
   const [isVerified, setIsVerified] = useState(false);
   const [cookies] = useCookies([DUST_HAS_SESSION]);
@@ -81,16 +104,7 @@ export function SharedFramePage() {
     shareToken: shareMetadata ? token : null,
   });
 
-  // Track frame view once the frame successfully loads.
-  useEffect(() => {
-    if (!frameMetadata || !shareMetadata) {
-      return;
-    }
-    posthog.capture("frame_shared_view", {
-      workspace_id: shareMetadata.workspaceId,
-      requires_email_verification: shareMetadata.requiresEmailVerification,
-    });
-  }, [frameMetadata, shareMetadata, posthog]);
+  useTrackSharedFrameOpen({ frameMetadata, shareMetadata });
 
   // Show the email form when:
   // 1. Metadata says the scope requires email verification, AND

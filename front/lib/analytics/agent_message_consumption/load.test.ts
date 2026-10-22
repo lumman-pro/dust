@@ -9,6 +9,7 @@ import type { UsageType } from "@app/lib/metronome/types";
 import { AgentMessageModel } from "@app/lib/models/agent/conversation";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { AgentConfigurationFactory } from "@app/tests/utils/AgentConfigurationFactory";
+import { AgentMessageConsumptionItemFactory } from "@app/tests/utils/AgentMessageConsumptionItemFactory";
 import { ConversationFactory } from "@app/tests/utils/ConversationFactory";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
 import { GroupFactory } from "@app/tests/utils/GroupFactory";
@@ -129,6 +130,7 @@ async function setupSettledMessage({
   depth = 0,
   agenticOriginMessageId,
   agentName,
+  reconciled = true,
   testContext,
   usageType = USAGE_TYPE_USER,
 }: {
@@ -137,6 +139,8 @@ async function setupSettledMessage({
   depth?: number;
   agenticOriginMessageId?: string;
   agentName?: string;
+  // Whether the attribution activity reconciled the items it stored for the message.
+  reconciled?: boolean;
   testContext?: { authenticator: Authenticator; workspace: WorkspaceType };
   usageType?: UsageType | null;
 } = {}) {
@@ -154,7 +158,7 @@ async function setupSettledMessage({
       authorless,
       agentName,
     });
-  const { run } = await RunFactory.createWithUsage(auth, {
+  const { run, runUsageModelId } = await RunFactory.createWithUsage(auth, {
     inputTokens: 100,
     outputTokens: 20,
     modelId: GPT_5_MINI_MODEL_CONFIG.modelId,
@@ -174,6 +178,25 @@ async function setupSettledMessage({
       },
     }
   );
+  await AgentMessageConsumptionItemFactory.createItems(auth, {
+    agentMessageModelId,
+    conversation,
+    reconciled,
+    records: [
+      {
+        itemType: "input",
+        runUsageModelId,
+        inputTokensCount: 100,
+        grossAttributedCreditAmountMicro: 4_000_000,
+      },
+      {
+        itemType: "output",
+        runUsageModelId,
+        outputTokensCount: 20,
+        grossAttributedCreditAmountMicro: 1_000_000,
+      },
+    ],
+  });
   return {
     agent,
     agentMessage,
@@ -182,6 +205,7 @@ async function setupSettledMessage({
     completedAt,
     conversation,
     run,
+    runUsageModelId,
     workspace,
   };
 }
@@ -196,6 +220,43 @@ describe("loadAgentMessageConsumptionAnalyticsInput", () => {
     );
 
     expect(input).toBeNull();
+  });
+
+  it("returns null when the newest attribution version has no reconciled item", async () => {
+    const context = await setupSettledMessage({ reconciled: false });
+
+    const input = await loadAgentMessageConsumptionAnalyticsInput(
+      context.auth,
+      { agentMessageId: context.agentMessage.sId }
+    );
+
+    expect(input).toBeNull();
+  });
+
+  it("fails when only part of the newest attribution version is reconciled", async () => {
+    const context = await setupSettledMessage();
+    // Evidence written by a later pass that did not reconcile.
+    await AgentMessageConsumptionItemFactory.createItems(context.auth, {
+      agentMessageModelId: context.agentMessageModelId,
+      conversation: context.conversation,
+      reconciled: false,
+      records: [
+        {
+          itemType: "reasoning",
+          runUsageModelId: context.runUsageModelId,
+          outputTokensCount: 5,
+          grossAttributedCreditAmountMicro: 100_000,
+        },
+      ],
+    });
+
+    await expect(
+      loadAgentMessageConsumptionAnalyticsInput(context.auth, {
+        agentMessageId: context.agentMessage.sId,
+      })
+    ).rejects.toThrow(
+      "Only part of the newest attribution version is reconciled"
+    );
   });
 
   it("loads the authoritative inputs for billed user usage", async () => {
@@ -497,64 +558,6 @@ describe("loadAgentMessageConsumptionAnalyticsInput", () => {
         agentMessageId: context.agentMessage.sId,
       })
     ).rejects.toThrow("Run usage billing classification is incomplete");
-  });
-
-  it("returns null when a failed message was never billed", async () => {
-    const context = await setupSettledMessage();
-    await AgentMessageModel.update(
-      { costCredits: null, status: "failed" },
-      {
-        where: {
-          id: context.agentMessage.agentMessageId!,
-          workspaceId: context.workspace.id,
-        },
-      }
-    );
-
-    const input = await loadAgentMessageConsumptionAnalyticsInput(
-      context.auth,
-      { agentMessageId: context.agentMessage.sId }
-    );
-
-    expect(input).toBeNull();
-  });
-
-  it("returns null when only unavailable model calls ran and nothing was billed", async () => {
-    const context = await setupSettledMessage();
-    const { run } = await RunFactory.createWithUnavailableUsage(context.auth);
-    await AgentMessageModel.update(
-      { costCredits: null, runIds: [run.dustRunId] },
-      {
-        where: {
-          id: context.agentMessageModelId,
-          workspaceId: context.workspace.id,
-        },
-      }
-    );
-
-    const input = await loadAgentMessageConsumptionAnalyticsInput(
-      context.auth,
-      { agentMessageId: context.agentMessage.sId }
-    );
-
-    expect(input).toBeNull();
-  });
-
-  it("loads a reported model call that was never billed", async () => {
-    const context = await setupSettledMessage();
-    await ConversationResource.updateAgentMessageCostCredits(context.auth, {
-      agentMessageModelId: context.agentMessageModelId,
-      costCredits: null,
-    });
-
-    const input = await loadAgentMessageConsumptionAnalyticsInput(
-      context.auth,
-      { agentMessageId: context.agentMessage.sId }
-    );
-
-    expect(input).toMatchObject({
-      usages: [{ runModelId: context.run.id }],
-    });
   });
 
   it("loads a failed message that was billed before it failed", async () => {

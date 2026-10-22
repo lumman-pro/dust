@@ -1,9 +1,10 @@
+import { DUST_CLIENT_SIDE_MCP_SERVER_NAMES } from "@app/lib/actions/constants";
 import { registerAllTools } from "@extension/platforms/front/tools";
 import { McpService } from "@extension/shared/services/mcp";
 import type { WebViewContext } from "@frontapp/plugin-sdk/dist/webViewSdkTypes";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-const FRONT_MCP_CLIENT_NAME = "front-extension-client";
+const FRONT_MCP_CLIENT_NAME = DUST_CLIENT_SIDE_MCP_SERVER_NAMES.frontExtension;
 
 /**
  * Front-specific implementation of the MCP service

@@ -55,7 +55,7 @@ requests return 404.
 
 For Frame function tests, run Viz and configure the sandbox callback tunnel to
 reach the same hive. `SBX_DEV_FRONT_URL` must reach the API and `SBX_DEV_VIZ_URL`
-must reach Viz. Enable `frames_v2` and `frames_v2_functions` in the local workspace.
+must reach Viz. Enable `frames_v2_functions` in the local workspace.
 Use a durable function that runs longer than 10 seconds: faster functions can
 return their outcome inline without opening an event stream. Check both success
 and error results in the iframe and in the event response.
