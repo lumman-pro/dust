@@ -1212,7 +1212,7 @@ msgstr "{seatConsumedCreditCount, plural, one {{seatConsumedLabel} crédit utili
 
 #: front/components/workspace/MembersUsageTable.tsx
 msgid "Pool usage"
-msgstr "Utilisation de la réserve"
+msgstr "Réserve utilisée"
 
 #: front/components/workspace/MembersUsageTable.tsx
 msgid "{poolConsumedCreditCount, plural, one {{poolConsumedLabel} credit used out of {poolLimitLabel}} other {{poolConsumedLabel} credits used out of {poolLimitLabel}}}"
@@ -1247,16 +1247,13 @@ msgid "{allowanceCreditCount, plural, one {{consumedLabel} / {allowanceLabel} cr
 msgstr "{allowanceCreditCount, plural, one {{consumedLabel} / {allowanceLabel} crédit utilisé} other {{consumedLabel} / {allowanceLabel} crédits utilisés}}"
 
 #: front/components/workspace/MembersUsageTable.tsx
+msgctxt "column header"
 msgid "Credit usage"
-msgstr "Consommation de crédits"
+msgstr "Crédits consommés"
 
 #: front/components/workspace/MembersUsageTable.tsx
 msgid "Premium messages"
 msgstr "Messages premium"
-
-#: front/components/workspace/MembersUsageTable.tsx
-msgid "Resets on a rolling {windowDays}-day basis"
-msgstr "Réinitialisation sur une période glissante de {windowDays} jours"
 
 #: front/components/workspace/MembersUsageTable.tsx
 msgid "Premium message usage"
@@ -1269,6 +1266,10 @@ msgstr "{usedMessages} sur {limitMessages, plural, one {# message premium utilis
 #: front/components/workspace/MembersUsageTable.tsx
 msgid "Reset schedule:"
 msgstr "Calendrier de réinitialisation :"
+
+#: front/components/workspace/MembersUsageTable.tsx
+msgid "Resets on a rolling {windowDays}-day basis"
+msgstr "Réinitialisation sur une période glissante de {windowDays} jours"
 
 #: front/components/workspace/MembersUsageTable.tsx
 msgid "Fair usage credits"

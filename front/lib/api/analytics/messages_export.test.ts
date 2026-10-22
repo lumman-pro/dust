@@ -7,6 +7,7 @@ import {
 } from "@app/lib/api/elasticsearch";
 import { TagResource } from "@app/lib/resources/tags_resource";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
+import { SpaceFactory } from "@app/tests/utils/SpaceFactory";
 import { TagFactory } from "@app/tests/utils/TagFactory";
 import { Err, Ok } from "@app/types/shared/result";
 import { describe, expect, it, vi } from "vitest";
@@ -341,5 +342,38 @@ describe("generateMessageExportRows", () => {
 
     expect(outcomes).toEqual(["ok", "es unavailable"]);
     expect(vi.mocked(searchAnalytics)).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports the conversation space id and name, defaulting to empty", async () => {
+    const { authenticator, workspace, user } = await createResourceTest({
+      role: "admin",
+    });
+    const pod = await SpaceFactory.project(workspace, user.id, {
+      name: "Pod Alpha",
+    });
+
+    mockMessageHits([
+      messageDoc({ message_id: "msg_pod", space_id: pod.sId }),
+      messageDoc({ message_id: "msg_unknown", space_id: "space_unknown" }),
+      messageDoc({ message_id: "msg_null", space_id: null }),
+      messageDoc({ message_id: "msg_legacy" }),
+    ]);
+
+    const rows = await collectMessageExportRows({
+      auth: authenticator,
+      owner: workspace,
+      startDate: "2026-07-01",
+      endDate: "2026-07-02",
+      timezone: "UTC",
+    });
+
+    expect(
+      rows.map((r) => ({ spaceId: r.spaceId, spaceName: r.spaceName }))
+    ).toEqual([
+      { spaceId: pod.sId, spaceName: "Pod Alpha" },
+      { spaceId: "space_unknown", spaceName: "" },
+      { spaceId: "", spaceName: "" },
+      { spaceId: "", spaceName: "" },
+    ]);
   });
 });

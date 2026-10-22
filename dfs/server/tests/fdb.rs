@@ -1,4 +1,5 @@
 use std::{
+    path::PathBuf,
     sync::atomic::{AtomicUsize, Ordering},
     time::{Duration, Instant},
 };
@@ -33,6 +34,7 @@ fn fdb_client() -> Result<()> {
         fdb::ping(fdb::database()?).await?;
         commit_versions_follow_the_successful_attempt_and_read_only_commits().await?;
         ping_fails_instead_of_hanging_when_fdb_is_unreachable().await?;
+        seed_overwrites_missing_empty_and_different_copies().await?;
         resource_errors_abort_staged_writes().await
     })
 }
@@ -49,6 +51,57 @@ async fn ping_fails_instead_of_hanging_when_fdb_is_unreachable() -> Result<()> {
     std::fs::remove_file(&cluster_file)?;
     assert!(result.is_err());
     assert!(started.elapsed() < UNREACHABLE_PING_DEADLINE);
+    Ok(())
+}
+
+async fn seed_overwrites_missing_empty_and_different_copies() -> Result<()> {
+    let dir = std::env::temp_dir().join(format!("dfs-seed-{}", std::process::id()));
+    std::fs::create_dir_all(&dir)?;
+    let seed = dir.join("seed.cluster");
+    let copy = dir.join("fdb.cluster");
+    let live = std::env::var_os("FDB_CLUSTER_FILE")
+        .map_or_else(|| PathBuf::from("fdb.cluster"), PathBuf::from);
+    std::fs::copy(&live, &seed)?;
+    let expected = std::fs::read_to_string(&seed)?;
+    let mut permissions = std::fs::metadata(&seed)?.permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(&seed, permissions)?;
+
+    let missing = fdb::open_seeded(&copy, Some(&seed)).await;
+    let created = std::fs::read_to_string(&copy)?;
+    std::fs::write(&copy, "")?;
+    let empty = fdb::open_seeded(&copy, Some(&seed)).await;
+    let filled = std::fs::read_to_string(&copy)?;
+    std::fs::write(&copy, "test:test@127.0.0.1:1\n")?;
+    let outdated = fdb::open_seeded(&copy, Some(&seed)).await;
+    let replaced = std::fs::read_to_string(&copy)?;
+    let unreachable_seed = dir.join("unreachable.cluster");
+    std::fs::write(&unreachable_seed, "test:test@127.0.0.1:1\n")?;
+    let healthy_copy = fdb::open_seeded(&copy, Some(&unreachable_seed)).await;
+    let overwritten = std::fs::read_to_string(&copy)?;
+    let unseeded = fdb::open_seeded(&copy, None).await;
+    let unchanged_copy = std::fs::read_to_string(&copy)?;
+    let unchanged_seed = std::fs::read_to_string(&seed)?;
+
+    std::fs::remove_dir_all(&dir)?;
+    missing?;
+    empty?;
+    outdated?;
+    let connection_string = |contents: &str| {
+        contents
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.starts_with('#'))
+            .collect::<String>()
+    };
+    assert_eq!(connection_string(&created), connection_string(&expected));
+    assert_eq!(connection_string(&filled), connection_string(&expected));
+    assert_eq!(connection_string(&replaced), connection_string(&expected));
+    assert!(healthy_copy.is_err());
+    assert_eq!(overwritten, "test:test@127.0.0.1:1\n");
+    assert_eq!(unchanged_copy, overwritten);
+    assert_eq!(unchanged_seed, expected);
+    assert!(unseeded.is_err());
     Ok(())
 }
 

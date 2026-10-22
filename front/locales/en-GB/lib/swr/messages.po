@@ -384,18 +384,6 @@ msgstr ""
 msgid "Couldn't save edits"
 msgstr ""
 
-#: front/lib/swr/frames.ts
-msgid "PDF export failed"
-msgstr ""
-
-#: front/lib/swr/frames.ts
-msgid "PDF exported"
-msgstr ""
-
-#: front/lib/swr/frames.ts
-msgid "Your PDF has been downloaded."
-msgstr ""
-
 #: front/lib/swr/github_connection.ts
 msgid "GitHub disconnected"
 msgstr ""

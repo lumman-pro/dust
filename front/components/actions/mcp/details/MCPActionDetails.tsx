@@ -56,6 +56,7 @@ import {
   SKILL_MANAGEMENT_SERVER_NAME,
   TOOLSETS_ENABLE_TOOL_NAME,
   TOOLSETS_LIST_TOOL_NAME,
+  validateToolInputs,
   WEBBROWSER_TOOL_NAME,
   WEBSEARCH_TOOL_NAME,
 } from "@app/lib/actions/mcp_internal_actions/constants";
@@ -66,11 +67,8 @@ import {
   isTextContent,
 } from "@app/lib/actions/mcp_internal_actions/output_schemas";
 import {
-  isDataSourceFilesystemFindInputType,
-  isDataSourceFilesystemListInputType,
   isIncludeInputType,
   isSearchInputTypeWithTags,
-  isWebsearchInputType,
 } from "@app/lib/actions/mcp_internal_actions/types";
 import { MCP_SPECIFICATION } from "@app/lib/actions/utils_ui";
 import {
@@ -97,6 +95,7 @@ import {
   SKILL_AUTHORING_SERVER_NAME,
   UPDATE_SKILL_TOOL_NAME,
 } from "@app/lib/api/actions/servers/skill_authoring/metadata";
+import { WEB_SEARCH_BROWSE_SERVER_NAME } from "@app/lib/api/actions/servers/web_search_browse/metadata";
 import { useSkill } from "@app/lib/swr/skill_configurations";
 import { isValidJSON } from "@app/lib/utils/json";
 import type { AgentMCPActionWithOutputType } from "@app/types/actions";
@@ -250,9 +249,19 @@ function MCPActionDetailsInner({
             }
             actionOutput={output}
             query={
-              isDataSourceFilesystemFindInputType(params)
+              toolName === FILESYSTEM_FIND_TOOL_NAME &&
+              validateToolInputs(
+                "data_sources_file_system",
+                FILESYSTEM_FIND_TOOL_NAME,
+                params
+              )
                 ? makeQueryTextForFind(t, params)
-                : isDataSourceFilesystemListInputType(params)
+                : toolName === FILESYSTEM_LIST_TOOL_NAME &&
+                    validateToolInputs(
+                      "data_sources_file_system",
+                      FILESYSTEM_LIST_TOOL_NAME,
+                      params
+                    )
                   ? makeQueryTextForList(t, params)
                   : null
             }
@@ -299,7 +308,16 @@ function MCPActionDetailsInner({
         return (
           <SearchResultDetails
             displayContext={displayContext}
-            query={isWebsearchInputType(params) ? params.query : null}
+            query={
+              // http_client reuses the web_search_&_browse tools metadata.
+              validateToolInputs(
+                WEB_SEARCH_BROWSE_SERVER_NAME,
+                WEBSEARCH_TOOL_NAME,
+                params
+              )
+                ? params.query
+                : null
+            }
             actionName={
               displayContext === "conversation"
                 ? t`Searching the web`

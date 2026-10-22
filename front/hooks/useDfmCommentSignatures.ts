@@ -14,13 +14,13 @@ export function useDfmMessageVerifier({
   disabled,
 }: {
   owner: LightWorkspaceType | undefined;
-  /** Scoped path of the file whose messages are checked. */
-  filePath: string;
+  /** Scoped path of the file whose messages are checked; without one, none are. */
+  filePath: string | null;
   disabled?: boolean;
 }): DfmMessageVerifier | null {
   const { fetcher } = useFetcher();
   const swrKey =
-    disabled || !owner
+    disabled || !owner || !filePath
       ? null
       : ([`/api/w/${owner.sId}/files/comment-signatures`, filePath] as const);
   const { data } = useSWRWithDefaults(

@@ -10,6 +10,7 @@ import {
   presenceClass,
   usePresence,
 } from "@app/components/editor/document/usePresence";
+import type { AgentEvent } from "@app/lib/client/collab/agents";
 import type { DfmComment } from "@app/lib/markdown/dfm";
 import type { Result } from "@app/types/shared/result";
 import { cn } from "@dust-tt/sparkle";
@@ -95,6 +96,7 @@ const useCardPosition = (
 interface FloatingThreadProps {
   thread: DfmComment;
   comments: DocumentCommentsController;
+  agentActivity?: AgentEvent;
   renderCommentBody: (body: string) => ReactNode;
   commentInputExtensions?: Extensions;
   mountPortalContainer?: HTMLElement;
@@ -106,6 +108,7 @@ interface FloatingThreadProps {
 const FloatingThread = ({
   thread,
   comments,
+  agentActivity,
   renderCommentBody,
   commentInputExtensions,
   mountPortalContainer,
@@ -141,6 +144,7 @@ const FloatingThread = ({
       variant="card"
       comment={thread}
       quote={quotes.get(thread.id)}
+      agentActivity={agentActivity}
       active
       canWrite={canWrite}
       busy={busyThreadIds.has(thread.id)}
@@ -176,6 +180,7 @@ const FloatingThread = ({
 interface DocumentCommentCardProps {
   editor: Editor;
   comments: DocumentCommentsController;
+  commentAgents?: ReadonlyMap<string, AgentEvent>;
   /** The positioned element the editor renders in. */
   containerRef: RefObject<HTMLElement | null>;
   renderCommentBody: (body: string) => ReactNode;
@@ -207,6 +212,7 @@ interface DocumentCommentCardProps {
 export const DocumentCommentCard = ({
   editor,
   comments,
+  commentAgents,
   containerRef,
   renderCommentBody,
   commentInputExtensions,
@@ -319,6 +325,7 @@ export const DocumentCommentCard = ({
           key={shown.target.id}
           thread={shown.target}
           comments={comments}
+          agentActivity={commentAgents?.get(shown.target.id)}
           renderCommentBody={renderCommentBody}
           commentInputExtensions={commentInputExtensions}
           mountPortalContainer={mountPortalContainer}

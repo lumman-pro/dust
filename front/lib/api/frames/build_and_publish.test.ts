@@ -91,6 +91,65 @@ const uiOnlyManifest = FrameManifestSchema.parse({
   description: "Track tasks.",
 });
 
+const scheduledManifest = FrameManifestSchema.parse({
+  version: 1,
+  description: "Track tasks.",
+  functions: [
+    {
+      name: "add-task",
+      description: "Add a task.",
+      entryPoint: "functions/add_task.ts",
+      schedules: [
+        {
+          cron: "0 9 * * 1-5",
+          timezone: "Europe/Paris",
+          input: { title: "Daily stand-up" },
+        },
+      ],
+    },
+    {
+      name: "list-tasks",
+      description: "List tasks.",
+      entryPoint: "functions/list_tasks.ts",
+      schedules: [
+        {
+          cron: "0 * * * *",
+          timezone: "UTC",
+          input: { limit: 10 },
+        },
+      ],
+    },
+  ],
+});
+
+function mockScheduledFunctionBuilds() {
+  vi.mocked(buildSandboxFunctionOnReadySandbox)
+    .mockResolvedValueOnce(
+      new Ok({
+        bundleCode: "export const addTask = true;",
+        userIdentity: "workspace_user_required",
+        inputSchema: {
+          type: "object",
+          properties: { title: { type: "string" } },
+          required: ["title"],
+        },
+        outputSchema: { type: "object" },
+      })
+    )
+    .mockResolvedValueOnce(
+      new Ok({
+        bundleCode: "export const listTasks = true;",
+        userIdentity: "workspace_user_required",
+        inputSchema: {
+          type: "object",
+          properties: { limit: { type: "integer", minimum: 1 } },
+          required: ["limit"],
+        },
+        outputSchema: { type: "array" },
+      })
+    );
+}
+
 const databaseManifest = FrameManifestSchema.parse({
   version: 1,
   name: "Task List",
@@ -367,6 +426,54 @@ describe("buildAndPublishFramePublication", () => {
       (await FileResource.fetchById(auth, frame.sId))?.useCaseMetadata
         ?.activePublicationId
     ).toBeUndefined();
+  });
+
+  it("validates schedule inputs against the generated schemas without publishing", async () => {
+    const { auth, frame } = await setup();
+    mockScheduledFunctionBuilds();
+
+    const result = await validateFramePublication(auth, {
+      frame,
+      manifest: scheduledManifest,
+      sourceFiles,
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(fileStorageMock.saveFileCalls).toHaveLength(0);
+  });
+
+  it("fails validation when a schedule input does not match the generated schema", async () => {
+    const { auth, frame } = await setup();
+    mockScheduledFunctionBuilds();
+    const manifest = FrameManifestSchema.parse({
+      ...scheduledManifest,
+      functions: [
+        scheduledManifest.functions[0],
+        {
+          ...scheduledManifest.functions[1],
+          schedules: [
+            {
+              ...scheduledManifest.functions[1].schedules[0],
+              input: { limit: 0 },
+            },
+          ],
+        },
+      ],
+    });
+
+    const result = await validateFramePublication(auth, {
+      frame,
+      manifest,
+      sourceFiles,
+    });
+
+    expect(result.isErr() && result.error).toMatchObject({
+      code: "invalid_schedule",
+      message: expect.stringContaining(
+        'Frame function "list-tasks" schedule (cron "0 * * * *", UTC)'
+      ),
+    });
+    expect(fileStorageMock.saveFileCalls).toHaveLength(0);
   });
 
   it("builds every declared function before publishing", async () => {

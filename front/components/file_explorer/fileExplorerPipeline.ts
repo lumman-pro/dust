@@ -44,8 +44,6 @@ interface GetFileExplorerPipelineParams {
   files: FileExplorerPathEntry[];
   searchQuery: string;
   sortMode: FileExplorerSortMode;
-  /** Collapse registered Frames v2 source folders into package entries. */
-  displayFramePackages?: boolean;
   /** Top-level scope folders at the virtual root (e.g. `conversation`, `pod`). */
   virtualScopeRoots?: readonly FileExplorerVirtualScopeRoot[];
 }
@@ -118,20 +116,14 @@ function getCollapsedFramePackages({
 
 function collapseFramePackages({
   currentFolderPath,
-  displayFramePackages,
   files,
 }: {
   currentFolderPath: string;
-  displayFramePackages: boolean;
   files: FileExplorerPathEntry[];
 }): {
   files: FileExplorerPathEntry[];
   packagesByPath: Map<string, FramePackageEntry>;
 } {
-  if (!displayFramePackages) {
-    return { files, packagesByPath: new Map() };
-  }
-
   const packages = getCollapsedFramePackages({ currentFolderPath, files });
   if (packages.length === 0) {
     return { files, packagesByPath: new Map() };
@@ -200,17 +192,12 @@ export function getFileExplorerPipeline({
   activeFilter,
   contentNodes,
   currentFolderPath,
-  displayFramePackages = false,
   files,
   searchQuery,
   sortMode,
   virtualScopeRoots,
 }: GetFileExplorerPipelineParams): FileExplorerPipeline {
-  const collapsed = collapseFramePackages({
-    currentFolderPath,
-    displayFramePackages,
-    files,
-  });
+  const collapsed = collapseFramePackages({ currentFolderPath, files });
   const entryByRelativePath = new Map<string, FileExplorerEntry>();
   for (const f of collapsed.files) {
     if (f.isDirectory) {

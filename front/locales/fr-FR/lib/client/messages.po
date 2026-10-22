@@ -154,6 +154,58 @@ msgstr "Des modèles de pointe, bien plus chers que Premium, pour les travaux le
 msgid "all efforts"
 msgstr "tous les niveaux d’effort"
 
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "High (always ask for confirmation)"
+msgstr "Élevé (toujours demander une confirmation)"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Medium (allows input-scoped confirmation save)"
+msgstr "Moyen (confirmation mémorisable par entrée)"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Low (allows user-global confirmation save)"
+msgstr "Faible (confirmation mémorisable globalement)"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Never ask (automatic execution)"
+msgstr "Jamais (exécution automatique)"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgctxt "tool stake level"
+msgid "High"
+msgstr "Élevé"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgctxt "tool stake level"
+msgid "Medium"
+msgstr "Moyen"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgctxt "tool stake level"
+msgid "Low"
+msgstr "Faible"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgctxt "tool stake level"
+msgid "Never ask"
+msgstr "Jamais"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Needs explicit user approval."
+msgstr "Nécessite l’approbation explicite du membre."
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Users can save confirmations for specific tool inputs."
+msgstr "Les membres peuvent mémoriser leur confirmation pour des entrées précises de l’outil."
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Users can completely disable confirmations."
+msgstr "Les membres peuvent désactiver complètement les confirmations."
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Runs automatically."
+msgstr "S’exécute automatiquement."
+
 #: front/lib/client/visualization.ts
 msgid "The visualization code failed with this error:"
 msgstr "Le code de la visualisation a échoué avec cette erreur :"

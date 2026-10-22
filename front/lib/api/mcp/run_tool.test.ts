@@ -145,6 +145,31 @@ describe("runToolWithStreaming (sandbox function run context)", () => {
     );
   });
 
+  it("should mark the action errored without throwing when the error content GCS write fails", async () => {
+    const { auth, action, runContext } = await setupSandboxFunctionRun();
+
+    mockToolCallResult({
+      isError: true,
+      content: [{ type: "text", text: "tool exploded" }],
+    });
+    fileStorageMock.setFileSaveFails((filePath) =>
+      filePath.endsWith(`mcp_output_items/${action.sId}/output.json`)
+    );
+
+    const eventTypes = await collectEvents(
+      runToolWithStreaming(auth, { toolContext: { runContext } })
+    );
+
+    expect(eventTypes).toEqual(["tool_success"]);
+
+    const refetched =
+      await SandboxFunctionMCPActionResource.fetchByModelIdWithAuth(
+        auth,
+        action.id
+      );
+    expect(refetched?.status).toBe("errored");
+  });
+
   it("should mark the action errored instead of throwing when pause events fail", async () => {
     const { auth, action, runContext } = await setupSandboxFunctionRun();
 

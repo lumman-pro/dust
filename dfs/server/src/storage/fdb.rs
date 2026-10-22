@@ -1,4 +1,7 @@
-use std::sync::OnceLock;
+use std::{
+    path::{Path, PathBuf},
+    sync::OnceLock,
+};
 
 use anyhow::{Context, Result};
 use foundationdb::{
@@ -11,6 +14,8 @@ use super::{Error, receipt::Receipt};
 /// dust-hive envs export their own cluster file through `env.sh`.
 const CLUSTER_FILE_ENV: &str = "FDB_CLUSTER_FILE";
 const DEFAULT_CLUSTER_FILE: &str = "fdb.cluster";
+/// Read-only cluster file distributed by the deployment, such as a mounted Kubernetes Secret.
+const CLUSTER_FILE_SEED_ENV: &str = "FDB_CLUSTER_FILE_SEED";
 
 /// `Database::run` retries forever by default; this bounds every transaction, retries included.
 pub const TRANSACTION_TIMEOUT_MS: i32 = 5_000;
@@ -23,8 +28,50 @@ pub fn database() -> Result<&'static Database> {
     if let Some(database) = DATABASE.get() {
         return Ok(database);
     }
-    let database = open()?;
+    let database = open(&cluster_file())?;
     Ok(DATABASE.get_or_init(|| database))
+}
+
+/// Opens the process-wide database from `FDB_CLUSTER_FILE`, seeded by `FDB_CLUSTER_FILE_SEED` when
+/// set, and fails unless the cluster answers. The caller must have booted the network first.
+pub async fn connect() -> Result<&'static Database> {
+    let seed = std::env::var_os(CLUSTER_FILE_SEED_ENV).map(PathBuf::from);
+    let database = open_seeded(&cluster_file(), seed.as_deref()).await?;
+    Ok(DATABASE.get_or_init(|| database))
+}
+
+/**
+ * @cc [owner:jd,label:backend;performance] cluster-file-seed
+ * Without a seed, `cluster_file` MUST be used as is. With a seed, a missing or differing
+ * `cluster_file`, including an empty file, MUST be overwritten from the seed before connecting.
+ * The copy MUST be writable by the client, and the seed MUST NOT be written.
+ */
+pub async fn open_seeded(cluster_file: &Path, seed: Option<&Path>) -> Result<Database> {
+    if let Some(seed) = seed
+        && (!cluster_file.exists() || read(seed)? != read(cluster_file)?)
+    {
+        copy_seed(seed, cluster_file)?;
+    }
+    let database = open(cluster_file)?;
+    ping(&database).await?;
+    Ok(database)
+}
+
+fn cluster_file() -> PathBuf {
+    std::env::var_os(CLUSTER_FILE_ENV).map_or_else(|| DEFAULT_CLUSTER_FILE.into(), PathBuf::from)
+}
+
+fn read(path: &Path) -> Result<String> {
+    std::fs::read_to_string(path)
+        .with_context(|| format!("reading cluster file {}", path.display()))
+}
+
+/// Writes rather than copies: a copy would inherit the seed's read-only mode.
+fn copy_seed(seed: &Path, cluster_file: &Path) -> Result<()> {
+    std::fs::write(cluster_file, read(seed)?)
+        .with_context(|| format!("writing cluster file {}", cluster_file.display()))?;
+    tracing::info!(seed = %seed.display(), cluster_file = %cluster_file.display(), "copied cluster file seed");
+    Ok(())
 }
 
 pub async fn with_transaction<F, Fut, T, E>(body: F) -> Result<T, Error<E>>
@@ -113,12 +160,10 @@ pub(super) fn version_from_stamp(stamp: &[u8]) -> i64 {
         .fold(0, |version, byte| (version << u8::BITS) | i64::from(*byte))
 }
 
-fn open() -> Result<Database> {
-    let cluster_file =
-        std::env::var(CLUSTER_FILE_ENV).unwrap_or_else(|_| DEFAULT_CLUSTER_FILE.to_owned());
-    tracing::info!(cluster_file = %cluster_file, "opening FoundationDB");
-    let database = Database::from_path(&cluster_file)
-        .with_context(|| format!("opening cluster file {cluster_file}"))?;
+fn open(cluster_file: &Path) -> Result<Database> {
+    tracing::info!(cluster_file = %cluster_file.display(), "opening FoundationDB");
+    let database = Database::from_path(&cluster_file.to_string_lossy())
+        .with_context(|| format!("opening cluster file {}", cluster_file.display()))?;
     database.set_option(DatabaseOption::TransactionTimeout(TRANSACTION_TIMEOUT_MS))?;
     Ok(database)
 }

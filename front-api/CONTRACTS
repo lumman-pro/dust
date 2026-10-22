@@ -4,7 +4,8 @@ TypeScript environment and reaches into `front` internals via the `@app/*` path 
 
 @cc [label:api] one-way-front-dependency
 `front-api` is the Hono service that serves all HTTP traffic. `server.ts` boots `honoApp`
-from `app.ts` on `@hono/node-server`, and `routes/` holds every handler.
+from `app.ts` on `@hono/node-server`, and `routes/` holds every handler. The collab server is
+built from the same code (`collab-server-folder`).
 
 `front` is a library workspace (`lib`, `types`, `logger`, `components`) plus the Temporal
 workers and the migrations. The dependency is one-way: `front-api` reaches into `front`
@@ -89,13 +90,23 @@ not shadow the literal-prefixed routes above it.
 
 @cc [owner:PopDaph,label:api] collab-path-reserved
 Routes MUST NOT be mounted under `/api/collab`: the ingress and dust-hive's proxy send that prefix
-to the collab server (`collab_server.ts`), so such a route would never reach front-api.
+to the collab server (`collab/server.ts`), so such a route would never reach front-api.
+
+@cc [owner:PopDaph,label:architecture] collab-server-folder
+The collab server's own code MUST live in `front-api/collab/`, booted by `collab/server.ts`. It MAY
+import the rest of front-api, such as `lib/hono.ts`, `middlewares/` or `routes/healthz.ts`, but
+code outside `collab/` MUST NOT import from it, so front-api's server never loads collab code.
+Code only the collab server runs MUST live in `collab/`, business logic included (loading and
+saving files, the Yjs state kept in Redis, comment commands), so the folder shows the whole
+server. Code the rest of the app also uses stays outside it: in front-api, such as
+`lib/collab_access_errors.ts`, or in front, such as the access checks and the Yjs document format
+(`front/lib/api/collab/`).
 
 @cc [owner:tdraier,label:api] collab-server-internal-routes
-The collab server (`collab_server.ts`) serves its own HTTP routes, apart from front-api's route
+The collab server (`collab/server.ts`) serves its own HTTP routes, apart from front-api's route
 tree: its internal routes need the Hocuspocus instance it creates, so they MUST be built by
-`createInternalRoutes` in `lib/collab/internal_routes.ts` and mounted under `/internal` by
-`collab_server.ts` only. They are an exception to `url-aligned-route-files`,
+`createInternalRoutes` in `collab/lib/internal_routes.ts` and mounted under `/internal` by
+`collab/server.ts` only. They are an exception to `url-aligned-route-files`,
 `directory-route-mounts` and `route-mounting-is-source-of-truth`, limited to them; every other rule
 of this file applies to them.
 

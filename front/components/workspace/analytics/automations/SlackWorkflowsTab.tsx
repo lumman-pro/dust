@@ -168,7 +168,7 @@ function SlackWorkflowsCard({
         accessorKey: "botName",
         header: t`Workflow`,
         enableSorting: true,
-        meta: { className: "w-64 truncate", headerAlign: "left" },
+        meta: { className: "truncate", headerAlign: "left" },
         cell: (info) => (
           <DataTable.CellContent className="w-full justify-start text-left">
             <span className="truncate text-sm font-semibold">
@@ -182,7 +182,10 @@ function SlackWorkflowsCard({
         accessorKey: "spaceNames",
         header: t`Spaces`,
         enableSorting: false,
-        meta: { className: "w-full truncate", headerAlign: "left" },
+        meta: {
+          className: "hidden truncate @xs:table-cell",
+          headerAlign: "left",
+        },
         cell: (info) => (
           <SpacesCell spaceNames={info.row.original.spaceNames} />
         ),
@@ -192,7 +195,7 @@ function SlackWorkflowsCard({
         accessorKey: "createdAt",
         header: t`Added`,
         enableSorting: true,
-        meta: { className: "w-28", headerAlign: "left" },
+        meta: { className: "w-32", headerAlign: "left" },
         cell: (info) => (
           <DataTable.BasicCellContent
             className="whitespace-nowrap"

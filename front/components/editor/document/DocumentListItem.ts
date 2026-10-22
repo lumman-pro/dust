@@ -2,7 +2,7 @@ import {
   isEmptyParagraphMarker,
   KEEPS_EMPTY_ATTR,
 } from "@app/components/editor/document/DocumentParagraph";
-import { isNumber, isString } from "@app/types/shared/utils/general";
+import { isNumber } from "@app/types/shared/utils/general";
 import type {
   Command,
   JSONContent,
@@ -10,12 +10,7 @@ import type {
   RenderContext,
   SingleCommands,
 } from "@tiptap/core";
-import {
-  InputRule,
-  mergeAttributes,
-  renderNestedMarkdownContent,
-} from "@tiptap/core";
-import type { ListItemOptions } from "@tiptap/extension-list";
+import { InputRule, renderNestedMarkdownContent } from "@tiptap/core";
 import { ListItem } from "@tiptap/extension-list";
 import type { Node as ProseMirrorNode, ResolvedPos } from "@tiptap/pm/model";
 import type { Transaction } from "@tiptap/pm/state";
@@ -150,22 +145,6 @@ const isMarkerParagraph = (node: JSONContent | undefined) => {
   );
 };
 
-const isNode = (target: EventTarget | null): target is Node =>
-  target instanceof globalThis.Node;
-
-/** The text of an item's first paragraph, images read as their alt text. */
-const itemText = (item: ProseMirrorNode) => {
-  const paragraph = item.firstChild;
-  return paragraph
-    ? paragraph
-        .textBetween(0, paragraph.content.size, " ", (leaf) =>
-          isString(leaf.attrs.alt) ? ` ${leaf.attrs.alt} ` : ""
-        )
-        .replace(/\s+/g, " ")
-        .trim()
-    : "";
-};
-
 /** The list item nearest to each textblock of the selection. */
 const selectedListItems = (tr: Transaction, type: ProseMirrorNode["type"]) => {
   const items = new Map<number, ProseMirrorNode>();
@@ -200,16 +179,7 @@ const selectedListItems = (tr: Transaction, type: ProseMirrorNode["type"]) => {
  * an empty first paragraph, as TipTap's paragraph reads one. Any other text, the marker escaped
  * included, MUST read as text.
  */
-export const DocumentListItem = ListItem.extend<
-  ListItemOptions & {
-    /** The name of a task's checkbox when its item has no text. */
-    emptyTaskLabel: string;
-  }
->({
-  addOptions() {
-    return { ...ListItem.options, emptyTaskLabel: "Task" };
-  },
-
+export const DocumentListItem = ListItem.extend({
   addAttributes() {
     return {
       ...this.parent?.(),
@@ -332,93 +302,6 @@ export const DocumentListItem = ListItem.extend<
           (tr, pos) => tr.doc.resolve(pos).parent.type.name === "orderedList",
           (commands) => commands.toggleOrderedList()
         ),
-    };
-  },
-
-  /**
-   * @cc [owner:rfrenoy,label:product] document-task-item-read-only
-   * In an editor that is not editable, clicking or pressing Space on a task's checkbox MUST NOT
-   * change the document nor the checkbox's state. In an editable one, it MUST toggle only that
-   * item's `checked`.
-   */
-  addNodeView() {
-    return ({ node, getPos, editor, HTMLAttributes }) => {
-      const item = document.createElement("li");
-      Object.entries(
-        mergeAttributes(this.options.HTMLAttributes, HTMLAttributes)
-      ).forEach(([name, value]) => item.setAttribute(name, String(value)));
-
-      if (!node.attrs.task) {
-        return {
-          dom: item,
-          contentDOM: item,
-          update: (updated) =>
-            updated.type === node.type && !updated.attrs.task,
-        };
-      }
-
-      item.classList.add("[ul>&]:list-none");
-      const box = document.createElement("label");
-      box.contentEditable = "false";
-      box.className =
-        "float-left flex h-[1.5em] items-center [ol>li>&]:mr-2 [ul>li>&]:-ml-6 [ul>li>&]:w-6 my-1";
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.className = "size-4 cursor-pointer accent-foreground";
-      box.append(checkbox);
-      const content = document.createElement("div");
-      content.className = "flow-root [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1";
-      item.append(box, content);
-
-      let current = node;
-      const render = () => {
-        checkbox.checked = current.attrs.checked === true;
-        checkbox.setAttribute(
-          "aria-label",
-          itemText(current) || this.options.emptyTaskLabel
-        );
-      };
-      render();
-
-      checkbox.addEventListener("mousedown", (event) => event.preventDefault());
-      checkbox.addEventListener("click", (event) => {
-        if (!editor.isEditable) {
-          event.preventDefault();
-        }
-      });
-      checkbox.addEventListener("change", () => {
-        const pos = getPos();
-        if (!editor.isEditable || !isNumber(pos)) {
-          render();
-          return;
-        }
-        const { checked } = checkbox;
-        editor
-          .chain()
-          .focus(undefined, { scrollIntoView: false })
-          .command(({ tr }) => {
-            tr.setNodeAttribute(pos, "checked", checked);
-            return true;
-          })
-          .run();
-      });
-
-      return {
-        dom: item,
-        contentDOM: content,
-        update: (updated) => {
-          if (updated.type !== node.type || !updated.attrs.task) {
-            return false;
-          }
-          current = updated;
-          render();
-          return true;
-        },
-        stopEvent: (event) =>
-          isNode(event.target) && box.contains(event.target),
-        ignoreMutation: (mutation) =>
-          mutation.type !== "selection" && box.contains(mutation.target),
-      };
     };
   },
 });

@@ -7,7 +7,8 @@ import type { ZodRawShape } from "zod";
 
 /**
  * Registers client-side tools built with `buildTools` on the MCP server.
- * The tool metadata (stake, display labels, arguments requiring approval) is sent in `_meta.dust`.
+ * The tool metadata (stake, display labels, arguments requiring approval, price) is sent in
+ * `_meta.dust`.
  */
 export function registerClientTools(
   server: McpServer,
@@ -23,6 +24,8 @@ export function registerClientTools(
           dust: {
             stake: tool.stake,
             displayLabels: tool.displayLabels,
+            toolCostCategory: tool.toolCostCategory,
+            freeUsage: tool.freeUsage,
             ...(tool.argumentsRequiringApproval
               ? { argumentsRequiringApproval: tool.argumentsRequiringApproval }
               : {}),

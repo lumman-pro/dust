@@ -422,6 +422,10 @@ msgid "This file is being edited live and can't take this change."
 msgstr "This file is being edited live and can't take this change."
 
 #: front/lib/api_error_messages.ts
+msgid "Only files in a conversation or a Pod can be edited live."
+msgstr "Only files in a conversation or a Pod can be edited live."
+
+#: front/lib/api_error_messages.ts
 msgid "Run not found."
 msgstr "Run not found."
 
@@ -556,6 +560,10 @@ msgstr "Conversation context usage not found."
 #: front/lib/api_error_messages.ts
 msgid "The tool rejected the credentials."
 msgstr "The tool rejected the credentials."
+
+#: front/lib/api_error_messages.ts
+msgid "These tools use each person's own credentials, so they can't be used for a message Dust posted."
+msgstr "These tools use each person's own credentials, so they can't be used for a message Dust posted."
 
 #: front/lib/api_error_messages.ts
 msgid "The tool identifier is invalid."

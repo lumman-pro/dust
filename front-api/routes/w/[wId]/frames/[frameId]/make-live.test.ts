@@ -134,7 +134,6 @@ async function setupAuthoredFrame() {
   const { auth, workspace } = await createPrivateApiMockRequest({
     role: "admin",
   });
-  await FeatureFlagFactory.basic(auth, "frames_v2");
   const conversation = await ConversationFactory.create(auth, {
     agentConfigurationId: "test-agent",
     messagesCreatedAt: [],

@@ -2,6 +2,7 @@ import { frontSequelize } from "@app/lib/resources/storage";
 import {
   DANGEROUSLY_UNBOUNDED_TEXT,
   DataTypes,
+  Op,
 } from "@app/lib/resources/storage/data_types";
 import { FileModel } from "@app/lib/resources/storage/models/files";
 import { UserModel } from "@app/lib/resources/storage/models/user";
@@ -79,6 +80,12 @@ export class SandboxFunctionInvocationModel extends WorkspaceAwareModel<SandboxF
   declare origin: SandboxFunctionInvocationOrigin | null;
   declare status: SandboxFunctionInvocationStatus;
   declare gcsPath: string;
+  // Denormalized from context.conversationCaller when the invocation was started via
+  // `dsbx frame call` (conversation sandbox). Null for Frame UI / public / scheduled origins.
+  // Used to list blocked tool actions against a conversation without reading the GCS blob.
+  declare conversationId: string | null;
+  declare agentMessageId: string | null;
+  declare agentConfigurationId: string | null;
 
   declare sandboxFunction: NonAttribute<SandboxFunctionModel>;
   declare user: NonAttribute<UserModel> | null;
@@ -223,6 +230,18 @@ SandboxFunctionInvocationModel.init(
       type: DANGEROUSLY_UNBOUNDED_TEXT,
       allowNull: false,
     },
+    conversationId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    agentMessageId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    agentConfigurationId: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
   },
   {
     modelName: "sandbox_function_invocation",
@@ -235,6 +254,15 @@ SandboxFunctionInvocationModel.init(
       {
         fields: ["userId"],
         concurrently: true,
+      },
+      {
+        fields: ["workspaceId", "conversationId"],
+        concurrently: true,
+        where: {
+          conversationId: {
+            [Op.ne]: null,
+          },
+        },
       },
     ],
   }

@@ -5,10 +5,6 @@ import {
   SearchWithNodesInputSchema,
 } from "@app/lib/actions/mcp_internal_actions/types";
 import { FILES_SERVER_NAME } from "@app/lib/api/actions/servers/files/metadata";
-import {
-  PodMembersToAddSchema,
-  PodMembersToRemoveSchema,
-} from "@app/lib/api/actions/servers/pod_manager/types";
 import { DATA_SOURCE_NODE_ID } from "@app/types/core/content_node";
 import { SCOPED_PREFIX_POD } from "@app/types/file_system";
 import {
@@ -27,6 +23,11 @@ export const SET_PINNED_FRAME_TOOL_NAME = "set_pinned_frame" as const;
 export const SET_FILE_TABS_TOOL_NAME = "set_file_tabs" as const;
 export const MOVE_CONVERSATION_TOOL_NAME = "move_conversation" as const;
 export const SET_DEFAULT_AGENT_TOOL_NAME = "set_default_agent" as const;
+
+const PodMembersToAddSchema = z.record(
+  z.string(),
+  z.enum(["member", "editor"])
+);
 
 export const POD_MANAGER_TOOLS_METADATA = [
   {
@@ -173,13 +174,13 @@ export const POD_MANAGER_TOOLS_METADATA = [
               .max(MAX_POD_FILE_TAB_TITLE_LENGTH)
               .optional()
               .describe(
-                "Display title for the tab. Defaults to the file basename when omitted."
+                "Plain-text display title for the tab (no emojis or symbols; the UI already shows the tab's icon). Defaults to the file basename when omitted."
               ),
             icon: z
               .string()
               .optional()
               .describe(
-                "Action icon name (e.g. ActionDocumentIcon, ActionDashboardIcon). Defaults to ActionDocumentIcon."
+                "Action icon name (e.g. ActionDocumentIcon, ActionDashboardIcon). Pick an icon that fits the file's content so tabs are visually distinct. Defaults to ActionDocumentIcon."
               ),
           })
         )
@@ -250,9 +251,12 @@ export const POD_MANAGER_TOOLS_METADATA = [
       membersToAdd: PodMembersToAddSchema.optional().describe(
         "User ids to add mapped to their Pod role (member or editor)."
       ),
-      membersToRemove: PodMembersToRemoveSchema.optional().describe(
-        "User ids to remove from the Pod (membership or editorship)."
-      ),
+      membersToRemove: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "User ids to remove from the Pod (membership or editorship)."
+        ),
       dustPod: ConfigurableToolInputSchemas[
         INTERNAL_MIME_TYPES.TOOL_INPUT.DUST_POD
       ]

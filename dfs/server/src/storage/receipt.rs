@@ -200,4 +200,4 @@ fn subspace() -> Subspace {
 
 #[cfg(test)]
 #[path = "../../tests/storage/receipt.rs"]
-mod tests;
+pub(super) mod tests;

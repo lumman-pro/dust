@@ -113,7 +113,7 @@ export function PodFileTabPreview({ owner, filePath }: PodFileTabPreviewProps) {
             <div className="flex items-center gap-2">
               {markdown.canEdit &&
                 !markdown.richEditor &&
-                !markdown.isSourceMode && (
+                markdown.collabViewMode !== "source" && (
                   <MarkdownFilePreviewViewModeSwitch
                     key={entry.path}
                     viewMode={markdown.viewMode}

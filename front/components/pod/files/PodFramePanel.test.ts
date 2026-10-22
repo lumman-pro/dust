@@ -1,3 +1,4 @@
+import { useSidePanelFrameTracking } from "@app/components/assistant/conversation/interactive_content/useFrameTracking";
 import { PodFramePanel } from "@app/components/pod/files/PodFramePanel";
 import { FileSystemEntryFactory } from "@app/tests/utils/FileSystemEntryFactory";
 import { LightWorkspaceFactory } from "@app/tests/utils/LightWorkspaceFactory";
@@ -114,9 +115,15 @@ vi.mock(
 );
 
 vi.mock(
+  "@app/components/assistant/conversation/interactive_content/useFrameTracking",
+  () => ({ useSidePanelFrameTracking: vi.fn() })
+);
+
+vi.mock(
   "@app/components/assistant/conversation/useSidePanelFullScreen",
   () => ({
     useSidePanelFullScreen: () => ({
+      canEnterFullScreen: true,
       closePanel: vi.fn(),
       enterFullScreen: vi.fn(),
       exitFullScreen: vi.fn(),
@@ -279,6 +286,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.mocked(useSidePanelFrameTracking).mockClear();
   mocks.iframeProps = null;
   mocks.contentCalls = [];
   mocks.metadataCalls = [];
@@ -293,6 +301,18 @@ const panelProps = {
 };
 
 describe("PodFramePanel", () => {
+  it("tracks the Frame as opened from the Pod's files", () => {
+    render(createElement(PodFramePanel, panelProps));
+
+    expect(useSidePanelFrameTracking).toHaveBeenCalledWith({
+      frameId: "fil_frame",
+      location: { type: "pod", id: "vlt_project" },
+      uiElement: "pod_files",
+      isFullScreen: false,
+      canEnterFullScreen: true,
+    });
+  });
+
   it("names a Frame v2 after the folder holding its manifest", () => {
     render(createElement(PodFramePanel, panelProps));
 

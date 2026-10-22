@@ -16,6 +16,7 @@ import {
   scrollToCommentHighlight,
   withoutOrphanCommentMarks,
 } from "@app/components/editor/document/DocumentComments";
+import { getLiveCommentAnchor } from "@app/components/editor/document/liveCommentAnchor";
 import type { ActiveCommentBinding } from "@app/components/editor/document/types";
 import type { CommentChannel } from "@app/lib/client/collab/comments";
 import type { DfmMessageVerifier } from "@app/lib/client/dfm_signatures";
@@ -214,12 +215,14 @@ export interface CommentsFocusRequest {
  * @cc [owner:tdraier,label:product] collab-editor-comment-requests
  * With `live`, posting, replying to, resolving and deleting comments MUST go through the session
  * and MUST NOT change the threads in the document, which only the session sends, with two
- * exceptions: a new thread MUST be anchored to the draft once the session created it, and deleting
- * MUST remove the comment's marks once the session deleted the thread or answered that it has none,
- * never before. A new thread MUST be deleted from the session instead when it can no longer be
- * anchored, or when the session accepted it without returning it or returned a thread the codec
- * cannot write. A new comment or reply the codec could not write, or the document would no longer
- * save with, MUST be refused before the session sees it, checked with the current author and a
+ * exceptions: a pending draft MUST end on the new thread the session accepted, and deleting MUST
+ * remove the comment's marks once the session deleted the thread or answered that it has none,
+ * never before. A new thread MUST be sent with the draft's anchor (`live-comment-anchor`), which
+ * the session marks, and MUST NOT be marked by the editor; without an anchor it MUST be refused
+ * before the session sees it. A new thread MUST be deleted from the session when the session
+ * accepted it without returning it or returned a thread the codec cannot write. A new comment or
+ * reply the codec could not write, or the document would no longer save with, MUST be refused
+ * before the session sees it, checked with the current author and a
  * full-length signature, and without the comment marks that have no thread, which the session drops
  * when it writes the file. Every refusal from the session, and a command that could not be sent,
  * MUST be returned with a reason, never thrown; applying a suggestion whose resolution the session
@@ -425,6 +428,8 @@ export const useDocumentComments = ({
         return t(THREAD_CHANGED_MESSAGE);
       case "unwritable":
         return t(UNSAVABLE_MESSAGE);
+      case "unanchored":
+        return t(UNANCHORED_MESSAGE);
       default:
         assertNeverAndIgnore(code);
         return t(UNAVAILABLE_MESSAGE);
@@ -497,11 +502,16 @@ export const useDocumentComments = ({
     return {
       add: async (id, body) => {
         const draft = documentCommentsPluginKey.getState(editor.state)?.draft;
+        const anchor = draft ? getLiveCommentAnchor(editor.state, draft) : null;
+        if (!draft || !anchor) {
+          return new Err(t(UNANCHORED_MESSAGE));
+        }
         const created = await channel.send({
           type: "add",
           commentId: id,
           body,
-          quote: draft ? getDraftQuote(editor.state.doc, draft) : undefined,
+          quote: getDraftQuote(editor.state.doc, draft),
+          anchor,
         });
         if (created.isErr()) {
           return new Err(liveErrorMessage(created.error));
@@ -540,28 +550,6 @@ export const useDocumentComments = ({
       },
       discard,
     };
-  };
-
-  /** Anchors a created thread to the draft. */
-  const anchorToDraft = (
-    editor: Editor,
-    comment: DfmComment
-  ): Result<void, string> => {
-    if (!editor.isEditable) {
-      return new Err(t(UNAVAILABLE_MESSAGE));
-    }
-    const draft = documentCommentsPluginKey.getState(editor.state)?.draft;
-    const next = draft
-      ? previewDocument(editor, (chain) => chain.addComment(comment))
-      : null;
-    if (!draft || !next) {
-      return new Err(t(UNANCHORED_MESSAGE));
-    }
-    if (!wouldSave(next)) {
-      return new Err(unsavableMessage(editor, UNSAVABLE_MESSAGE));
-    }
-    editor.chain().addComment(comment).focus().setTextSelection(draft.to).run();
-    return new Ok(undefined);
   };
 
   const suggestionTemplate = (
@@ -718,17 +706,19 @@ export const useDocumentComments = ({
       if (checked.isErr()) {
         return checked;
       }
-      const commands = sessionCommands(editor, live);
-      const created = await commands.add(id, body);
+      const created = await sessionCommands(editor, live).add(id, body);
       if (created.isErr()) {
         return created;
       }
-      // The draft may have moved, or been cancelled, while the server signed the message.
-      const anchored = anchorToDraft(editor, created.value);
-      if (anchored.isErr()) {
-        // The session already holds the thread; without its anchor, it goes.
-        commands.discard(id);
-        return anchored;
+      // The session marked the text before accepting; the draft may have been cancelled since.
+      const draft = documentCommentsPluginKey.getState(editor.state)?.draft;
+      if (draft) {
+        editor
+          .chain()
+          .commitCommentDraft(created.value)
+          .focus()
+          .setTextSelection(draft.to)
+          .run();
       }
       return new Ok(undefined);
     },

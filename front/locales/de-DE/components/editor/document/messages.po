@@ -129,6 +129,22 @@ msgstr "Weitere Aktionen"
 msgid "Delete"
 msgstr "Löschen"
 
+#: front/components/editor/document/DocumentCommentThread.tsx
+msgid "{name} is busy. It'll answer soon."
+msgstr "{name} ist beschäftigt und antwortet bald."
+
+#: front/components/editor/document/DocumentCommentThread.tsx
+msgid "{name} is thinking…"
+msgstr "{name} denkt nach…"
+
+#: front/components/editor/document/DocumentCommentThread.tsx
+msgid "{name} is reading the document…"
+msgstr "{name} liest das Dokument…"
+
+#: front/components/editor/document/DocumentCommentThread.tsx
+msgid "{name} is editing the document…"
+msgstr "{name} bearbeitet das Dokument…"
+
 #. placeholder {0}: replies.length
 #: front/components/editor/document/DocumentCommentThread.tsx
 msgid "{0, plural, one {# reply} other {# replies}}"
@@ -244,6 +260,14 @@ msgstr "Wird neu verbunden…"
 #: front/components/editor/document/DocumentSaveStatus.tsx
 msgid "Live editing unavailable"
 msgstr "Live-Bearbeitung nicht verfügbar"
+
+#: front/components/editor/document/DocumentSaveStatus.tsx
+msgid "thinking…"
+msgstr "denkt nach…"
+
+#: front/components/editor/document/DocumentSaveStatus.tsx
+msgid "{name} is thinking"
+msgstr "{name} denkt nach"
 
 #: front/components/editor/document/DocumentSaveStatus.tsx
 msgid "reading…"

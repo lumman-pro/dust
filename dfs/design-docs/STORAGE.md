@@ -85,6 +85,36 @@ of at most 100 entries. Each batch rechecks session state with conflict tracking
 protecting refreshed sessions and allowing concurrent sweepers to retry safely. Stale and orphaned
 index entries are also removed. Authentication rejects expired sessions independently of cleanup.
 
+## Exclusive locks
+
+FDB is authoritative for [exclusive locks](API.md#exclusive-locks).
+
+| Key | Value | Rationale |
+| --- | --- | --- |
+| `dfs-v1-{env}/tenant/<tenantId>/object/<objectId>/lock` | Tuple `(lock_id_bytes, expires_at_ms)`; UUIDv7 as 16 bytes. | Object ownership token and expiry. |
+| `dfs-v1-{env}/lock-expiry/<expiresAtMs>/<tenantId>/<objectId>` | Empty. | Expiry scan, using session expiry's timestamp encoding. |
+
+Acquire, refresh, and unlock use `with_idempotent_transaction`. Each attempt checks expiry against
+current server time; receipt replay returns the committed expiry. Lock state and its expiry entry
+change atomically. Refresh preserves the greater of the stored expiry and `now + 60s`.
+Moves preserve both; removal clears both.
+
+The holder loses validity at expiry. Acquisition and mutations without a token wait a further
+5 seconds. Every successful mutation admitted by expiry atomically clears the expired token and
+its expiry index. Lock checks collect expired records without writing, and invalidate them only
+when the operation succeeds, so a rejected operation cannot revoke a lease.
+
+One helper checks Apply's batching targets after authorization and before writes. All lock reads
+use ordinary FDB reads (`snapshot = false`) in the write transaction, so concurrent lock changes
+force a retry. Lock state is never cached; session authentication uses the existing cache.
+
+Cleanup joins `sweep_expired_storage`, sharing jitter and a fixed cutoff 5 seconds before the pass.
+It drains at most 100 entries per transaction, independently of other cleanup failures. Each lock
+has exactly one matching expiry index entry, maintained atomically with the lock. Cleanup reads
+the expiry range with conflict tracking and clears each indexed lock and its index entry together.
+Concurrent renewal removes the old index entry, forcing cleanup to retry if renewal commits first.
+Expiry takes effect independently of cleanup.
+
 ## Transaction receipts
 
 All resource writes use `fdb::with_idempotent_transaction`, protecting the whole transaction and its

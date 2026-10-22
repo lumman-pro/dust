@@ -43,6 +43,70 @@ pub(crate) async fn apply_returns_per_operation_errors_and_rejects_invalid_reque
 
     let file = ObjectId::new_v7();
     let unrelated = ObjectId::new_v7();
+    let result = client
+        .apply(with_authorization(
+            ApplyRequest {
+                operations: vec![rpc::Operation {
+                    operation: Some(Operation::Create(CreateOperation {
+                        parent_id: tenant.root_id,
+                        object_id: file,
+                        name: "file".to_owned(),
+                        kind: ObjectKind::File.into(),
+                        ..Default::default()
+                    })),
+                }],
+                locks: vec![rpc::ObjectLock {
+                    object_id: tenant.root_id,
+                    lock_id: ObjectId::new_v7().as_bytes().to_vec(),
+                }],
+            },
+            &authorization,
+        )?)
+        .await?
+        .into_inner();
+    assert_eq!(
+        result.results[0]
+            .error
+            .as_ref()
+            .context("expected lost lock")?
+            .code(),
+        ErrorCode::LockLost
+    );
+    let lock = |lock_id: Vec<u8>| rpc::ObjectLock {
+        object_id: tenant.root_id,
+        lock_id,
+    };
+    for locks in [
+        vec![lock(vec![0; 15])],
+        vec![
+            lock(ObjectId::new_v7().as_bytes().to_vec()),
+            lock(ObjectId::new_v7().as_bytes().to_vec()),
+        ],
+    ] {
+        let error = client
+            .apply(with_authorization(
+                ApplyRequest {
+                    operations: vec![rpc::Operation {
+                        operation: Some(Operation::Create(CreateOperation {
+                            parent_id: tenant.root_id,
+                            object_id: file,
+                            name: "file".to_owned(),
+                            kind: ObjectKind::File.into(),
+                            ..Default::default()
+                        })),
+                    }],
+                    locks,
+                },
+                &authorization,
+            )?)
+            .await
+            .err()
+            .context("expected invalid locks")?;
+        assert_eq!(error_code(&error)?, ErrorCode::InvalidInput);
+    }
+    let tx = fdb::database()?.create_trx()?;
+    assert!(ObjectResource::fetch(&tx, &tenant, &file).await?.is_none());
+
     let operations = vec![
         Operation::Create(CreateOperation {
             parent_id: tenant.root_id,
@@ -101,6 +165,7 @@ pub(crate) async fn apply_returns_per_operation_errors_and_rejects_invalid_reque
                         operation: Some(operation),
                     })
                     .collect(),
+                ..Default::default()
             },
             &authorization,
         )?)
@@ -192,7 +257,10 @@ pub(crate) async fn apply_returns_per_operation_errors_and_rejects_invalid_reque
     ] {
         let error = client
             .apply(with_authorization(
-                ApplyRequest { operations },
+                ApplyRequest {
+                    operations,
+                    ..Default::default()
+                },
                 &authorization,
             )?)
             .await
@@ -212,6 +280,7 @@ pub(crate) async fn apply_returns_per_operation_errors_and_rejects_invalid_reque
                         ..Default::default()
                     })),
                 }],
+                ..Default::default()
             },
             &authorization,
         )?)

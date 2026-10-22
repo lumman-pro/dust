@@ -3,6 +3,7 @@ import type { RequestToolPermissionActionValueParsed } from "@connectors/api/web
 import {
   ANSWER_USER_QUESTION_SKIP,
   ANSWER_USER_QUESTION_SUBMIT,
+  ALWAYS_APPROVE_TOOL_EXECUTION,
   APPROVE_TOOL_EXECUTION,
   AUTHENTICATE_TOOL,
   LEAVE_FEEDBACK_DOWN,
@@ -458,10 +459,12 @@ export function makeToolValidationBlock({
   i18n,
   toolName,
   id,
+  canAlwaysApprove,
 }: {
   i18n: I18n;
   toolName: string;
   id: string;
+  canAlwaysApprove: boolean;
 }) {
   return [
     {
@@ -492,6 +495,23 @@ export function makeToolValidationBlock({
           } as RequestToolPermissionActionValueParsed),
           action_id: APPROVE_TOOL_EXECUTION,
         },
+        ...(canAlwaysApprove
+          ? [
+              {
+                type: "button",
+                text: {
+                  type: "plain_text",
+                  text: i18n._("Always allow"),
+                  emoji: true,
+                },
+                value: JSON.stringify({
+                  status: "always_approved",
+                  toolName,
+                } as RequestToolPermissionActionValueParsed),
+                action_id: ALWAYS_APPROVE_TOOL_EXECUTION,
+              },
+            ]
+          : []),
         {
           type: "button",
           text: {

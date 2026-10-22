@@ -2,6 +2,7 @@ import { parseMarkdownBlocks } from "@app/components/editor/document/content";
 import type { DocumentImageOptions } from "@app/components/editor/document/DocumentImage";
 import { DocumentLinks } from "@app/components/editor/document/DocumentLinks";
 import { DocumentListJoin } from "@app/components/editor/document/DocumentListJoin";
+import { DocumentTaskBadges } from "@app/components/editor/document/DocumentTaskBadges";
 import { buildSchemaExtensions } from "@app/components/editor/document/extensions";
 import type { MessageDescriptor } from "@lingui/core";
 import { msg } from "@lingui/core/macro";
@@ -28,6 +29,10 @@ export const buildDocumentEditorExtensions = (
     live,
     resolveImageSource,
     parsePastedMarkdown: parseMarkdownBlocks,
+  }),
+  DocumentListJoin,
+  DocumentLinks,
+  DocumentTaskBadges.configure({
     emptyTaskLabel: t(
       msg({
         message: "Task",
@@ -35,8 +40,6 @@ export const buildDocumentEditorExtensions = (
       })
     ),
   }),
-  DocumentListJoin,
-  DocumentLinks,
   Placeholder.configure({
     placeholder: ({ node, pos, editor }) =>
       node.type.name === "heading"

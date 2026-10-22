@@ -1,6 +1,7 @@
 {
   "number_of_shards": 2,
   "number_of_replicas": 1,
+  "routing.allocation.require.workload": "default",
   "refresh_interval": "5s",
   "analysis": {
     "analyzer": {

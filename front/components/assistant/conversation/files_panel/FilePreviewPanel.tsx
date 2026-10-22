@@ -7,6 +7,7 @@ import {
 import { ConversationSidePanelHeader } from "@app/components/assistant/conversation/ConversationSidePanelHeader";
 import { CenteredState } from "@app/components/assistant/conversation/interactive_content/CenteredState";
 import { useSidePanelFullScreen } from "@app/components/assistant/conversation/useSidePanelFullScreen";
+import { CollabViewModeFileIcon } from "@app/components/file_explorer/CollabViewModeFileIcon";
 import {
   FilePreviewBody,
   filePreviewLayoutClassName,
@@ -16,10 +17,11 @@ import {
   useFilePreviewContent,
 } from "@app/components/file_explorer/FilePreviewContent";
 import { MarkdownFilePreviewViewModeSwitch } from "@app/components/file_explorer/MarkdownFilePreview";
-import { SourceModeFileIcon } from "@app/components/file_explorer/SourceModeFileIcon";
 import type { FileEntry } from "@app/components/file_explorer/types";
 import { useMarkdownFileEditor } from "@app/components/file_explorer/useMarkdownFileEditor";
 import { useConversationSandboxFiles } from "@app/hooks/conversations/useConversationSandboxFiles";
+import { useDownloadPdf } from "@app/hooks/useDownloadPdf";
+import { useFeatureFlags } from "@app/lib/auth/AuthContext";
 import { useClientType } from "@app/lib/context/clientType";
 import { getFileTypeIcon } from "@app/lib/file_icon_utils";
 import {
@@ -35,7 +37,7 @@ import type {
   FileSystemFileEntry,
 } from "@app/types/api/file_system/types";
 import type { ConversationWithoutContentType } from "@app/types/assistant/conversation";
-import { contentTypeFromFileName } from "@app/types/files";
+import { contentTypeFromFileName, stripFileExtension } from "@app/types/files";
 import { resolveCanonicalScopedPath } from "@app/types/mount_path";
 import type { LightWorkspaceType } from "@app/types/user";
 import {
@@ -133,11 +135,14 @@ export function FilePreviewPanelView({
     useSidePanelFullScreen(DEFAULT_RIGHT_PANEL_SIZE);
   const isMobile = useIsMobile();
   const clientType = useClientType();
+  const { hasFeature } = useFeatureFlags();
   const [documentControls, setDocumentControls] =
     useState<HTMLDivElement | null>(null);
   const [documentStatus, setDocumentStatus] = useState<HTMLSpanElement | null>(
     null
   );
+  const downloadPdf = useDownloadPdf();
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const fileId = target?.kind === "id" ? target.fileId : null;
   const filePath = target?.kind === "path" ? target.filePath : null;
   const openCommentId = target?.kind === "path" ? target.commentId : undefined;
@@ -250,6 +255,22 @@ export function FilePreviewPanelView({
   }
 
   const { recordCounts } = preview;
+
+  const handleExportAsPdf = async (documentPath: string) => {
+    if (isExportingPdf) {
+      return;
+    }
+    setIsExportingPdf(true);
+    try {
+      await downloadPdf({
+        url: getFilePathDownloadUrl(owner, documentPath, { format: "pdf" }),
+        fileName: `${stripFileExtension(fileName)}.pdf`,
+      });
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   const FileIcon = getFileTypeIcon(contentType, fileName);
 
   return (
@@ -260,7 +281,7 @@ export function FilePreviewPanelView({
           <>
             {markdown.canEdit && !markdown.richEditor && (
               <>
-                {!markdown.isSourceMode && (
+                {markdown.collabViewMode !== "source" && (
                   <MarkdownFilePreviewViewModeSwitch
                     viewMode={markdown.viewMode}
                     onViewModeChange={markdown.setViewMode}
@@ -288,7 +309,9 @@ export function FilePreviewPanelView({
               </>
             )}
             <div ref={setDocumentControls} className="flex empty:hidden" />
-            {path && preview.category === "markdown" ? (
+            {path &&
+            preview.category === "markdown" &&
+            hasFeature("co_edition") ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -296,6 +319,7 @@ export function FilePreviewPanelView({
                     size="sm"
                     icon={Download01}
                     tooltip={t({ message: "Download", context: "action" })}
+                    isLoading={isExportingPdf}
                   />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -313,6 +337,11 @@ export function FilePreviewPanelView({
                     target="_blank"
                     rel="noopener noreferrer"
                   />
+                  <DropdownMenuItem
+                    label={t`PDF`}
+                    disabled={isExportingPdf}
+                    onClick={() => void handleExportAsPdf(path)}
+                  />
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
@@ -328,7 +357,7 @@ export function FilePreviewPanelView({
             )}
             {!isMobile &&
               clientType !== "extension" &&
-              (markdown.richEditor || markdown.isSourceMode) && (
+              (markdown.richEditor || markdown.collabViewMode === "source") && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -345,13 +374,26 @@ export function FilePreviewPanelView({
         }
       >
         <div className="flex min-w-0 items-center gap-1.5">
-          <SourceModeFileIcon
+          <CollabViewModeFileIcon
             visual={FileIcon}
-            onToggleSourceMode={markdown.toggleSourceMode}
+            onCycleViewMode={markdown.cycleCollabViewMode}
           />
           <span className="min-w-16 truncate text-sm font-medium">
             {fileName}
           </span>
+          {markdown.collabViewMode !== "live" && (
+            <span className="shrink-0 text-xs text-muted-foreground">
+              {markdown.collabViewMode === "source"
+                ? t({
+                    message: "[source]",
+                    context: "file view mode label beside the file name",
+                  })
+                : t({
+                    message: "[read-only]",
+                    context: "file view mode label beside the file name",
+                  })}
+            </span>
+          )}
           <span ref={setDocumentStatus} className="flex empty:hidden" />
         </div>
       </ConversationSidePanelHeader>

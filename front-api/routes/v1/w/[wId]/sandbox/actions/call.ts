@@ -5,6 +5,7 @@ import {
 import { createSandboxChildAction } from "@app/lib/api/sandbox/create_child_action";
 import { createSandboxFunctionMCPAction } from "@app/lib/api/sandbox_functions/create_sandbox_function_mcp_action";
 import type { SandboxFunctionMcpActionServerTimingsMs } from "@app/lib/api/sandbox_functions/sandbox_function_mcp_action_server_timings";
+import { isDustErrorWithCode } from "@app/lib/error";
 import logger from "@app/logger/logger";
 import type { AgentMCPActionWithOutputType } from "@app/types/actions";
 import { assertNever } from "@app/types/shared/utils/assert_never";
@@ -141,6 +142,16 @@ app.post(
     });
 
     if (result.isErr()) {
+      if (isDustErrorWithCode(result.error, "personal_tools_unavailable")) {
+        return apiError(ctx, {
+          status_code: 403,
+          api_error: {
+            type: "personal_tools_unavailable",
+            message: result.error.message,
+          },
+        });
+      }
+
       logger.error(
         {
           err: result.error,

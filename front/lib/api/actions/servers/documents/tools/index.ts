@@ -22,23 +22,12 @@ import {
   editAgentDocument,
   readAgentDocument,
 } from "@app/lib/api/documents/agent_edits";
+import { toCollabAgent } from "@app/lib/api/documents/comment_activity";
 import type { DfmStoredDocumentError } from "@app/lib/api/documents/read_write";
 import type { DustFileSystem } from "@app/lib/api/file_system";
 import type { Authenticator } from "@app/lib/auth";
-import type { CollabAgent } from "@app/types/collab";
 import { Err, Ok } from "@app/types/shared/result";
 import { pluralize } from "@app/types/shared/utils/string_utils";
-
-/** The agent as the editors of a live document show it reading or editing. */
-const collabAgentOf = ({
-  agentConfiguration,
-  userMessage,
-}: AgentLoopRunContext): CollabAgent => ({
-  agentId: agentConfiguration.sId,
-  name: agentConfiguration.name,
-  userId: userMessage.user?.sId ?? null,
-  userName: userMessage.context.fullName || userMessage.context.username,
-});
 
 /** Runs a tool against the conversation's file system, scoped to the document it targets. */
 async function withDocumentFs(
@@ -125,7 +114,7 @@ const handlers: ToolHandlers<typeof DOCUMENTS_TOOLS_METADATA> = {
         auth,
         dustFs,
         path,
-        collabAgentOf(runContext)
+        toCollabAgent(runContext)
       );
       if (read.isErr()) {
         return new Err(toDocumentsMCPError(read.error));
@@ -153,7 +142,7 @@ const handlers: ToolHandlers<typeof DOCUMENTS_TOOLS_METADATA> = {
         oldString: old_string,
         newString: new_string,
         expectedReplacements: expected_replacements ?? 1,
-        agent: collabAgentOf(runContext),
+        agent: toCollabAgent(runContext),
       });
       if (edited.isErr()) {
         return new Err(toDocumentsMCPError(edited.error));

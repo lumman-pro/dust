@@ -692,7 +692,7 @@ export function PanelLayout({ children }: PanelLayoutProps) {
       return { nav: 0, p2: W, p3: 0, p4: 0 };
     }
 
-    const nav = showNavInline ? navW : 0;
+    const nav = navChild && showNavInline ? navW : 0;
     if (visible.length === 0) {
       return { nav, p2: 0, p3: 0, p4: 0 };
     }
@@ -949,7 +949,10 @@ export function PanelLayout({ children }: PanelLayoutProps) {
                   />
                 ) : (
                   <>
-                    {navHidden && isLeftmostVisible && navToggleButton}
+                    {navChild &&
+                      navHidden &&
+                      isLeftmostVisible &&
+                      navToggleButton}
                     {panel.props.topBarLeft}
                   </>
                 );
@@ -1033,7 +1036,7 @@ export function PanelLayout({ children }: PanelLayoutProps) {
               rounded and bordered on its three free edges, and lifted with
               the same shadow as the content card. It stays flush left so the
               slide-in still comes from the window edge. */}
-          {!isMobile && (
+          {navChild && !isMobile && (
             <div
               className={[
                 "absolute bottom-0 left-0 top-0 z-50 flex flex-col py-3",
@@ -1077,7 +1080,7 @@ export function PanelLayout({ children }: PanelLayoutProps) {
           )}
 
           {/* ── Edge peek trigger (desktop only) ── */}
-          {!isMobile && navHidden && (
+          {navChild && !isMobile && navHidden && (
             <div
               className="absolute bottom-0 left-0 top-0 z-[35] w-2 cursor-pointer"
               onMouseEnter={() => setNavPeek(true)}

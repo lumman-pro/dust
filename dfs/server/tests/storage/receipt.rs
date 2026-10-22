@@ -18,22 +18,13 @@ impl fmt::Display for TestError {
 
 impl std::error::Error for TestError {}
 
-#[test]
-fn receipt_storage() -> Result<()> {
-    // SAFETY: this is the only FDB network boot in the library test binary.
-    #[allow(unsafe_code)]
-    let _network = unsafe { foundationdb::boot() };
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()?;
-    runtime.block_on(async {
-        completed_calls_return_before_cleanup_and_preserve_other_receipts().await?;
-        receipts_retry_uncommitted_bodies_and_replay_committed_results().await?;
-        late_commits_replay_the_committing_attempts_result().await?;
-        body_errors_abort_writes_without_a_receipt().await?;
-        cleanup_is_bounded_and_preserves_the_cutoff_and_recent_receipts().await?;
-        expired_or_incomplete_receipts_never_run_the_body().await
-    })
+pub(crate) async fn run() -> Result<()> {
+    completed_calls_return_before_cleanup_and_preserve_other_receipts().await?;
+    receipts_retry_uncommitted_bodies_and_replay_committed_results().await?;
+    late_commits_replay_the_committing_attempts_result().await?;
+    body_errors_abort_writes_without_a_receipt().await?;
+    cleanup_is_bounded_and_preserves_the_cutoff_and_recent_receipts().await?;
+    expired_or_incomplete_receipts_never_run_the_body().await
 }
 
 async fn increment(tx: &Transaction, key: &[u8]) -> TestResult<u64> {

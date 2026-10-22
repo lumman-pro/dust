@@ -127,25 +127,8 @@ msgid "Only workspace member email addresses can be added."
 msgstr "Seules les adresses e-mail des membres du workspace peuvent être ajoutées."
 
 #: front/components/assistant/conversation/interactive_content/frame/FrameSharingGrants.tsx
-msgid "Remove access rule"
-msgstr "Supprimer la règle d’accès"
-
-#: front/components/assistant/conversation/interactive_content/frame/FrameSharingGrants.tsx
-msgid "Remove"
-msgstr "Retirer"
-
-#: front/components/assistant/conversation/interactive_content/frame/FrameSharingGrants.tsx
-#: front/components/assistant/conversation/interactive_content/frame/useFrameEditSession.ts
-msgid "Cancel"
-msgstr "Annuler"
-
-#: front/components/assistant/conversation/interactive_content/frame/FrameSharingGrants.tsx
-msgid "Remove access for <0>{label}</0>? People may still have access through another invitation, domain or the frame’s general access setting."
-msgstr "Supprimer l’accès de <0>{label}</0> ? Ces personnes peuvent encore y accéder via une autre invitation, un domaine ou le paramètre d’accès général du Frame."
-
-#: front/components/assistant/conversation/interactive_content/frame/FrameSharingGrants.tsx
 msgid "Add people or domains"
-msgstr "Ajouter des personnes ou des domaines"
+msgstr "Ajouter des personnes ou domaines"
 
 #: front/components/assistant/conversation/interactive_content/frame/FrameSharingGrants.tsx
 msgid "Invite by email"
@@ -154,6 +137,14 @@ msgstr "Inviter par e-mail"
 #: front/components/assistant/conversation/interactive_content/frame/FrameSharingGrants.tsx
 msgid "Invite workspace members by email"
 msgstr "Inviter des membres du workspace par e-mail"
+
+#: front/components/assistant/conversation/interactive_content/frame/FrameSharingGrants.tsx
+msgid "Loading access rules"
+msgstr "Chargement des règles d’accès"
+
+#: front/components/assistant/conversation/interactive_content/frame/FrameSharingGrants.tsx
+msgid "Invitations are sent to email addresses only. People at an added domain can open the link after verifying their email."
+msgstr "Les invitations sont envoyées uniquement aux adresses e-mail. Les personnes d’un domaine ajouté peuvent ouvrir le lien après avoir vérifié leur e-mail."
 
 #: front/components/assistant/conversation/interactive_content/frame/FrameSharingGrants.tsx
 msgid "Add comma separated emails"
@@ -168,14 +159,6 @@ msgid "Invite"
 msgstr "Inviter"
 
 #: front/components/assistant/conversation/interactive_content/frame/FrameSharingGrants.tsx
-msgid "Invitations are sent to email addresses only. People at an added domain can open the link after verifying their email."
-msgstr "Les invitations sont envoyées uniquement aux adresses e-mail. Les personnes d’un domaine ajouté peuvent ouvrir le lien après avoir vérifié leur e-mail."
-
-#: front/components/assistant/conversation/interactive_content/frame/FrameSharingGrants.tsx
-msgid "Loading access rules"
-msgstr "Chargement des règles d’accès"
-
-#: front/components/assistant/conversation/interactive_content/frame/FrameSharingGrants.tsx
 msgid "Could not load access rules."
 msgstr "Impossible de charger les règles d’accès."
 
@@ -186,32 +169,16 @@ msgid "Retry"
 msgstr "Réessayer"
 
 #: front/components/assistant/conversation/interactive_content/frame/FrameSharingGrants.tsx
-msgid "No people or domains have been added yet."
-msgstr "Aucune personne ni aucun domaine n’a encore été ajouté."
-
-#: front/components/assistant/conversation/interactive_content/frame/FrameSharingGrants.tsx
-msgid "No one has been invited yet."
-msgstr "Personne n’a encore été invité."
-
-#: front/components/assistant/conversation/interactive_content/frame/FrameSharingGrants.tsx
 msgid "People with access"
 msgstr "Personnes ayant accès"
 
 #: front/components/assistant/conversation/interactive_content/frame/FrameSharingGrants.tsx
-msgid "Added by {grantedBy} {grantedAgo}"
-msgstr "Ajouté par {grantedBy} {grantedAgo}"
+msgid "Added by {grantedBy}"
+msgstr "Ajouté par {grantedBy}"
 
 #: front/components/assistant/conversation/interactive_content/frame/FrameSharingGrants.tsx
-msgid "Added {grantedAgo}"
-msgstr "Ajouté {grantedAgo}"
-
-#: front/components/assistant/conversation/interactive_content/frame/FrameSharingGrants.tsx
-msgid "Invited by {grantedBy} {grantedAgo}"
-msgstr "Invité par {grantedBy} {grantedAgo}"
-
-#: front/components/assistant/conversation/interactive_content/frame/FrameSharingGrants.tsx
-msgid "Invited {grantedAgo}"
-msgstr "Invité {grantedAgo}"
+msgid "Invited by {grantedBy}"
+msgstr "Invité par {grantedBy}"
 
 #: front/components/assistant/conversation/interactive_content/frame/FrameSharingGrants.tsx
 msgid "External viewers cannot access this frame."
@@ -242,8 +209,8 @@ msgid "Could not load viewers."
 msgstr "Impossible de charger les lecteurs."
 
 #: front/components/assistant/conversation/interactive_content/frame/FrameSharingViewers.tsx
-msgid "No views recorded yet."
-msgstr "Aucune consultation enregistrée pour l’instant."
+msgid "No views yet."
+msgstr "Aucune consultation pour l’instant."
 
 #: front/components/assistant/conversation/interactive_content/frame/FrameSharingViewers.tsx
 msgid "Recent viewers"
@@ -394,20 +361,24 @@ msgid "Viewers will only be able to access files you can verify. Fix or remove t
 msgstr "Les lecteurs n’auront accès qu’aux fichiers que vous pouvez vérifier. Corrigez ou supprimez ces références avant de partager : {blockedRefs}"
 
 #: front/components/assistant/conversation/interactive_content/frame/ShareFramePopover.tsx
-msgid "Who has access"
-msgstr "Qui a accès"
-
-#: front/components/assistant/conversation/interactive_content/frame/ShareFramePopover.tsx
-msgid "Updating sharing settings"
-msgstr "Mise à jour des paramètres de partage"
-
-#: front/components/assistant/conversation/interactive_content/frame/ShareFramePopover.tsx
 msgid "Copied!"
 msgstr "Copié !"
 
 #: front/components/assistant/conversation/interactive_content/frame/ShareFramePopover.tsx
 msgid "Copy link"
 msgstr "Copier le lien"
+
+#: front/components/assistant/conversation/interactive_content/frame/ShareFramePopover.tsx
+msgid "Loading sharing settings"
+msgstr "Chargement des paramètres de partage"
+
+#: front/components/assistant/conversation/interactive_content/frame/ShareFramePopover.tsx
+msgid "Who has access"
+msgstr "Qui a accès"
+
+#: front/components/assistant/conversation/interactive_content/frame/ShareFramePopover.tsx
+msgid "Updating sharing settings"
+msgstr "Mise à jour des paramètres de partage"
 
 #: front/components/assistant/conversation/interactive_content/frame/shareFrameScopeOptions.ts
 msgid "Invite only"
@@ -419,11 +390,11 @@ msgstr "Membres du workspace invités uniquement"
 
 #: front/components/assistant/conversation/interactive_content/frame/shareFrameScopeOptions.ts
 msgid "All workspace members + invites"
-msgstr "Tous les membres du workspace + invités"
+msgstr "Membres du workspace + invités"
 
 #: front/components/assistant/conversation/interactive_content/frame/shareFrameScopeOptions.ts
 msgid "All workspace members"
-msgstr "Tous les membres du workspace"
+msgstr "Membres du workspace"
 
 #: front/components/assistant/conversation/interactive_content/frame/shareFrameScopeOptions.ts
 msgid "Anyone with the link"
@@ -448,6 +419,10 @@ msgstr "Vous avez des modifications de texte non enregistrées. Quitter le mode 
 #: front/components/assistant/conversation/interactive_content/frame/useFrameEditSession.ts
 msgid "Discard"
 msgstr "Abandonner"
+
+#: front/components/assistant/conversation/interactive_content/frame/useFrameEditSession.ts
+msgid "Cancel"
+msgstr "Annuler"
 
 #: front/components/assistant/conversation/interactive_content/frame/useLiveFrameEditing.tsx
 msgid "This Frame is in draft mode. Edit it from the conversation."

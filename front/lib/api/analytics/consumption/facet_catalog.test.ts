@@ -4,6 +4,7 @@ import {
 } from "@app/lib/api/analytics/consumption/facet_catalog";
 import { Authenticator } from "@app/lib/auth";
 import { KeyResource } from "@app/lib/resources/key_resource";
+import { MembershipResource } from "@app/lib/resources/membership_resource";
 import { AgentConfigurationFactory } from "@app/tests/utils/AgentConfigurationFactory";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
 import { MCPServerViewFactory } from "@app/tests/utils/MCPServerViewFactory";
@@ -50,6 +51,31 @@ describe("listConsumptionFacetCatalog", () => {
       value: user.sId,
       label: user.fullName(),
       pictureUrl: user.imageUrl,
+    });
+  });
+
+  it("flags revoked workspace members", async () => {
+    const { authenticator, workspace } = await createResourceTest({
+      role: "manager",
+    });
+    const revokedUser = await UserFactory.basic();
+    await MembershipFactory.associate(workspace, revokedUser, { role: "user" });
+    const revokeResult = await MembershipResource.revokeMembership({
+      user: revokedUser,
+      workspace,
+    });
+    expect(revokeResult.isOk()).toBe(true);
+
+    const users = await listConsumptionFacetCatalogDimension(
+      authenticator,
+      "user"
+    );
+
+    expect(users).toContainEqual({
+      value: revokedUser.sId,
+      label: revokedUser.fullName(),
+      pictureUrl: revokedUser.imageUrl,
+      revoked: true,
     });
   });
 

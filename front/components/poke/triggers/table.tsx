@@ -27,9 +27,10 @@ const TRIGGER_KIND_OPTIONS = TRIGGER_KINDS.map((kind) => ({
 
 interface TriggerDataTableProps {
   owner: LightWorkspaceType;
+  agentId?: string;
 }
 
-export function TriggerDataTable({ owner }: TriggerDataTableProps) {
+export function TriggerDataTable({ owner, agentId }: TriggerDataTableProps) {
   const [period, setPeriod] = useState<ConsumptionPeriodSelection>(
     DEFAULT_CONSUMPTION_PERIOD
   );
@@ -82,7 +83,13 @@ export function TriggerDataTable({ owner }: TriggerDataTableProps) {
     limit: pagination.pageSize,
     offset: pagination.pageIndex * pagination.pageSize,
     search: search || undefined,
-    filter: selectedKinds.length > 0 ? { kinds: selectedKinds } : undefined,
+    filter:
+      selectedKinds.length > 0 || agentId
+        ? {
+            kinds: selectedKinds.length > 0 ? selectedKinds : undefined,
+            agentIds: agentId ? [agentId] : undefined,
+          }
+        : undefined,
     sortOrder: sorting[0]?.desc === false ? "asc" : "desc",
   });
 

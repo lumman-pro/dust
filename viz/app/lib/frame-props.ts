@@ -2,9 +2,9 @@ export type FrameProps = Record<string, string>;
 
 const FRAME_PROP_PARAM_PREFIX = "props.";
 
-const FRAME_PROP_NAME_REGEX = /^[A-Za-z][A-Za-z0-9_]*$/;
+export const FRAME_PROP_NAME_REGEX = /^[A-Za-z][A-Za-z0-9_]*$/;
 
-const REACT_RESERVED_PROP_NAMES = new Set(["key", "ref"]);
+export const REACT_RESERVED_PROP_NAMES = new Set(["key", "ref"]);
 
 /**
  * @cc [owner:tdraier,label:product] frame-props-from-url

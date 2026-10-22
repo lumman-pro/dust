@@ -8,7 +8,7 @@ import {
 } from "@app/lib/api/audit/workos_audit";
 import { runToolWithStreaming } from "@app/lib/api/mcp/run_tool";
 import { buildSandboxFunctionAuditMetadata } from "@app/lib/api/sandbox_functions/audit";
-import { publishSandboxFunctionInvocationEvent } from "@app/lib/api/sandbox_functions/events";
+import { publishSandboxFunctionBlockingEvent } from "@app/lib/api/sandbox_functions/publish_blocking_event";
 import type { SandboxFunctionMcpActionRunTimingsMs } from "@app/lib/api/sandbox_functions/sandbox_function_mcp_action_server_timings";
 import {
   roundMs,
@@ -123,8 +123,8 @@ export async function runSandboxFunctionTool(
               isSandboxFunctionToolEvent(event),
               "Expected a sandbox function authentication event."
             );
-            await publishSandboxFunctionInvocationEvent(event, {
-              invocationId: invocation.sId,
+            await publishSandboxFunctionBlockingEvent(auth, event, {
+              invocation,
             });
             break;
           case "tool_approve_execution":

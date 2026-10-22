@@ -306,6 +306,23 @@ export async function getPodMemberAndEditorIds(
   return { editorIds, memberIds };
 }
 
+export function partitionMembersToAdd(
+  membersToAdd: Record<string, "editor" | "member">
+): { editorIds: string[]; memberIds: string[] } {
+  const editorIds: string[] = [];
+  const memberIds: string[] = [];
+
+  for (const [userId, role] of Object.entries(membersToAdd)) {
+    if (role === "editor") {
+      editorIds.push(userId);
+    } else {
+      memberIds.push(userId);
+    }
+  }
+
+  return { editorIds, memberIds };
+}
+
 export function partitionMembersToRemove(
   membersToRemove: string[],
   roleByUserId: Map<string, "editor" | "member">

@@ -69,6 +69,8 @@ export type GetOutputResponse = Result<
     nativeChainOfThought: string;
     timeToFirstEvent?: number;
     stopReason?: string;
+    // Set when the provider fell back to another model for this call.
+    servedModel?: string;
   },
   | { type: "shouldRetryMessage"; content: LLMErrorInfo }
   | { type: "shouldReturnNull" }

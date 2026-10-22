@@ -649,8 +649,10 @@ export async function computeAndStoreAgentMessageConsumptionAttribution(
   const toolBillingPlan = buildAgentMessageBillingPlan({
     actions: actions.map((actionResource) => ({
       actionResource,
+      createdAt: actionResource.createdAt.getTime(),
       internalMCPServerName: actionResource.metadata.internalMCPServerName,
       mcpServerId: actionResource.metadata.mcpServerId ?? null,
+      declaredBilling: actionResource.declaredBilling,
       status: actionResource.status,
       toolName: actionResource.toolName,
     })),

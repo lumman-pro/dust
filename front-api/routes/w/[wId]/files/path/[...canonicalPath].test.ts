@@ -37,6 +37,17 @@ vi.mock("@app/lib/api/collab/client", () => ({
   writeCollabSource: vi.fn(),
 }));
 
+const { exportHtmlToPdf } = vi.hoisted(() => ({ exportHtmlToPdf: vi.fn() }));
+
+vi.mock("@app/types/shared/document_renderer", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("@app/types/shared/document_renderer")
+  >()),
+  DocumentRenderer: class MockDocumentRenderer {
+    exportHtmlToPdf = exportHtmlToPdf;
+  },
+}));
+
 vi.mock("@app/lib/lock", () => ({
   executeWithLock: vi.fn(async (_lockName: string, fn: () => unknown) => fn()),
 }));
@@ -306,6 +317,7 @@ describe("GET /api/w/:wId/files/path/:canonicalPath?download=1 for a Markdown do
 
   it.each([
     { fileName: "notes.md", query: "format=markdown" },
+    { fileName: "notes.md", query: "format=pdf" },
     { fileName: "notes.md", query: "download=0&format=markdown" },
     { fileName: "notes.md", query: "download=1&format=dfm" },
   ])("refuses $query for $fileName", async ({ fileName, query }) => {
@@ -324,6 +336,118 @@ describe("GET /api/w/:wId/files/path/:canonicalPath?download=1 for a Markdown do
 
     expect(response.status).toBe(400);
     expect((await response.json()).error.type).toBe("file_type_not_supported");
+  });
+});
+
+describe("GET /api/w/:wId/files/path/:canonicalPath?download=1&format=pdf", () => {
+  const SOURCE = [
+    "# Notes",
+    "",
+    "Snow :comment-start{id=c1}loosens at dawn:comment-end{id=c1}.",
+    "",
+    ":::annotations",
+    "::comment{id=c1 status=open}",
+    "",
+    '::message{author=user:usr_1 name="Yuka" at=2026-09-25T14:16:32.380Z}',
+    "",
+    "Really?",
+    ":::",
+    "",
+  ].join("\n");
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(readCollabSource).mockResolvedValue(new Ok({ open: false }));
+    vi.spyOn(config, "getDocumentRendererUrl").mockReturnValue(
+      "http://gotenberg.test"
+    );
+    exportHtmlToPdf.mockResolvedValue(new Ok(Buffer.from("mock-pdf-content")));
+    fileStorageMock.setFileExists(
+      (path) => fileStorageMock.getObject(path) !== undefined
+    );
+    fileStorageMock.setFileMetadata(() => ({
+      contentType: "text/markdown",
+      size: "42",
+    }));
+  });
+
+  afterEach(() => {
+    vi.mocked(config.getDocumentRendererUrl).mockRestore();
+  });
+
+  async function exportPdf(content: string | null, fileName = "notes.md") {
+    const { workspace, conversation } = await setup();
+    if (content !== null) {
+      fileStorageMock.setObject(
+        `w/${workspace.sId}/conversations/${conversation.sId}/files/${fileName}`,
+        content
+      );
+    }
+    return honoApp.request(
+      `/api/w/${workspace.sId}/files/path/conversation-${conversation.sId}/${fileName}?download=1&format=pdf`
+    );
+  }
+
+  it("prints the document without its comments", async () => {
+    const response = await exportPdf(SOURCE);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("application/pdf");
+    expect(response.headers.get("Content-Disposition")).toMatch(
+      /^attachment; filename="notes.pdf"/
+    );
+    expect(await response.text()).toBe("mock-pdf-content");
+
+    const [html] = exportHtmlToPdf.mock.calls[0];
+    expect(html).toContain(">Snow loosens at dawn.</p>");
+    expect(html).not.toContain("Really?");
+  });
+
+  it("prints the live session's source while one holds the document", async () => {
+    vi.mocked(readCollabSource).mockResolvedValue(
+      new Ok({ open: true, source: SOURCE.replace("Snow", "Rain") })
+    );
+
+    const response = await exportPdf(SOURCE);
+
+    expect(response.status).toBe(200);
+    const [html] = exportHtmlToPdf.mock.calls[0];
+    expect(html).toContain(">Rain loosens at dawn.</p>");
+  });
+
+  it("returns 404 for a missing document", async () => {
+    const response = await exportPdf(null);
+
+    expect(response.status).toBe(404);
+    expect((await response.json()).error.type).toBe("file_not_found");
+  });
+
+  it.each([
+    {
+      label: "a document the editor cannot load",
+      content: "An anchor :comment-start{id=c1}without a thread.\n",
+      fileName: "notes.md",
+    },
+    {
+      label: "a file that is not Markdown",
+      content: SOURCE,
+      fileName: "notes.txt",
+    },
+  ])("returns 400 for $label", async ({ content, fileName }) => {
+    const response = await exportPdf(content, fileName);
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error.type).toBe("file_type_not_supported");
+    expect(exportHtmlToPdf).not.toHaveBeenCalled();
+  });
+
+  it("returns 503 when PDF export is not configured", async () => {
+    vi.mocked(config.getDocumentRendererUrl).mockReturnValue(undefined);
+
+    const response = await exportPdf(SOURCE);
+
+    expect(response.status).toBe(503);
+    expect((await response.json()).error.type).toBe("service_unavailable");
   });
 });
 

@@ -129,6 +129,22 @@ msgstr ""
 msgid "Delete"
 msgstr ""
 
+#: front/components/editor/document/DocumentCommentThread.tsx
+msgid "{name} is busy. It'll answer soon."
+msgstr ""
+
+#: front/components/editor/document/DocumentCommentThread.tsx
+msgid "{name} is thinking…"
+msgstr ""
+
+#: front/components/editor/document/DocumentCommentThread.tsx
+msgid "{name} is reading the document…"
+msgstr ""
+
+#: front/components/editor/document/DocumentCommentThread.tsx
+msgid "{name} is editing the document…"
+msgstr ""
+
 #. placeholder {0}: replies.length
 #: front/components/editor/document/DocumentCommentThread.tsx
 msgid "{0, plural, one {# reply} other {# replies}}"
@@ -243,6 +259,14 @@ msgstr ""
 
 #: front/components/editor/document/DocumentSaveStatus.tsx
 msgid "Live editing unavailable"
+msgstr ""
+
+#: front/components/editor/document/DocumentSaveStatus.tsx
+msgid "thinking…"
+msgstr ""
+
+#: front/components/editor/document/DocumentSaveStatus.tsx
+msgid "{name} is thinking"
 msgstr ""
 
 #: front/components/editor/document/DocumentSaveStatus.tsx

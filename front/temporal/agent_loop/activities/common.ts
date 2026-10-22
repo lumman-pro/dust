@@ -60,6 +60,11 @@ type AgentMessageStatusUpdate = Extract<
  * Note that we are mutating the agentMessage object in memory and not returning a new object.
  * This is because we want to make sure that all functions using this object have the latest state.
  */
+/**
+ * @cc [owner:fontanierh,label:product] fallback-model-last-wins-never-cleared
+ * A `fallbackModel` update MUST overwrite any earlier `fallbackModelId` (the last fallback of the
+ * message wins). Once set, no later update MUST clear it.
+ */
 export async function updateAgentMessageDBAndMemory(
   auth: Authenticator,
   args:
@@ -87,6 +92,10 @@ export async function updateAgentMessageDBAndMemory(
           | {
               type: "prunedContext";
               prunedContext: true;
+            }
+          | {
+              type: "fallbackModel";
+              fallbackModelId: string;
             };
       }
 ): Promise<boolean> {
@@ -186,6 +195,18 @@ export async function updateAgentMessageDBAndMemory(
           { where }
         );
         agentMessage.prunedContext = update.prunedContext;
+      }
+      break;
+
+    case "fallbackModel":
+      {
+        await AgentMessageModel.update(
+          {
+            fallbackModelId: update.fallbackModelId,
+          },
+          { where }
+        );
+        agentMessage.fallbackModelId = update.fallbackModelId;
       }
       break;
 
@@ -691,6 +712,7 @@ export async function notifyAgentMessageError(
     costCredits: null,
     resolvedModel: resolvedModelFromAgentMessageRow(messageRow.agentMessage),
     modelResolutionMethod: messageRow.agentMessage.modelResolutionMethod,
+    fallbackModelId: messageRow.agentMessage.fallbackModelId,
 
     // HACKY: These last 3 fields are not used in the workflow error case but required in the type.
     configuration: null as unknown as LightAgentConfigurationType,

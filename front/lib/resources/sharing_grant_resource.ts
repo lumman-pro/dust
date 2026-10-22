@@ -1,9 +1,10 @@
-import type { AuditAction } from "@app/lib/api/audit/workos_audit";
 import {
   buildAuditLogTarget,
   emitAuditLogEvent,
   getAuditLogContext,
 } from "@app/lib/api/audit/workos_audit";
+import type { ShareAuditEvent } from "@app/lib/api/share/share_audit";
+import { SHARE_AUDIT_BY_KIND } from "@app/lib/api/share/share_audit";
 import type { Authenticator } from "@app/lib/auth";
 import { DustError } from "@app/lib/error";
 import { BaseResource } from "@app/lib/resources/base_resource";
@@ -275,7 +276,7 @@ export class SharingGrantResource extends BaseResource<SharingGrantModel> {
       this.emitAuditEvent(
         auth,
         file,
-        "frame.email_grant_added",
+        "emailGrantAdded",
         {
           emails: createdEmails.join(","),
         },
@@ -286,7 +287,7 @@ export class SharingGrantResource extends BaseResource<SharingGrantModel> {
       this.emitAuditEvent(
         auth,
         file,
-        "frame.domain_grant_added",
+        "domainGrantAdded",
         {
           domains: createdDomains.join(","),
         },
@@ -299,20 +300,26 @@ export class SharingGrantResource extends BaseResource<SharingGrantModel> {
   private static emitAuditEvent(
     auth: Authenticator,
     file: FileResource,
-    action: AuditAction,
+    event: ShareAuditEvent,
     metadata: Record<string, string>,
     transaction?: Transaction
   ): void {
+    const kind = file.shareKind;
+    assert(kind, `Sharing grant on a non-shareable file (file: ${file.sId})`);
+    const audit = SHARE_AUDIT_BY_KIND[kind];
     const emit = () => {
       void emitAuditLogEvent({
         auth,
-        action,
+        action: audit.actions[event],
         targets: [
           buildAuditLogTarget("workspace", auth.getNonNullableWorkspace()),
-          buildAuditLogTarget("frame", { sId: file.sId, name: file.fileName }),
+          buildAuditLogTarget(audit.targetType, {
+            sId: file.sId,
+            name: file.fileName,
+          }),
         ],
         context: getAuditLogContext(auth),
-        metadata: { frame_name: file.fileName, ...metadata },
+        metadata: { [audit.nameMetadataKey]: file.fileName, ...metadata },
       });
     };
     // A rolled-back grant must not appear in the audit log.
@@ -393,7 +400,7 @@ export class SharingGrantResource extends BaseResource<SharingGrantModel> {
         SharingGrantResource.emitAuditEvent(
           auth,
           this.file,
-          "frame.email_grant_revoked",
+          "emailGrantRevoked",
           {
             email: target.value,
           },
@@ -404,7 +411,7 @@ export class SharingGrantResource extends BaseResource<SharingGrantModel> {
         SharingGrantResource.emitAuditEvent(
           auth,
           this.file,
-          "frame.domain_grant_revoked",
+          "domainGrantRevoked",
           {
             domain: target.value,
           },

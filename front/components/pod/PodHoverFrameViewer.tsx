@@ -5,6 +5,11 @@ import { FrameToolConsentGate } from "@app/components/assistant/conversation/int
 import { PreviewActionButtons } from "@app/components/assistant/conversation/interactive_content/frame/PreviewActionButtons";
 import { useFrameEditSession } from "@app/components/assistant/conversation/interactive_content/frame/useFrameEditSession";
 import { useLiveFrameEditing } from "@app/components/assistant/conversation/interactive_content/frame/useLiveFrameEditing";
+import type {
+  FrameExpandUiElement,
+  FrameOpenOrigin,
+} from "@app/components/assistant/conversation/interactive_content/frameTracking";
+import { useFrameTracking } from "@app/components/assistant/conversation/interactive_content/useFrameTracking";
 import {
   useFileContent,
   useFileContentByUrl,
@@ -41,7 +46,37 @@ interface PodHoverFrameViewerProps {
   overlayLeading?: ReactNode;
   /** Open in fullscreen on mount (e.g. collapsed banner "full screen" affordance). */
   initialFullscreen?: boolean;
+  /** Tracks the Frame as shown while mounted, and its full screen. Untracked when omitted. */
+  tracking?: { openedFrom: FrameOpenOrigin; uiElement: FrameExpandUiElement };
   className?: string;
+}
+
+// The viewer is mounted while its Frame is visible. Untracked when `tracking` is omitted.
+function useHoverFrameTracking({
+  tracking,
+  fileId,
+  podId,
+  isFullscreen,
+  initialFullscreen,
+}: {
+  tracking: PodHoverFrameViewerProps["tracking"];
+  fileId: string;
+  podId: string;
+  isFullscreen: boolean;
+  initialFullscreen: boolean;
+}) {
+  useFrameTracking({
+    frameId: tracking ? fileId : null,
+    location: { type: "pod", id: podId },
+    openedFrom: tracking?.openedFrom ?? null,
+    isVisible: true,
+    fullScreen: tracking && {
+      isFullScreen: isFullscreen,
+      uiElement: tracking.uiElement,
+      // Mounted in full screen only when the user asked for it.
+      countOnShow: initialFullscreen,
+    },
+  });
 }
 
 /**
@@ -67,6 +102,7 @@ export function PodHoverFrameViewer({
   isArchived = false,
   overlayLeading,
   initialFullscreen = false,
+  tracking,
   className,
 }: PodHoverFrameViewerProps) {
   const { t } = useLingui();
@@ -82,6 +118,14 @@ export function PodHoverFrameViewer({
       setIsFullscreen(true);
     }
   }, [initialFullscreen]);
+
+  useHoverFrameTracking({
+    tracking,
+    fileId,
+    podId: spaceId,
+    isFullscreen,
+    initialFullscreen,
+  });
 
   const isV2 = Boolean(frameId);
   const { mutateFileContent } = useFileContent({

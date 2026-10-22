@@ -1114,6 +1114,43 @@ describe("updateAgentMessageDBAndMemory", () => {
       expect(agentMessage.prunedContext).toBe(true);
     });
   });
+
+  describe("fallbackModel update", () => {
+    it("stores the last fallback model and keeps it on later updates", async () => {
+      const agentConfig = await AgentConfigurationFactory.createTestAgent(
+        auth,
+        { name: "Test Agent" }
+      );
+      const conversation = await ConversationFactory.create(auth, {
+        agentConfigurationId: agentConfig.sId,
+        messagesCreatedAt: [],
+      });
+      const { agentMessage } = await ConversationFactory.createAgentMessage(
+        auth,
+        { workspace, conversation, agentConfig }
+      );
+      expect(agentMessage.fallbackModelId).toBeNull();
+
+      await updateAgentMessageDBAndMemory(auth, {
+        agentMessage,
+        update: { type: "fallbackModel", fallbackModelId: "claude-opus-4-7" },
+      });
+      await updateAgentMessageDBAndMemory(auth, {
+        agentMessage,
+        update: { type: "fallbackModel", fallbackModelId: "claude-opus-4-8" },
+      });
+      await updateAgentMessageDBAndMemory(auth, {
+        agentMessage,
+        update: { type: "usageMetadata", modelInteractionDurationMs: 10 },
+      });
+
+      const dbMessage = await AgentMessageModel.findOne({
+        where: { id: agentMessage.agentMessageId, workspaceId: workspace.id },
+      });
+      expect(dbMessage?.fallbackModelId).toBe("claude-opus-4-8");
+      expect(agentMessage.fallbackModelId).toBe("claude-opus-4-8");
+    });
+  });
 });
 
 describe("late terminal events after finalization", () => {

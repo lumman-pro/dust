@@ -13,6 +13,7 @@ import {
   CARDINALITY_PRECISION_THRESHOLD,
   CONSUMPTION_TOP_SORT_ORDER,
 } from "@app/lib/api/analytics/consumption/scope";
+import { resolveAnalyticsAgentLabels } from "@app/lib/api/assistant/observability/agent_labels";
 import type { ElasticsearchError } from "@app/lib/api/elasticsearch";
 import type { Authenticator } from "@app/lib/auth";
 import { TriggerResource } from "@app/lib/resources/trigger_resource";
@@ -69,6 +70,38 @@ function matchesFilter(
   return true;
 }
 
+/**
+ * @cc [owner:fontanierh,label:product] poke-trigger-search-fields
+ * A trigger matches a search when its name, its agent's name or its editor's email contains the
+ * search string, case-insensitively.
+ */
+async function filterTriggersBySearch(
+  auth: Authenticator,
+  triggers: TriggerResource[],
+  search: string
+): Promise<TriggerResource[]> {
+  const [agentLabels, editors] = await Promise.all([
+    resolveAnalyticsAgentLabels(auth, [
+      ...new Set(triggers.map((trigger) => trigger.agentConfigurationId)),
+    ]),
+    UserResource.fetchByModelIds([
+      ...new Set(triggers.map((trigger) => trigger.editor)),
+    ]),
+  ]);
+  const editorEmailsByModelId = new Map(
+    editors.map((editor) => [editor.id, editor.email])
+  );
+  const needle = search.toLowerCase();
+
+  return triggers.filter((trigger) =>
+    [
+      trigger.name,
+      agentLabels.get(trigger.agentConfigurationId)?.name,
+      editorEmailsByModelId.get(trigger.editor),
+    ].some((value) => value?.toLowerCase().includes(needle))
+  );
+}
+
 /** Every live workspace trigger, ordered by its period consumption. */
 export async function fetchPokeTriggers(
   auth: Authenticator,
@@ -88,10 +121,8 @@ export async function fetchPokeTriggers(
     sortOrder: PokeTriggersSearchBody["sortOrder"];
   }
 ): Promise<Result<GetAutomationTriggersResponse, ElasticsearchError>> {
-  const [liveTriggers, editors, rankingResult] = await Promise.all([
-    search
-      ? TriggerResource.listByWorkspaceAndNameSearch(auth, search)
-      : TriggerResource.listByWorkspace(auth),
+  const [workspaceTriggers, editors, rankingResult] = await Promise.all([
+    TriggerResource.listByWorkspace(auth),
     filter?.editorIds?.length
       ? UserResource.fetchByIds(filter.editorIds)
       : Promise.resolve([]),
@@ -99,7 +130,6 @@ export async function fetchPokeTriggers(
       period,
       limit: CARDINALITY_PRECISION_THRESHOLD,
       offset: 0,
-      search,
       filter,
     }),
   ]);
@@ -107,6 +137,9 @@ export async function fetchPokeTriggers(
     return rankingResult;
   }
 
+  const liveTriggers = search
+    ? await filterTriggersBySearch(auth, workspaceTriggers, search)
+    : workspaceTriggers;
   const editorModelIds = filter?.editorIds?.length
     ? new Set(editors.map((editor) => editor.id))
     : null;

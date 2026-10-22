@@ -55,7 +55,6 @@ describe("getFileExplorerPipeline Frame packages", () => {
       activeFilter: "all",
       contentNodes: [],
       currentFolderPath: "apps",
-      displayFramePackages: true,
       files,
       searchQuery: "",
       sortMode: "last-modified",
@@ -88,7 +87,6 @@ describe("getFileExplorerPipeline Frame packages", () => {
       activeFilter: "all",
       contentNodes: [],
       currentFolderPath: "apps/status",
-      displayFramePackages: true,
       files,
       searchQuery: "",
       sortMode: "name-asc",
@@ -113,27 +111,6 @@ describe("getFileExplorerPipeline Frame packages", () => {
           fileId: null,
         }
       ),
-      mountFile("conversation-c1/apps/status/index.tsx"),
-    ];
-
-    const pipeline = getFileExplorerPipeline({
-      activeFilter: "all",
-      contentNodes: [],
-      currentFolderPath: "apps",
-      displayFramePackages: true,
-      files,
-      searchQuery: "",
-      sortMode: "name-asc",
-    });
-
-    expect(pipeline.sortedNodes).toMatchObject([
-      { isDirectory: true, name: "status", path: "apps/status" },
-    ]);
-  });
-
-  it("keeps registered source as a folder when package display is disabled", () => {
-    const files = [
-      frameManifest("conversation-c1/apps/status/manifest.json"),
       mountFile("conversation-c1/apps/status/index.tsx"),
     ];
 
@@ -167,7 +144,6 @@ describe("getFileExplorerPipeline Frame packages", () => {
       activeFilter: "all",
       contentNodes: [],
       currentFolderPath: "conversation",
-      displayFramePackages: true,
       files,
       searchQuery: "",
       sortMode: "last-modified",
@@ -444,7 +420,6 @@ describe("getFileExplorerPipeline type filters", () => {
       activeFilter: "frames",
       contentNodes: [],
       currentFolderPath: "",
-      displayFramePackages: true,
       files,
       searchQuery: "",
       sortMode: "name-asc",
@@ -503,7 +478,6 @@ describe("getFileExplorerPipeline type filters", () => {
     const base = {
       contentNodes: [],
       currentFolderPath: "",
-      displayFramePackages: true,
       files,
       searchQuery: "",
       sortMode: "name-asc" as const,

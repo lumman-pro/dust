@@ -67,7 +67,6 @@ import type { WithAccessControl } from "@app/types/resource_permissions";
 import { isDevelopment } from "@app/types/shared/env";
 import type { WhitelistableFeature } from "@app/types/shared/feature_flags";
 import {
-  applyFeatureFlagOverrides,
   isWhitelistableFeature,
   WHITELISTABLE_FEATURES,
 } from "@app/types/shared/feature_flags";
@@ -2328,7 +2327,7 @@ export async function getFeatureFlagsForContext(
     }
   }
 
-  return applyFeatureFlagOverrides(effectiveFlags);
+  return effectiveFlags;
 }
 
 export function getFeatureFlags(

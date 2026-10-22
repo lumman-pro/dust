@@ -30,6 +30,7 @@ import { LinkWrapper } from "@app/lib/platform";
 import { getSkillAvatarIcon } from "@app/lib/skill";
 import type {
   ConsumptionScopeFilter,
+  ConsumptionTopRankBy,
   ConsumptionTopSortOrder,
 } from "@app/types/api/analytics/consumption";
 import { CONSUMPTION_DIMENSION_FILTER_KEYS } from "@app/types/api/analytics/consumption";
@@ -95,9 +96,11 @@ const DEFAULT_ATTRIBUTION_SORTING: SortingState = [
   { id: "credits", desc: true },
 ];
 
-const ATTRIBUTION_SERVER_SORTABLE_COLUMN_IDS = new Set([
-  "credits",
-  "costShare",
+// Server ranking each sortable column follows.
+const ATTRIBUTION_SERVER_RANK_BY = new Map<string, ConsumptionTopRankBy>([
+  ["credits", "credits"],
+  ["costShare", "credits"],
+  ["count", "count"],
 ]);
 
 function AttributionTooltipCard({
@@ -489,7 +492,7 @@ function buildColumns({
       id: "count",
       accessorKey: "count",
       header: countLabel,
-      enableSorting: false,
+      enableSorting: true,
       meta: {
         className: cn(
           COLLAPSED_COLUMN_CLASSES,
@@ -641,6 +644,7 @@ export interface ConsumptionAttributionRowsQueryState {
   sorting: SortingState;
   onSortingChange: OnChangeFn<SortingState>;
   sortOrder: ConsumptionTopSortOrder;
+  rankBy: ConsumptionTopRankBy;
 }
 
 export function useConsumptionAttributionRowsQueryState(): ConsumptionAttributionRowsQueryState {
@@ -660,16 +664,13 @@ export function useConsumptionAttributionRowsQueryState(): ConsumptionAttributio
   };
 
   const activeSort = sorting[0];
-  // Ranking is always by credits: only forward asc/desc when the sorted
-  // column actually rides that ranking, so sorting by anything else keeps
-  // fetching pages in the default credits-desc order and reorders them
-  // locally instead.
-  const sortOrder =
-    activeSort?.id &&
-    ATTRIBUTION_SERVER_SORTABLE_COLUMN_IDS.has(activeSort.id) &&
-    !activeSort.desc
-      ? "asc"
-      : "desc";
+  // Only forward the sort when the sorted column rides a server ranking, so
+  // sorting by anything else keeps fetching pages in the default credits-desc
+  // order and reorders them locally instead.
+  const serverRankBy = activeSort?.id
+    ? ATTRIBUTION_SERVER_RANK_BY.get(activeSort.id)
+    : undefined;
+  const sortOrder = serverRankBy && !activeSort?.desc ? "asc" : "desc";
 
   return {
     pagination,
@@ -677,6 +678,7 @@ export function useConsumptionAttributionRowsQueryState(): ConsumptionAttributio
     sorting,
     onSortingChange,
     sortOrder,
+    rankBy: serverRankBy ?? "credits",
   };
 }
 
@@ -930,6 +932,7 @@ function WorkspaceConsumptionAttributionRows(
     filter: props.filter,
     analyticsScope: props.analyticsScope,
     sortOrder: queryState.sortOrder,
+    rankBy: queryState.rankBy,
     disabled: props.disabled,
   });
 

@@ -1,10 +1,13 @@
 import type { InternalAllowedIconType } from "@app/components/resources/resources_icons";
+import type { AuthorizationInfo } from "@app/lib/actions/mcp_metadata_extraction";
 import type { ToolDisplayLabels } from "@app/lib/api/mcp";
 import type {
   HostDerivedOAuthConfig,
   MCPOAuthUseCase,
+  OAuthProvider,
 } from "@app/types/oauth/lib";
 import type { WhitelistableFeature } from "@app/types/shared/feature_flags";
+import { assertNever } from "@app/types/shared/utils/assert_never";
 
 export type DefaultRemoteMCPServerConfig = {
   id: number;
@@ -14,7 +17,16 @@ export type DefaultRemoteMCPServerConfig = {
   icon: InternalAllowedIconType;
   documentationUrl?: string;
   connectionInstructions?: string;
-  authMethod: "bearer" | "oauth-dynamic" | "oauth-static" | null;
+  authMethod:
+    | "bearer"
+    | "oauth-dynamic"
+    | "oauth-static"
+    | "oauth-static-dust-app"
+    | null;
+  // Static OAuth through Dust's own OAuth app: the provider registered in Dust that holds the
+  // app's credentials in Dust's environment. Required when `authMethod` is
+  // "oauth-static-dust-app", unset otherwise.
+  oauthProvider?: OAuthProvider;
   supportedOAuthUseCases?: MCPOAuthUseCase[];
   scope?: string;
   // Overrides the `client_uri` sent at Dynamic Client Registration, for servers that allowlist
@@ -7588,7 +7600,7 @@ export const DEFAULT_REMOTE_MCP_SERVERS: DefaultRemoteMCPServerConfig[] = [
     },
   },
   {
-    id: 10060,
+    id: 10065,
     name: "Multi Calendar",
     description:
       "Multi Calendar tools to read events, find free time, create, move and cancel events and answer invitations across several Outlook.com, Microsoft 365 and Google calendar accounts at once, with booking links, booking pages, group polls and circles.",
@@ -7709,7 +7721,7 @@ export const DEFAULT_REMOTE_MCP_SERVERS: DefaultRemoteMCPServerConfig[] = [
     },
   },
   {
-    id: 10049,
+    id: 10061,
     name: "Grafana",
     description:
       "Grafana Cloud tools for metrics, logs, traces, dashboards, and incidents.",
@@ -8345,6 +8357,194 @@ export const DEFAULT_REMOTE_MCP_SERVERS: DefaultRemoteMCPServerConfig[] = [
       },
     },
   },
+  {
+    id: 10059,
+    name: "Dropbox",
+    description:
+      "Dropbox tools for browsing, searching and reading files, and for creating, moving, sharing and restoring files and folders.",
+    url: "https://mcp.dropbox.com/mcp",
+    icon: "DropboxLogo",
+    documentationUrl:
+      "https://help.dropbox.com/integrations/connect-dropbox-mcp-server",
+    connectionInstructions:
+      "Dropbox uses OAuth. You will be prompted to sign in with your Dropbox account. The MCP can only access the files and folders you can already see in Dropbox.",
+    authMethod: "oauth-static-dust-app",
+    oauthProvider: "dropbox",
+    supportedOAuthUseCases: ["personal_actions", "platform_actions"],
+    toolStakes: {
+      list_folder: "never_ask",
+      get_file_metadata: "never_ask",
+      get_file_content: "never_ask",
+      get_usage_and_quota: "never_ask",
+      search: "never_ask",
+      who_am_i: "never_ask",
+      check_job_status: "never_ask",
+      list_shared_links: "never_ask",
+      get_shared_link_metadata: "never_ask",
+      list_file_requests: "never_ask",
+      get_file_request: "never_ask",
+      list_file_revisions: "never_ask",
+      list_restore_events: "never_ask",
+      list_dropbox_operations: "never_ask",
+      get_dropbox_operation: "never_ask",
+      run_read_dropbox_operation: "never_ask",
+
+      create_folder: "low",
+      create_file: "low",
+      copy: "low",
+
+      move: "high",
+      delete: "high",
+      restore_file_revision: "high",
+      restore_folder: "high",
+      run_write_dropbox_operation: "high",
+      // Shared links, file requests and download links expose content outside of Dropbox.
+      create_shared_link: "high",
+      create_file_request: "high",
+      download_link: "high",
+    },
+    toolDisplayLabels: {
+      list_folder: {
+        running: "Listing a Dropbox folder",
+        done: "Listed a Dropbox folder",
+      },
+      get_file_metadata: {
+        running: "Reading file metadata on Dropbox",
+        done: "Read file metadata on Dropbox",
+      },
+      get_file_content: {
+        running: "Reading a file on Dropbox",
+        done: "Read a file on Dropbox",
+      },
+      get_usage_and_quota: {
+        running: "Checking storage usage on Dropbox",
+        done: "Checked storage usage on Dropbox",
+      },
+      search: {
+        running: "Searching on Dropbox",
+        done: "Searched on Dropbox",
+      },
+      who_am_i: {
+        running: "Checking identity on Dropbox",
+        done: "Checked identity on Dropbox",
+      },
+      check_job_status: {
+        running: "Checking a job status on Dropbox",
+        done: "Checked a job status on Dropbox",
+      },
+      list_shared_links: {
+        running: "Listing shared links on Dropbox",
+        done: "Listed shared links on Dropbox",
+      },
+      get_shared_link_metadata: {
+        running: "Reading a shared link on Dropbox",
+        done: "Read a shared link on Dropbox",
+      },
+      list_file_requests: {
+        running: "Listing file requests on Dropbox",
+        done: "Listed file requests on Dropbox",
+      },
+      get_file_request: {
+        running: "Reading a file request on Dropbox",
+        done: "Read a file request on Dropbox",
+      },
+      list_file_revisions: {
+        running: "Listing file revisions on Dropbox",
+        done: "Listed file revisions on Dropbox",
+      },
+      list_restore_events: {
+        running: "Listing activity on Dropbox",
+        done: "Listed activity on Dropbox",
+      },
+      list_dropbox_operations: {
+        running: "Listing Dropbox operations",
+        done: "Listed Dropbox operations",
+      },
+      get_dropbox_operation: {
+        running: "Reading a Dropbox operation",
+        done: "Read a Dropbox operation",
+      },
+      run_read_dropbox_operation: {
+        running: "Running a read operation on Dropbox",
+        done: "Ran a read operation on Dropbox",
+      },
+      create_folder: {
+        running: "Creating a folder on Dropbox",
+        done: "Created a folder on Dropbox",
+      },
+      create_file: {
+        running: "Creating a file on Dropbox",
+        done: "Created a file on Dropbox",
+      },
+      copy: {
+        running: "Copying on Dropbox",
+        done: "Copied on Dropbox",
+      },
+      move: {
+        running: "Moving on Dropbox",
+        done: "Moved on Dropbox",
+      },
+      delete: {
+        running: "Deleting on Dropbox",
+        done: "Deleted on Dropbox",
+      },
+      restore_file_revision: {
+        running: "Restoring a file revision on Dropbox",
+        done: "Restored a file revision on Dropbox",
+      },
+      restore_folder: {
+        running: "Restoring a folder on Dropbox",
+        done: "Restored a folder on Dropbox",
+      },
+      run_write_dropbox_operation: {
+        running: "Running a write operation on Dropbox",
+        done: "Ran a write operation on Dropbox",
+      },
+      create_shared_link: {
+        running: "Creating a shared link on Dropbox",
+        done: "Created a shared link on Dropbox",
+      },
+      create_file_request: {
+        running: "Creating a file request on Dropbox",
+        done: "Created a file request on Dropbox",
+      },
+      download_link: {
+        running: "Creating a download link on Dropbox",
+        done: "Created a download link on Dropbox",
+      },
+    },
+  },
+  {
+    id: 10060,
+    name: "Mobbin",
+    description:
+      "Mobbin tools to search real-world UI design references: app screens, multi-step user flows, and website sections.",
+    url: "https://api.mobbin.com/mcp",
+    icon: "MobbinLogo",
+    documentationUrl: "https://docs.mobbin.com/mcp",
+    connectionInstructions:
+      "Mobbin uses OAuth with dynamic client registration. Sign in with your Mobbin account to connect.",
+    authMethod: "oauth-dynamic",
+    toolStakes: {
+      search_screens: "never_ask",
+      search_flows: "never_ask",
+      search_sections: "never_ask",
+    },
+    toolDisplayLabels: {
+      search_screens: {
+        running: "Searching screens on Mobbin",
+        done: "Searched screens on Mobbin",
+      },
+      search_flows: {
+        running: "Searching flows on Mobbin",
+        done: "Searched flows on Mobbin",
+      },
+      search_sections: {
+        running: "Searching sections on Mobbin",
+        done: "Searched sections on Mobbin",
+      },
+    },
+  },
 ];
 
 export const getDefaultRemoteMCPServerByURL = (
@@ -8368,3 +8568,41 @@ export const getDefaultRemoteMCPServerByName = (
     DEFAULT_REMOTE_MCP_SERVERS.find((server) => server.name === name) || null
   );
 };
+
+/**
+ * @cc [owner:LeandreLeBizec,label:mcp] preset-authorization-by-auth-method
+ * The returned authorization MUST follow the preset's `authMethod`:
+ * - "oauth-dynamic": provider `mcp`, with the preset's `scope`;
+ * - "oauth-static": provider `mcp_static`;
+ * - "oauth-static-dust-app": provider `oauthProvider`, or `null` when `oauthProvider` is missing;
+ * - "bearer" or `null`: `null`.
+ * `supported_use_cases` MUST be the preset's `supportedOAuthUseCases`, or empty when unset.
+ */
+export function getDefaultRemoteMCPServerAuthorization(
+  config: DefaultRemoteMCPServerConfig
+): AuthorizationInfo | null {
+  const supportedUseCases = config.supportedOAuthUseCases ?? [];
+
+  switch (config.authMethod) {
+    case "oauth-dynamic":
+      return {
+        provider: "mcp",
+        supported_use_cases: supportedUseCases,
+        scope: config.scope,
+      };
+    case "oauth-static":
+      return { provider: "mcp_static", supported_use_cases: supportedUseCases };
+    case "oauth-static-dust-app":
+      return config.oauthProvider
+        ? {
+            provider: config.oauthProvider,
+            supported_use_cases: supportedUseCases,
+          }
+        : null;
+    case "bearer":
+    case null:
+      return null;
+    default:
+      return assertNever(config.authMethod);
+  }
+}

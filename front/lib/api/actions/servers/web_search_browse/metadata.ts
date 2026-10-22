@@ -1,9 +1,7 @@
 import type { ServerMetadata } from "@app/lib/actions/mcp_internal_actions/tool_definition";
-import {
-  MAX_BROWSE_URLS,
-  WebbrowseInputSchema,
-  WebsearchInputSchema,
-} from "@app/lib/actions/mcp_internal_actions/types";
+import { z } from "zod";
+
+const MAX_BROWSE_URLS = 16;
 
 export const WEB_SEARCH_BROWSE_SERVER_NAME = "web_search_&_browse" as const;
 export const WEB_SEARCH_BROWSE_ACTION_DESCRIPTION =
@@ -15,7 +13,15 @@ export const WEB_SEARCH_BROWSE_TOOLS_METADATA = [
     description:
       "Search Google for web results, news, and current online information. " +
       "Look up any topic on the internet using a search query.",
-    schema: WebsearchInputSchema.shape,
+    schema: {
+      query: z
+        .string()
+        .describe(
+          "The query used to perform the Google search. If requested by the " +
+            "user, use the Google syntax `site:` to restrict the search " +
+            "to a particular website or domain."
+        ),
+    },
     stake: "never_ask",
     enableAlerting: true,
     eager: true,
@@ -32,7 +38,23 @@ export const WEB_SEARCH_BROWSE_TOOLS_METADATA = [
       `Fetch and read the content of web pages and webpages from given URLs. ` +
       `Open and browse websites to extract text, or take a viewport or ` +
       `full-page screenshot. Accepts up to ${MAX_BROWSE_URLS} URLs at once.`,
-    schema: WebbrowseInputSchema.shape,
+    schema: {
+      urls: z
+        .string()
+        .array()
+        .max(MAX_BROWSE_URLS)
+        .describe(`List of urls to browse (max: ${MAX_BROWSE_URLS})`),
+      screenshotMode: z
+        .enum(["none", "viewport", "fullPage"])
+        .optional()
+        .describe(
+          "Screenshot mode: 'none' (default), 'viewport', or 'fullPage'."
+        ),
+      links: z
+        .boolean()
+        .optional()
+        .describe("If true, also retrieve outgoing links from the page."),
+    },
     stake: "never_ask",
     enableAlerting: true,
     eager: true,

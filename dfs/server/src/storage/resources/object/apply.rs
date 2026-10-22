@@ -7,7 +7,7 @@ use dfs_protocol::{
 use foundationdb::{Transaction, tuple::pack};
 use futures::future::try_join_all;
 
-use super::{Error, Metadata, ObjectResource};
+use super::{Error, Metadata, ObjectResource, locks::LockTokens};
 use crate::{
     clock,
     storage::{
@@ -43,6 +43,7 @@ impl ObjectResource {
         tx: &Transaction,
         session: &SessionResource,
         operations: Vec<Operation>,
+        locks: &LockTokens,
     ) -> Result<Vec<Result<Mutation, Error>>, storage::Error<Error>> {
         let mut results: Vec<_> = (0..operations.len()).map(|_| None).collect();
         let batches = Self::group_by_targets(operations);
@@ -50,7 +51,7 @@ impl ObjectResource {
             |(operations, _targets)| async move {
                 let mut results = Vec::with_capacity(operations.len());
                 for (index, operation) in operations {
-                    let result = match Self::apply_operation(tx, session, operation).await {
+                    let result = match Self::apply_operation(tx, session, operation, locks).await {
                         Ok(mutation) => Ok(mutation),
                         Err(storage::Error::Resource(error)) => Err(error),
                         Err(error) => return Err(error),
@@ -72,20 +73,21 @@ impl ObjectResource {
         tx: &Transaction,
         session: &SessionResource,
         operation: Operation,
+        locks: &LockTokens,
     ) -> Result<Mutation, storage::Error<Error>> {
         match operation {
             Operation::Create(operation) => {
-                Ok(DirectoryResource::apply_create(tx, session, operation).await?)
+                Ok(DirectoryResource::apply_create(tx, session, operation, locks).await?)
             }
-            Operation::Update(operation) => Self::apply_update(tx, session, operation).await,
+            Operation::Update(operation) => Self::apply_update(tx, session, operation, locks).await,
             Operation::Write(operation) => {
-                Ok(FileResource::apply_write(tx, session, operation).await?)
+                Ok(FileResource::apply_write(tx, session, operation, locks).await?)
             }
             Operation::Move(operation) => {
-                Ok(DirectoryResource::apply_move(tx, session, operation).await?)
+                Ok(DirectoryResource::apply_move(tx, session, operation, locks).await?)
             }
             Operation::Remove(operation) => {
-                Ok(DirectoryResource::apply_remove(tx, session, operation).await?)
+                Ok(DirectoryResource::apply_remove(tx, session, operation, locks).await?)
             }
         }
     }
@@ -117,6 +119,7 @@ impl ObjectResource {
         tx: &Transaction,
         session: &SessionResource,
         operation: UpdateOperation,
+        locks: &LockTokens,
     ) -> Result<Mutation, storage::Error<Error>> {
         // Check permissions and reuse the object fetched during authorization.
         let (mut object, mode) = Self::modes_for_session(tx, session, &[operation.object_id])
@@ -127,6 +130,7 @@ impl ObjectResource {
         if !mode.can_read() || !mode.can_write() {
             return Err(Error::Forbidden.into());
         }
+        let expired_locks = Self::check_locks(tx, session, &[operation.object_id], locks).await?;
         object.attr_mode(mode)?;
 
         // Prepare and validate the full metadata patch before changing stored state.
@@ -188,6 +192,7 @@ impl ObjectResource {
         }
         object.record_attr_change(tx, now_ms);
 
+        expired_locks.clear(tx, &session.tenant.tenant_id);
         Ok(Mutation {
             object: Some(object.attr(tx, mode).await?),
             related: vec![],

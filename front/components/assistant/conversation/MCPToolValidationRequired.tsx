@@ -7,6 +7,7 @@ import {
 import type { ValidationRequiredToolExecution } from "@app/components/assistant/conversation/editable_tool_validation/types";
 import { useSendApiErrorNotification } from "@app/hooks/useNotification";
 import type { MCPValidationOutputType } from "@app/lib/actions/constants";
+import { isSandboxFunctionBackedBlockedAction } from "@app/lib/actions/mcp";
 import { canCurrentUserRespondToParentUserMessage } from "@app/lib/api/assistant/conversation/can_current_user_respond";
 import { useAuth, useFeatureFlags } from "@app/lib/auth/AuthContext";
 import { useValidateAction } from "@app/lib/swr/tool_actions";
@@ -76,13 +77,23 @@ export function MCPToolValidationRequired({
   ): Promise<boolean> => {
     handleValidationStart();
 
-    const result = await validateAction({
-      contextType: "agent_loop",
-      conversationId: blockedAction.conversationId,
-      messageId: blockedAction.messageId,
-      actionId: blockedAction.actionId,
-      approved,
-    });
+    const result = await validateAction(
+      isSandboxFunctionBackedBlockedAction(blockedAction)
+        ? {
+            contextType: "sandbox_function",
+            sandboxFunctionId: blockedAction.sandboxFunctionId,
+            invocationId: blockedAction.invocationId,
+            actionId: blockedAction.actionId,
+            approved,
+          }
+        : {
+            contextType: "agent_loop",
+            conversationId: blockedAction.conversationId,
+            messageId: blockedAction.messageId,
+            actionId: blockedAction.actionId,
+            approved,
+          }
+    );
 
     if (!result.success) {
       sendApiErrorNotification({
@@ -105,13 +116,23 @@ export function MCPToolValidationRequired({
       );
 
       for (const cascadeAction of cascadable) {
-        const cascadeResult = await validateAction({
-          contextType: "agent_loop",
-          conversationId: cascadeAction.conversationId,
-          messageId: cascadeAction.messageId,
-          actionId: cascadeAction.actionId,
-          approved: "always_approved",
-        });
+        const cascadeResult = await validateAction(
+          isSandboxFunctionBackedBlockedAction(cascadeAction)
+            ? {
+                contextType: "sandbox_function",
+                sandboxFunctionId: cascadeAction.sandboxFunctionId,
+                invocationId: cascadeAction.invocationId,
+                actionId: cascadeAction.actionId,
+                approved: "always_approved",
+              }
+            : {
+                contextType: "agent_loop",
+                conversationId: cascadeAction.conversationId,
+                messageId: cascadeAction.messageId,
+                actionId: cascadeAction.actionId,
+                approved: "always_approved",
+              }
+        );
         if (cascadeResult.success) {
           removeCompletedAction(cascadeAction.actionId);
         }

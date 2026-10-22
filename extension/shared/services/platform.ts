@@ -1,3 +1,4 @@
+import type { InputBarHostSelection } from "@app/components/assistant/conversation/input_bar/InputBarContext";
 import type { CellInfo } from "@app/types/cell";
 import type { LightWorkspaceType } from "@app/types/user";
 import type { AuthService } from "@extension/shared/services/auth";
@@ -51,6 +52,8 @@ export abstract class PlatformService {
   readonly mcp?: McpService;
   readonly cells?: CellInfo[];
   useCaptureActions: UseCaptureActionsHook = () => undefined;
+  // What the user has selected in the host app (e.g. cells in Excel), shown in the input bar.
+  useInputBarSelection: () => InputBarHostSelection | null = () => null;
 
   constructor(
     platform: PlatformType,

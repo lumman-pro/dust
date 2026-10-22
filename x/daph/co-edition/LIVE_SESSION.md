@@ -2,6 +2,9 @@
 
 Work in progress, reviewed once and expected to change.
 
+Parts of this design predate the implementation. For storage, recovery, deploys and running
+several pods, [INFRA.md](INFRA.md) is the reference.
+
 Goal of the first version: one human and one agent co-edit a `.md` file live, the human watching
 the agent's cursor move and its text appear. Yjs is the sync layer (README decision 3).
 
@@ -46,9 +49,8 @@ document model, the stored state, the checkpoint, the agent tools, the comment m
   its own pods, reached through a path prefix. The collab service goes one step further: a new
   entrypoint in the front-api workspace, built into the same image, deployed as its own
   `front-collab` deployment with its own tag, chart (the `viz` chart is the closest template) and
-  fixed replica count, outside front's release. One replica per region for the MVP, so each
-  document has exactly one owner; several replicas later, with the Redis extension and a
-  per-document lease. See "The service".
+  fixed replica count, outside front's release. One replica per region for now; several pods,
+  with one owner per document, in [INFRA.md](INFRA.md).
 - **Browsers** bind the editor with TipTap's Collaboration extension and connect over a
   WebSocket to a dedicated hostname per region. Presence and cursors use Yjs awareness.
 - **Agents** reach the service through an internal endpoint (cluster DNS plus a shared JWT
@@ -60,7 +62,7 @@ document model, the stored state, the checkpoint, the agent tools, the comment m
 
 ## The service
 
-**What it is.** One long-running Node process, `front-api/collab_server.ts`, built by
+**What it is.** One long-running Node process, `front-api/collab/server.ts`, built by
 front-api's esbuild as a second target next to `server.ts`, so it imports front's code through
 `@app/*` like front-api does: the DFM codec, the server-safe document model, workspace auth and
 file system permissions. It is not a separate codebase and not a Hocuspocus program: Hocuspocus
@@ -79,12 +81,11 @@ is a library, embedded in our server.
  +--------------------------------------------------------------+
  |  front-collab pod  (front-api image, collab_server.js)       |
  +--------------------------------------------------------------+
-        |                      |                       |
-        v                      v                       v
-   Postgres or GCS (open)  file system (GCS)       Redis
-   stored Yjs state,       the .md files           per-file lock, lease;
-   epoch, checkpoint                               later, relay between
-   record                                          replicas
+        |                                  |
+        v                                  v
+   file system (GCS)                   Redis
+   the .md files                       Yjs state and epoch per document;
+                                       later, owners and live pods
 ```
 
 **What is inside the process.**
@@ -126,150 +127,93 @@ then on speaks the Yjs protocol on it and calls our hooks at the right moments.
 |---|---|
 | WebSocket handling and the Yjs sync handshake | `onAuthenticate`: check the ticket and the file grants, mark viewers read-only |
 | Relaying updates between connected browsers | `onLoadDocument`: stored state, or the `.md` through the codec as a new epoch |
-| Awareness: presence and cursors | `onStoreDocument`: the stored state, conditional on the fencing token |
-| Debouncing saves, one `Y.Doc` per open file | The checkpoint to the `.md`, with the pending record and the revision guard |
+| Awareness: presence and cursors | `onStoreDocument`: the `.md` save, conditional on the file's revision, then the Yjs state to Redis |
+| Debouncing saves, one `Y.Doc` per open file | The checkpoint to the `.md`, with the revision guard |
 | Server-side clients (`openDirectConnection`) | The agent edit and the comment commands, behind the internal routes |
 | Messages outside the document (`broadcastStateless`) | Pushing comment threads to browsers |
-| Later: the Redis extension for several replicas | The per-file lock and the ownership lease |
 
-**One edit, end to end.** A browser asks front-api for a ticket, opens a WebSocket to the
-service, and is authenticated by `onAuthenticate`. The first client loads the document through
-`onLoadDocument`; later ones share the same `Y.Doc` in memory. Each keystroke is a small Yjs
-update that Hocuspocus applies and relays to the other browsers. Every few seconds
-`onStoreDocument` saves the state; from time to time, and when the last client leaves, the
-checkpoint writes the `.md`. An agent's `edit_document`, running in a Temporal worker, calls
-`POST /internal/documents/edit` when a session is open; the service applies the change through a
-direct connection, so it reaches every open browser like a person typing.
+**One edit, end to end.** A browser asks front-api for a ticket, opens a WebSocket to the service,
+and is authenticated by `onAuthenticate`. The first client loads the document through
+`onLoadDocument`; later ones share the same `Y.Doc` in memory. Each keystroke is a small Yjs update
+that Hocuspocus applies and relays to the other browsers. Every few seconds `onStoreDocument` writes
+the `.md`, then the Yjs state to Redis. An agent's `edit_document`, running in a Temporal worker,
+calls `POST /internal/documents/edit` when a session is open; the service applies the change through
+a direct connection, so it reaches every open browser like a person typing.
 
 ## Durable state between checkpoints
 
-**What the state is.** The durable part of the document record (see "Session lifecycle and crash
-recovery"; ownership lives apart, in the session record):
+**What the state is.** What is stored for a document ([INFRA.md](INFRA.md)):
 
 | Field | What it holds |
 |---|---|
 | Yjs document | One binary blob: the document's content (the editor's text, structure and marks, plus the envelope: front matter and anchor order) and Yjs's bookkeeping for it, which records for every piece of text which client created it and at which step, and marks deleted text. Typically 1.5 to 3 times the size of the text; it grows with editing history, which Yjs's garbage collection trims. |
 | Epoch | Changes only when the state had to be rebuilt from the `.md`. |
-| Checkpoint record | The file generation last written, and the pending checkpoint while one is in progress. |
+| File revision | The revision of the `.md` the state continues from. |
 | Comment threads | While a session holds them, until the checkpoint writes them to the `.md`. |
-| Recent agent edit keys | So a retried agent call is not applied twice, on either path. |
+| Recent agent edit keys | Planned (infra step 3): a retried agent call is not applied twice in a session. |
 
 The bookkeeping is what the `.md` cannot hold. The file has the content but not the identities.
 If the state is lost and rebuilt from the file, the rebuilt text gets new identities, and every
 browser reconnecting with the old ones merges its copy into the new one: the document
 duplicates.
 
-**Where it is stored.** Saved debounced every few seconds, in a durable store. **Open:** Postgres
-(a table keyed by a stable file identity) or a GCS object next to the file (no schema, residency
-already per region).
-
-Not Redis, and not because of speed: one small write every few seconds per active document is
-trivial for either. Losing the state forces a rebuild from the last checkpoint with a new epoch,
-and every edit since that checkpoint, from everyone, has to be recovered by hand (see "Session
-lifecycle and crash recovery"). Our Redis isn't configured for durability, so an incident there
-would do that to every open document at once. Checkpointing the `.md` every few seconds would make
-losing Redis cheap, but rewriting the file constantly creates a new file generation each time,
-so agents' conditional writes would conflict far more often, and every save may trigger
-indexing. A Redis configured for durability would also work, but it is a dedicated instance to
-request from infra, more than a table or an object.
-
-**What Redis is for.** What can be lost safely: the per-file lock, the ownership lease, and later
-relaying updates between replicas. The existing `front/lib/lock.ts` lease is five seconds and not
-renewed; the session needs a renewed lease with a fencing token.
+**Where it is stored.** In a dedicated Redis instance, with the comment threads, saved with each
+`.md` save. The `.md` is written every few seconds and stays the source of truth, so losing Redis
+costs what is not in the `.md` yet, offered to copy ([INFRA.md](INFRA.md)). No new
+database.
 
 ## Session lifecycle and crash recovery
 
-**Two records, kept apart.**
+**Opening.** The service loads the stored Yjs state when it can be reused (see "Checkpoint"),
+otherwise the `.md` as a new epoch, so edits made through the file between two sessions are
+adopted as they are. While the session lives, a write from outside it is detected when the session
+saves, and both versions are kept, until DFS can lock a file ([INFRA.md](INFRA.md)).
 
-- **The document record**, durable, per file: the Yjs state while a session has unsaved work,
-  the comment threads while a session holds them, the epoch, the last checkpointed file
-  generation, an optional pending checkpoint (expected generation and content hash), and the
-  idempotency keys of recent agent edits. It outlives sessions.
-- **The session record**, transient: which instance owns the document, its lease and fencing
-  token. Removed when the session closes.
+**Saved.** Planned (infra steps 1 and 3): an edit is saved once the stored state includes it.
+Browsers keep their Yjs document while offline (step 1), in IndexedDB as well (step 3), until the
+server's stored state covers their updates. If the service dies before storing, a reconnecting
+browser resends what is missing through the ordinary Yjs handshake, with the same epoch and
+identities, so nothing duplicates. An agent edit reports success only after it is stored.
 
-**Opening.** Every writer of a co-editable `.md` (the file PUT route, the files `edit` and
-`create` tools, `add_comment`; the other mutations later, see "Build plan") takes a short per-file
-lock around its read-then-write. Opening a session takes the same lock, so a write already in
-flight finishes first. Under the lock the service acquires the ownership lease (a renewed lease
-with a fencing token), records the session, and loads: the stored Yjs state if the document record
-still holds one (the previous session ended without a clean close), otherwise the `.md` as a new
-epoch. Edits made through the file path between two sessions are therefore adopted as they are,
-not treated as conflicts. While the session lives, the other writers find it under the lock and go
-through the session or are refused. Sandbox writes in GCS mode bypass front and remain the
-acknowledged exception (see "Write routing").
+**Checkpoint.** Each save writes the `.md` conditional on the revision last seen, then the Yjs
+state with the revision it continues from. A file changed by someone else meanwhile is kept as a
+copy. When a session loads, it reuses the stored state if the file still has that revision, or
+if the file's content is what the state writes (a crash between the two saves); otherwise it
+rebuilds from the `.md` ([INFRA.md](INFRA.md)).
 
-**Saved.** An edit is saved once the stored state includes it. Browsers keep their Yjs document,
-in IndexedDB as well as in memory, until the server's stored state covers their updates. If the
-service dies before storing, a reconnecting browser resends what is missing through the ordinary
-Yjs handshake, with the same epoch and identities, so nothing duplicates. Edits are lost only if
-the service and every browser that made them die within the same storing window. An agent edit
-reports success only after it is stored.
+A new epoch starts when the stored state cannot be reused: expired, evicted, or the file changed.
+A browser holding an older epoch then gets its document offered to copy, not replayed, since a
+text diff cannot carry formatting and anchors safely.
 
-**Checkpoint.** In order: record the pending checkpoint (the generation it expects, the hash of
-the content it writes); write the `.md` conditional on that generation; record the new
-generation and clear the pending checkpoint. The Yjs state being newer than the file is the
-normal case. When a session loads stored Yjs state, the file is compared with the record:
+**Deploys, crashes and ownership:** see [INFRA.md](INFRA.md).
 
-- at the recorded generation: normal;
-- at another generation whose content matches the pending hash: our own checkpoint finished
-  before being recorded; adopt the new generation;
-- anything else: an external write. The session keeps its state, refuses to overwrite, keeps
-  both versions, and surfaces the conflict.
+**Agent edits.** Planned (infra step 3), stored before published: the service computes the agent's
+change as one Yjs update against the current state, writes the updated state and the idempotency key
+to the stored state in one write, then applies the update to the live document, which sends it to
+browsers. If the service dies in between, the next load already has both the edit and its key, so
+the retried call is a no-op. Published first, a browser could keep the edit through a crash while
+the key was lost, and the retry would apply a second, independently generated edit. A retry looks up
+the receipt before choosing a path, so a command first applied in a session is not applied again
+after it closes; a command first run on the file path has no receipt.
 
-A new epoch starts when the Yjs state is missing: after a clean close, or if the stored state is
-lost. A browser holding an older epoch then drops its document and reloads; anything it had not
-saved is shown to the user to copy, not replayed, since a text diff cannot carry formatting and
-anchors safely.
-
-**Ownership during deploys.** The deployment uses the Recreate strategy (the old pod stops
-before the new one starts; browsers reconnect after a few seconds), so two owners overlap only in
-failure cases, which the following still covers:
-
-- Writes to the document record are conditional on the current fencing token.
-- A token check before a `.md` write is not enough: an owner can pause after the check, lose its
-  lease, and resume, and a write conditional only on the file generation would still succeed.
-  So taking ownership also updates the file's metadata, which changes its metageneration, and
-  every checkpoint is conditional on both the generation and the metageneration it recorded. A
-  previous owner's late write then fails. To verify in the spike: the file system layer exposes
-  the generation precondition today, not the metageneration one.
-
-**Agent edits.** Stored before published: the service computes the agent's change as one Yjs
-update against the current state, writes the updated state and the idempotency key to the
-document record in one write, then applies the update to the live document, which sends it to
-browsers. If the service dies in between, the next load already has both the edit and its key,
-so the retried call is a no-op. Published first, a browser could keep the edit through a crash
-while the key was lost, and the retry would apply a second, independently generated edit. The
-file path checks and records keys in the same document record, so a retry that crosses a
-session opening or closing is still recognized.
-
-**Playing an agent's edit back.** Built 2026-10-08, without awareness: the service sends a stateless
-`agent_activity` message (agent, `reading` or `editing`) to the document's editors. `reading` goes
-out once the agent's read passes the access check; `editing` goes out just before the agent's change
-is applied, since Hocuspocus may batch document updates but sends stateless messages at once. Each
-browser diffs its own document before and after the next remote change, so no range travels and
-nothing persists in awareness. It then plays the change back as decorations: removed text fading,
-new text revealed behind the agent's caret, a highlight settling. The document holds the whole change
-from the start, so the typing effect is presentation only. The status "agent is working" lasts a
-fixed 20 s after a read, since the service learns nothing between the read and the write; follow-ups
-listen to the agent message's own stream to end it precisely, then stream the tool's arguments to
-know the edited document while the model writes.
+**Showing an agent's edit.** Built 2026-10-08 and 2026-10-09, without awareness. The service sends a
+stateless `agent_activity` message (agent, `reading` or `editing`) to the document's editors, and the
+header shows the agent's avatar with what it does. `reading` goes out once the agent's read passes
+the access check; it lasts a fixed 20 s, since the service learns nothing between the read and the
+write. After applying an agent's change, the service flushes its update to browsers, then sends
+`agent_edit` with the Yjs item ids the change inserted (`insertedRanges` in
+`front-api/collab/lib/session.ts`). A browser glows the text of those items in the agent's color,
+then fades it (`AgentEdits.ts`). Only ids are matched, never text: diffing the document before and
+after a remote change, tried first, showed someone typing at the same moment as the agent. Follow-ups:
+end the status on the agent message's own stream, then stream the tool's arguments to show the edit
+while the model writes. Target once Yjs v14 and its ProseMirror binding are stable: v14 attributions
+record who inserted each item, which replaces the ids message and most of `AgentEdits.ts`; only the
+glow itself stays.
 
 **Closing.** When the last client has been gone for a grace period (minutes, so a dropped
-connection or a reload reconnects to the same state), under the per-file lock: final checkpoint of
-the text and the threads to the `.md`; once it succeeds, the Yjs state and the threads are dropped
-from the document record (its generation, epoch and keys stay), then the session record is removed
-and the lease released. A close that fails to checkpoint keeps the Yjs state, so the next opening
-recovers it. A browser that reconnects after the grace period with edits it never sent sees them
-offered to copy, as for any epoch change.
-
-**Acceptance cases** for the proof of concept: kill the service while two browsers type and
-reconnect, nothing lost or duplicated; kill it between the checkpoint write and its record, the
-next load adopts the file; an agent write racing a session opening, one of them waits; kill it
-after an agent edit is stored but before it is published and retry the call, exactly one edit
-and the human's edits kept; close a session, edit the file through the file path, reopen, the
-edit is there and no conflict is raised; a previous owner's late checkpoint after ownership moved
-is refused.
+connection or a reload reconnects to the same state), the document unloads once its last save
+succeeded. Its Yjs state stays in Redis for a day, so reopening the unchanged file keeps its ids.
+A close whose save failed keeps the document loaded and retries.
 
 ## Infra constraints
 
@@ -291,7 +235,7 @@ is refused.
   service checks it and the file system grants on connect, then periodically.
 - Viewers connect read-only. Comment threads are not in the shared document at all: the service
   owns them and changes them only through commands that stamp the author, and pushes changes to
-  browsers as separate messages. A command is acknowledged once stored in the document record, and
+  browsers as separate messages. A command is acknowledged once stored, and
   a browser receives the full list of threads when it connects or reconnects, so a missed push is
   never lost. How threads follow anchors that move or disappear is part of M4. Browsers cannot
   write a thread, so no Yjs update needs inspecting for one. Comment anchors stay marks in the
@@ -314,11 +258,11 @@ commands instead (see "Comments in the live document").
   stored with the state, so a retried activity does not apply twice.
 
 **One tool, two paths, chosen by the server.** Decided 2026-10-06. The agent always calls
-`edit_document` and never needs to know whether a human has the document open. Under the
-per-file lock, the tool checks for a live session:
+`edit_document` and never needs to know whether a human has the document open. The tool checks
+for a live session:
 
-- **Session open:** the edit goes through the service as one Yjs transaction, streamed to
-  everyone watching with the agent's cursor.
+- **Session open:** the edit goes through the service, applied to the session's current text in
+  the document's turn (#35452), streamed to everyone watching.
 - **No session:** a conditional write of the `.md` with the revision guard, retrying on conflict
   from a fresh read, the same loop `add_comment` uses.
 
@@ -379,8 +323,8 @@ changes; the agent-write refresh from #34040 off for a session-bound editor.
 
 ## Build plan
 
-The proof of concept is built where production will live, as small PRs behind a new
-`co_edition_live` flag, so nothing is thrown away except a dev auth token and a script standing
+The proof of concept is built where production will live, as small PRs behind the
+`co_edition` flag, so nothing is thrown away except a dev auth token and a script standing
 in for the agent tool. The service is a new server entrypoint in the front-api workspace, built
 into the same image, deployed later like `front-sse` as its own `front-collab` deployment with
 its own tag. It imports front's code through `@app/*` like front-api does.
@@ -403,18 +347,15 @@ To a first local demo, two browsers editing live:
 5. **Run it in `dust-hive`.** A process, a port and a proxy route passing WebSocket upgrades.
 6. **Bind the editor.** A `collaboration` mode on `Document`: provider, Collaboration and caret
    extensions on the `body` fragment, y-prosemirror undo, the Yjs document kept in IndexedDB
-   until the server has stored it, no autosave; mounted when `co_edition_live` is on.
+   until the server has stored it, no autosave; mounted when `co_edition` is on.
 
 To a durable, agent-capable proof of concept:
 
 7. **Real auth.** A front-api route mints a short-lived ticket scoped to workspace, file and
    role; the server checks it and the file system grants on connect.
-8. **Document record, session record, lease and per-file lock.** A workspace-aware model and
-   Resource keyed on a stable file identity (a path changes on rename), with a size cap and Yjs
-   garbage collection; the ownership lease with fencing; the per-file lock taken by the existing
-   writers. Contracts and the acceptance cases of "Session lifecycle and crash recovery".
-9. **Checkpoint to the `.md`.** Through the codec, with the pending record and the revision
-   guard, skipped when unchanged, with the recovery rules above.
+8. **Durable document state.** Planned as steps 1 and 3 in [INFRA.md](INFRA.md).
+9. **Checkpoint to the `.md`.** Through the codec, with the revision guard, skipped when
+   unchanged, with the recovery rules above.
 10. **Agent edit.** `edit_document` in the `documents` MCP server, with both paths: through the
     session when one is open (one transaction, the agent's cursor, an idempotency key stored with
     the state), otherwise a conditional write of the `.md` like `add_comment`.
@@ -425,36 +366,8 @@ Parallel, not blocking: the infra ask (a WebSocket backend per region with its o
 policy, hostname, ingress, chart modeled on `viz` and `front-sse`) and an hour on Cloudflare
 Durable Objects as a fallback host.
 
-After the proof of concept: the rest of write routing (step 8 already puts the file PUT route,
-the files `edit` and `create` tools and `add_comment` under the per-file lock; `move`, `copy`,
-`delete`, `upload_from_url` and archive extraction follow), deployment per region, then comments
-in the live document with tdraier.
-
-## Cut from the MVP
-
-Several humans editing at once (the demos use one human, in one or two browser tabs), several
-replicas, the agent's comment tools going through the session (`add_comment` keeps writing the
-file), merging sandbox writes (detect and surface only).
-
-**Done when:** a human watches the agent's cursor move and its text appear; killing the service
-while typing and reconnecting shows the same document, once; the file on disk matches what the
-editor showed after the last checkpoint.
-
-## Comments in the live document
-
-To agree between tdraier (comments) and daph (live session) before more code lands, so the
-comments work does not need rework when the editor binds to Yjs:
-
-- Threads live today in the editor document's root attributes (`doc.attrs.comments`, see
-  `DocumentComments.ts`). In the live session, anchors stay marks in the text and threads stay
-  out of the shared document: the service owns them, changes them through commands and pushes
-  them to browsers. The envelope (front matter, anchor order) moves into the shared document, or
-  the checkpoint writes stale values.
-- Comment mutations are server commands only (add, reply, resolve), used by both the UI and
-  the agent tools, with the author stamped server-side. tdraier owns the comment operations and
-  their UI; daph owns the session, the edit operation and the infrastructure.
-- To decide together: what happens to a thread whose anchored text is deleted, and whether
-  overlapping comment marks survive y-prosemirror.
+After the proof of concept: the rest of write routing, deployment per region, then comments in
+the live document with tdraier.
 
 ```
       /\_/\

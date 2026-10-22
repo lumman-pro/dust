@@ -2,18 +2,20 @@
  * Shared types for the DustFileSystem abstraction.
  *
  * Scoped path: the agent/API-visible path format, e.g. `conversation-{cId}/report.pdf`,
- * `pod-{pId}/data.csv`, or `user-{uId}/memory.md`. Every public interface accepts and
- * returns scoped paths.
+ * `pod-{pId}/data.csv`, `user-{uId}/memory.md`, or `frame-{frameId}/…` (Frame persistent
+ * files). Every public interface accepts and returns scoped paths.
  *
- * FileSystemMount: one logical namespace (conversation, conversation metadata, pod, or user) with
- * its scoped prefix, sandbox mount point, backward-compat aliases, and per-mount permissions.
+ * FileSystemMount: one logical namespace (conversation, conversation metadata, pod, user, or
+ * frame) with its scoped prefix, sandbox mount point, backward-compat aliases, and per-mount
+ * permissions.
  */
 
 export type FileSystemMountKind =
   | "conversation"
   | "conversation_metadata"
   | "pod"
-  | "user";
+  | "user"
+  | "frame";
 
 /** Canonical scoped-path prefixes (include the trailing dash). */
 export const SCOPED_PREFIX_CONVERSATION = "conversation-" as const;
@@ -21,6 +23,7 @@ export const SCOPED_PREFIX_CONVERSATION_METADATA =
   "conversation_metadata-" as const;
 export const SCOPED_PREFIX_POD = "pod-" as const;
 export const SCOPED_PREFIX_USER = "user-" as const;
+export const SCOPED_PREFIX_FRAME = "frame-" as const;
 
 /** Legacy agent-visible path prefixes (no trailing dash/slash). */
 export const LEGACY_PREFIX_CONVERSATION = "conversation" as const;
@@ -144,4 +147,8 @@ export function podScopedPath(spaceId: string, rel: string): string {
 
 export function userScopedPath(userId: string, rel: string): string {
   return `${SCOPED_PREFIX_USER}${userId}/${rel}`;
+}
+
+export function frameScopedPath(frameId: string, rel: string): string {
+  return `${SCOPED_PREFIX_FRAME}${frameId}/${rel}`;
 }

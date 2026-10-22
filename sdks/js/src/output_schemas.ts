@@ -573,6 +573,7 @@ export function isMCPProgressNotificationType(
 export const OAuthProviderSchema = FlexibleEnumSchema<
   | "confluence"
   | "confluence_tools"
+  | "dropbox"
   | "fathom"
   | "freshservice"
   | "github"

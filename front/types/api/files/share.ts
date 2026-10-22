@@ -1,4 +1,4 @@
-export interface GetShareFrameMetadataResponseBody {
+export interface GetShareMetadataResponseBody {
   description: string | null;
   faviconUrl: string | null;
   logoUrl: string | null;
@@ -7,7 +7,10 @@ export interface GetShareFrameMetadataResponseBody {
   shareUrl: string;
   showSignUpCta: boolean;
   title: string;
-  vizUrl: string;
   workspaceId: string;
   workspaceName: string;
 }
+
+export type GetShareFrameMetadataResponseBody = GetShareMetadataResponseBody & {
+  vizUrl: string;
+};

@@ -92,6 +92,7 @@ import type {
   FileTypeWithUploadUrl,
   FileUseCase,
   FileUseCaseMetadata,
+  ShareableFileKind,
   SharingGrantType,
 } from "@app/types/files";
 import {
@@ -505,8 +506,10 @@ export class FileResource extends BaseResource<FileModel> {
       }
     }
 
-    const authorizedFileAccess =
-      await fileRes.getActiveAuthorizedFileAccessAllowlist();
+    // The useFile() allowlist only exists for Frames.
+    const authorizedFileAccess = fileRes.isShareableFrame
+      ? await fileRes.getActiveAuthorizedFileAccessAllowlist()
+      : null;
 
     return new Ok({
       file: fileRes,
@@ -1098,6 +1101,36 @@ export class FileResource extends BaseResource<FileModel> {
 
   get isShareableFrame(): boolean {
     return isFrameContentType(this.contentType);
+  }
+
+  /** The kind of share link this file supports, or null when it cannot be shared. */
+  get shareKind(): ShareableFileKind | null {
+    if (this.isShareableFrame) {
+      return "frame";
+    }
+    return null;
+  }
+
+  get isShareable(): boolean {
+    return this.shareKind !== null;
+  }
+
+  /** Ensures the share row of a shareable file exists. No-op for any other file. */
+  async ensureShareable(
+    auth: Authenticator,
+    { transaction }: { transaction?: Transaction } = {}
+  ): Promise<void> {
+    const kind = this.shareKind;
+    if (!kind) {
+      return;
+    }
+
+    switch (kind) {
+      case "frame":
+        return this.ensureShareableFrame(auth, { transaction });
+      default:
+        assertNever(kind);
+    }
   }
 
   async ensureShareableFrame(
@@ -2170,12 +2203,10 @@ export class FileResource extends BaseResource<FileModel> {
   }: {
     shareableFileToken: string;
   }): string {
-    assert(
-      this.isShareableFrame,
-      "getShareUrlForShareableFile called on a non-Frame file"
-    );
+    const kind = this.shareKind;
+    assert(kind, "getShareUrlForShareableFile called on a non-shareable file");
 
-    return `${config.getAppUrl()}/share/frame/${shareableFileToken}`;
+    return `${config.getAppUrl()}/share/${kind}/${shareableFileToken}`;
   }
 
   async setShareScope(
@@ -2183,11 +2214,11 @@ export class FileResource extends BaseResource<FileModel> {
     scope: FileShareScope,
     transaction?: Transaction
   ): Promise<void> {
-    if (!this.isShareableFrame) {
-      throw new Error("Only Frame files can be shared");
+    if (!this.isShareable) {
+      throw new Error("Only shareable files can be shared");
     }
 
-    await this.ensureShareableFrame(auth);
+    await this.ensureShareable(auth);
 
     const user = auth.getNonNullableUser();
 
@@ -2217,7 +2248,7 @@ export class FileResource extends BaseResource<FileModel> {
     sharedAt: number;
     shareUrl: string;
   } | null> {
-    if (!this.isShareableFrame) {
+    if (!this.isShareable) {
       return null;
     }
 
@@ -2807,8 +2838,8 @@ export class FileResource extends BaseResource<FileModel> {
     transaction?: Transaction
   ): Promise<ShareableFileModel> {
     assert(
-      this.isShareableFrame,
-      `Shareable file access requires a Frame (file: ${this.sId})`
+      this.isShareable,
+      `Shareable file access requires a shareable file (file: ${this.sId})`
     );
 
     const shareableFile = await FileResource.shareableFileModel.findOne({
@@ -2955,7 +2986,7 @@ export class FileResource extends BaseResource<FileModel> {
     auth: Authenticator,
     { grantId }: { grantId: ModelId }
   ): Promise<Result<{ email: string }, DustError>> {
-    assert(this.isShareableFrame, "revokeSharingGrant requires a Frame file");
+    assert(this.isShareable, "revokeSharingGrant requires a shareable file");
     if (!Number.isSafeInteger(grantId) || grantId < 0) {
       return new Err(
         new DustError("file_not_found", "Sharing grant not found")
@@ -2978,7 +3009,7 @@ export class FileResource extends BaseResource<FileModel> {
   }
 
   async listAllSharingGrants(): Promise<SharingGrantType[]> {
-    assert(this.isShareableFrame, "listAllSharingGrants requires a Frame file");
+    assert(this.isShareable, "listAllSharingGrants requires a shareable file");
     const grants = await SharingGrantResource.listForFile(this, {
       includeRevoked: true,
     });

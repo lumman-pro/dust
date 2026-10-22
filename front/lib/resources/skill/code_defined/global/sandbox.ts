@@ -20,10 +20,8 @@ import { isFramesV2FunctionsEnabled } from "@app/types/shared/feature_flags";
 import { Ok } from "@app/types/shared/result";
 
 function buildSandboxInstructionProse({
-  hasFramesV2,
   hasFramesV2Functions,
 }: {
-  hasFramesV2: boolean;
   hasFramesV2Functions: boolean;
 }): string {
   const instructions = [
@@ -40,10 +38,6 @@ function buildSandboxInstructionProse({
   if (hasFramesV2Functions) {
     instructions.push(
       "The `dsbx tools` CLI is for the Computer (this bash session) only. Inside Frame function source, call Dust tools with `tools.call` from `@dust/pod` — see the Create Frames skill. Do not shell out to `dsbx tools` from a Frame function's `fetch()`."
-    );
-  } else if (!hasFramesV2) {
-    instructions.push(
-      "For any Frame task, enable the `Create Frames` skill and use its interactive-content tools; publish or republish with `publish_interactive_content_file`. Never use `dsbx frame`."
     );
   }
 
@@ -332,11 +326,9 @@ async function buildSandboxInstructions(
   auth: Authenticator,
   providerId: ModelProviderIdType | undefined,
   {
-    hasFramesV2,
     hasFramesV2Functions,
     isProject,
   }: {
-    hasFramesV2: boolean;
     hasFramesV2Functions: boolean;
     isProject: boolean;
   }
@@ -345,7 +337,6 @@ async function buildSandboxInstructions(
   const environmentVariablesSection = buildEnvironmentVariablesSection();
   const filesSection = buildFilesSection({ hasPod: isProject });
   const sandboxInstructions = buildSandboxInstructionProse({
-    hasFramesV2,
     hasFramesV2Functions,
   });
 
@@ -416,15 +407,14 @@ export const sandboxSkill = {
     }: { spaceIds: string[]; agentLoopData?: AgentLoopExecutionData }
   ) => {
     const providerId = agentLoopData?.modelInfo.endpoint.modelConfig.providerId;
-    const flags = await getFeatureFlags(auth);
-    const hasFramesV2 = flags.includes("frames_v2");
-    const hasFramesV2Functions = isFramesV2FunctionsEnabled(flags);
+    const hasFramesV2Functions = isFramesV2FunctionsEnabled(
+      await getFeatureFlags(auth)
+    );
     const isProject = agentLoopData?.conversation
       ? isPodConversation(agentLoopData.conversation)
       : false;
 
     return buildSandboxInstructions(auth, providerId, {
-      hasFramesV2,
       hasFramesV2Functions,
       isProject,
     });

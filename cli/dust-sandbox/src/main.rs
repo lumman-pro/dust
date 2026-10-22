@@ -210,6 +210,12 @@ async fn run() -> anyhow::Result<()> {
             commands::frame::FrameCommand::Publish { source, replaces } => {
                 commands::cmd_frame_publish(&source, replaces.as_deref()).await?
             }
+            commands::frame::FrameCommand::DraftMode { manifest } => {
+                commands::cmd_frame_draft_mode(&manifest).await?
+            }
+            commands::frame::FrameCommand::MakeLive { manifest } => {
+                commands::cmd_frame_make_live(&manifest).await?
+            }
         },
         Commands::Filesystem { command } => commands::run_filesystem(command)?,
         Commands::Tools {
@@ -779,6 +785,48 @@ mod tests {
                 assert_eq!(replaces, None);
             }
             Commands::Frame { .. } => panic!("expected publish"),
+            _ => panic!("expected frame"),
+        }
+    }
+
+    #[test]
+    fn frame_make_live_parses() {
+        let cli = Cli::try_parse_from([
+            "dsbx",
+            "frame",
+            "make-live",
+            "/files/pod-vlt_123/Status/manifest.json",
+        ])
+        .expect("parse");
+        match cli.command {
+            Commands::Frame {
+                command: commands::frame::FrameCommand::MakeLive { manifest },
+            } => assert_eq!(
+                manifest,
+                std::path::PathBuf::from("/files/pod-vlt_123/Status/manifest.json")
+            ),
+            Commands::Frame { .. } => panic!("expected make-live"),
+            _ => panic!("expected frame"),
+        }
+    }
+
+    #[test]
+    fn frame_draft_mode_parses() {
+        let cli = Cli::try_parse_from([
+            "dsbx",
+            "frame",
+            "draft-mode",
+            "/files/pod-vlt_123/Status/manifest.json",
+        ])
+        .expect("parse");
+        match cli.command {
+            Commands::Frame {
+                command: commands::frame::FrameCommand::DraftMode { manifest },
+            } => assert_eq!(
+                manifest,
+                std::path::PathBuf::from("/files/pod-vlt_123/Status/manifest.json")
+            ),
+            Commands::Frame { .. } => panic!("expected draft-mode"),
             _ => panic!("expected frame"),
         }
     }

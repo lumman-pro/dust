@@ -384,18 +384,6 @@ msgstr "Failed to revoke access"
 msgid "Couldn't save edits"
 msgstr "Couldn't save edits"
 
-#: front/lib/swr/frames.ts
-msgid "PDF export failed"
-msgstr "PDF export failed"
-
-#: front/lib/swr/frames.ts
-msgid "PDF exported"
-msgstr "PDF exported"
-
-#: front/lib/swr/frames.ts
-msgid "Your PDF has been downloaded."
-msgstr "Your PDF has been downloaded."
-
 #: front/lib/swr/github_connection.ts
 msgid "GitHub disconnected"
 msgstr "GitHub disconnected"

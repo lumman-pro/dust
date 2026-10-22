@@ -10,6 +10,8 @@
  *   DustFileSystem.forConversations(auth, conversations) multiple conversation mounts (+pod if project space)
  *   DustFileSystem.forPod(auth, space)                   single pod mount
  *   DustFileSystem.forUser(auth)                         the authenticated user's own memory scope
+ *   DustFileSystem.forFramePersistentFiles(auth, frame)  Frame persistent files (host I/O; already
+ *       mounted in the Frame sandbox via sandboxOnlyMounts — this factory does not remount)
  *   DustFileSystem.forConversationMetadata(auth, conversation)
  *       a conversation's metadata (never agent-facing) plus the user's own scope
  *   DustFileSystem.fromScopedPath(auth, scopedPath)     infers context from the path prefix
@@ -44,10 +46,12 @@ import {
   LEGACY_PREFIX_PROJECT,
   SCOPED_PREFIX_CONVERSATION,
   SCOPED_PREFIX_CONVERSATION_METADATA,
+  SCOPED_PREFIX_FRAME,
   SCOPED_PREFIX_POD,
   SCOPED_PREFIX_USER,
 } from "@app/types/file_system";
 import { isSupportedImageContentType } from "@app/types/files";
+import { getFramePersistentFilesMountPoint } from "@app/types/mount_path";
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
 import { assertNever } from "@app/types/shared/utils/assert_never";
@@ -75,7 +79,8 @@ type ParsedScopedPrefix =
   | { kind: "conversation"; id: string }
   | { kind: "conversation_metadata"; id: string }
   | { kind: "pod"; id: string }
-  | { kind: "user"; id: string };
+  | { kind: "user"; id: string }
+  | { kind: "frame"; id: string };
 
 export function parseScopedPrefix(
   scopedPath: string
@@ -106,6 +111,12 @@ export function parseScopedPrefix(
     const id = prefix.slice(SCOPED_PREFIX_USER.length);
 
     return id ? { kind: "user", id } : null;
+  }
+
+  if (prefix.startsWith(SCOPED_PREFIX_FRAME)) {
+    const id = prefix.slice(SCOPED_PREFIX_FRAME.length);
+
+    return id ? { kind: "frame", id } : null;
   }
 
   return null;
@@ -177,6 +188,25 @@ function createUserMount(userId: string): FileSystemMount {
   };
 }
 
+function createFramePersistentFilesMount(
+  frame: Pick<FileResource, "sId">
+): FileSystemMount {
+  return {
+    kind: "frame",
+    id: frame.sId,
+    scopedPrefix: `${SCOPED_PREFIX_FRAME}${frame.sId}`,
+    // Same path the Frame sandbox already mounts via sandboxOnlyMounts; set so
+    // toSandboxPath can translate for callers that need an in-sandbox absolute path.
+    sandboxMountPoint: getFramePersistentFilesMountPoint(frame.sId),
+    legacyPrefix: null,
+    legacySandboxMountPoint: null,
+    permissions: {
+      canRead: true,
+      canWrite: true,
+    },
+  };
+}
+
 function collectScopedPrefixesFromPaths(scopedPaths: string[]): {
   conversationIds: Set<string>;
   podIds: Set<string>;
@@ -206,6 +236,10 @@ function collectScopedPrefixesFromPaths(scopedPaths: string[]): {
 
       case "user":
         userIds.add(parsed.id);
+        break;
+
+      // Frame persistent files are never mounted into agent-loop sandboxes.
+      case "frame":
         break;
 
       default:
@@ -389,6 +423,37 @@ export class DustFileSystem {
         [],
         DustFileSystem.createBackend(auth),
         sandboxOnlyMounts
+      )
+    );
+  }
+
+  /**
+   * Host-side I/O for a Frame's persistent files folder (same GCS prefix the Frame sandbox
+   * mounts at `/frames/{frameId}/files`). Does not configure sandbox mounts — use
+   * `forFrameSandboxProvisioning` + `sandboxOnlyMounts` for that.
+   *
+   * Callers that write during a Frame function tool run must gate on the sandbox_function run
+   * context and that invocation's Frame (see `writeToFramePersistentFilesFolder`).
+   */
+  static async forFramePersistentFiles(
+    auth: Authenticator,
+    frame: Pick<FileResource, "sId" | "workspaceId" | "isFrameV2">
+  ): Promise<Result<DustFileSystem, DustFileSystemError>> {
+    const owner = auth.getNonNullableWorkspace();
+    if (frame.workspaceId !== owner.id || !frame.isFrameV2) {
+      return new Err(
+        new DustFileSystemError(
+          "unauthorized",
+          "Frame persistent files require a Frames v2 resource in this workspace."
+        )
+      );
+    }
+
+    return new Ok(
+      new DustFileSystem(
+        auth,
+        [createFramePersistentFilesMount(frame)],
+        DustFileSystem.createBackend(auth)
       )
     );
   }
@@ -634,6 +699,17 @@ export class DustFileSystem {
         }
         return DustFileSystem.forUser(auth);
       }
+
+      case "frame":
+        // Host writes use `forFramePersistentFiles(auth, frame)` with the Frame resource from
+        // the invocation — avoid resolving by path here (keeps FileResource out of this module's
+        // runtime imports and prevents an import cycle).
+        return new Err(
+          new DustFileSystemError(
+            "invalid_path",
+            `Frame persistent files must be opened via forFramePersistentFiles: ${scopedPath}`
+          )
+        );
 
       default:
         assertNever(parsed);

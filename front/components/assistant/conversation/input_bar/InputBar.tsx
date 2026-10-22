@@ -162,6 +162,7 @@ export const InputBar = React.memo(function InputBar({
     fileUploaderService,
     isLoadingGoTemplate,
     onBeforeSubmit,
+    hostSelection,
   } = useContext(InputBarContext);
 
   // We use this specific hook because this component is involved in the new conversation page.
@@ -683,6 +684,7 @@ export const InputBar = React.memo(function InputBar({
             <InputBarAttachments
               owner={owner}
               files={{ service: fileUploaderService }}
+              hostSelection={hostSelection}
             />
           )}
           <InputBarContainer

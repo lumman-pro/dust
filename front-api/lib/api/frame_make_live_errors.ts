@@ -66,6 +66,7 @@ export function frameMakeLiveApiError(
     case "invalid_function_artifact":
     case "invalid_function_reference":
     case "invalid_manifest":
+    case "invalid_schedule":
     case "invalid_source":
     case "invalid_tailwind":
     case "ui_build_failed":

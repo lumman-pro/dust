@@ -1,10 +1,5 @@
-import type {
-  BilledRunUsage,
-  ConsumptionAnalyticsMessageMetadata,
-} from "@app/lib/analytics/agent_message_consumption/load";
+import type { ConsumptionAnalyticsMessageMetadata } from "@app/lib/analytics/agent_message_consumption/load";
 import { normalizeOrigin } from "@app/lib/api/analytics/source_labels";
-import type { MessageConsumptionAllocation } from "@app/lib/api/assistant/agent_message_consumption_attribution/allocation";
-import type { AgentMessageConsumptionItemResource } from "@app/lib/resources/agent_message_consumption_item_resource";
 import type { RunUsageWithRunKeyType } from "@app/lib/resources/run_resource";
 import type {
   AgentMessageAnalyticsModel,
@@ -12,7 +7,6 @@ import type {
   AgentMessageConsumptionAnalyticsUsageType,
 } from "@app/types/assistant/analytics";
 import type { ModelId } from "@app/types/shared/model_id";
-import assert from "assert";
 
 type AgentMessageConsumptionAnalyticsDocumentMetadata = Pick<
   AgentMessageConsumptionAnalyticsData,
@@ -89,16 +83,4 @@ export function makeBaseDocument(
     user: metadata.user,
     workspace_id: metadata.workspaceId,
   };
-}
-
-export function reconciledCreditMicroForItem(
-  allocation: MessageConsumptionAllocation<BilledRunUsage>,
-  item: AgentMessageConsumptionItemResource
-): number {
-  const creditMicro = allocation.reconciledCreditAmounts.byItem.get(item);
-  assert(
-    creditMicro !== undefined,
-    "Consumption item is missing its reconciled credit amount"
-  );
-  return creditMicro;
 }

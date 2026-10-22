@@ -1,12 +1,16 @@
 import { ActionDetailsWrapper } from "@app/components/actions/ActionDetailsWrapper";
 import { ToolGeneratedFileDetails } from "@app/components/actions/mcp/details/MCPToolOutputDetails";
 import type { ToolExecutionDetailsProps } from "@app/components/actions/mcp/details/types";
+import {
+  validateToolInputs,
+  WEBBROWSER_TOOL_NAME,
+} from "@app/lib/actions/mcp_internal_actions/constants";
 import type { BrowseResultResourceType } from "@app/lib/actions/mcp_internal_actions/output_schemas";
 import {
   isBrowseResultResourceType,
   isToolGeneratedFile,
 } from "@app/lib/actions/mcp_internal_actions/output_schemas";
-import { isWebbrowseInputType } from "@app/lib/actions/mcp_internal_actions/types";
+import { WEB_SEARCH_BROWSE_SERVER_NAME } from "@app/lib/api/actions/servers/web_search_browse/metadata";
 import { validateUrl } from "@app/types/shared/utils/url_utils";
 import { Card, FaviconIcon, Globe01 } from "@dust-tt/sparkle";
 import { Trans, useLingui } from "@lingui/react/macro";
@@ -60,7 +64,14 @@ export function MCPBrowseActionDetails({
   owner,
 }: ToolExecutionDetailsProps) {
   const { t } = useLingui();
-  const urls = isWebbrowseInputType(toolParams) ? toolParams.urls : null;
+  // http_client reuses the web_search_&_browse tools metadata.
+  const urls = validateToolInputs(
+    WEB_SEARCH_BROWSE_SERVER_NAME,
+    WEBBROWSER_TOOL_NAME,
+    toolParams
+  )
+    ? toolParams.urls
+    : null;
 
   const browseResults =
     toolOutput?.filter(isBrowseResultResourceType).map((o) => o.resource) ?? [];

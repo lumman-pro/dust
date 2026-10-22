@@ -26,6 +26,7 @@ import type { ConversationResource } from "@app/lib/resources/conversation_resou
 import { ConversationSandboxAdapter } from "@app/lib/resources/conversation_sandbox_adapter";
 import { ConversationSelectedSpaceResource } from "@app/lib/resources/conversation_selected_space_resource";
 import { DataSourceResource } from "@app/lib/resources/data_source_resource";
+import { InferenceHookResource } from "@app/lib/resources/inference_hook_resource";
 import { MentionResource } from "@app/lib/resources/mention_resource";
 import { ContentFragmentModel } from "@app/lib/resources/storage/models/content_fragment";
 import {
@@ -185,6 +186,9 @@ export async function destroyConversationMessages(
     });
     await AgentStepContentResource.deleteByAgentMessageIds(auth, {
       agentMessageIds,
+    });
+    await InferenceHookResource.deleteCheckpointsByAgentMessageModelIds(auth, {
+      agentMessageModelIds: agentMessageIds,
     });
     await AgentMessageFeedbackModel.destroy({
       where: {

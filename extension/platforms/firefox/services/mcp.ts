@@ -1,3 +1,4 @@
+import { DUST_CLIENT_SIDE_MCP_SERVER_NAMES } from "@app/lib/actions/constants";
 import { registerAllTools } from "@extension/shared/browser_tools";
 import { getBrowserMCPServerInstructions } from "@extension/shared/browser_tools/metadata";
 import type { CaptureService } from "@extension/shared/services/capture";
@@ -5,7 +6,8 @@ import { McpService } from "@extension/shared/services/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 const FIREFOX_MCP_SERVER_NAME = "firefox-mcp-server";
-const FIREFOX_MCP_CLIENT_NAME = "dust-firefox-extension";
+const FIREFOX_MCP_CLIENT_NAME =
+  DUST_CLIENT_SIDE_MCP_SERVER_NAMES.firefoxExtension;
 
 /**
  * Firefox-specific implementation of the MCP service.

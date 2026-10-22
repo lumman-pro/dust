@@ -1,3 +1,4 @@
+import { InputBarContext } from "@app/components/assistant/conversation/input_bar/InputBarContext";
 import { useClientType } from "@app/lib/context/clientType";
 import { clientFetch } from "@app/lib/egress/client";
 import { getLocalTimeZone } from "@app/lib/i18n/format";
@@ -16,7 +17,7 @@ import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
 import type { UserType, WorkspaceType } from "@app/types/user";
 import { useLingui } from "@lingui/react/macro";
-import { useCallback } from "react";
+import { useCallback, useContext } from "react";
 
 // Bounded concurrency for content fragment POSTs: each grabs a per-conversation advisory lock
 // (getConversationRankVersionLock) that serializes inserts, so posting them unbounded races the
@@ -39,6 +40,7 @@ export function useSubmitMessage({
 }) {
   const { t } = useLingui();
   const contextOrigin = useClientType();
+  const { hostSelection } = useContext(InputBarContext);
   const resumeOngoingAgentLoopsPolling = useResumeOngoingAgentLoopsPolling(
     owner.sId
   );
@@ -148,6 +150,7 @@ export function useSubmitMessage({
               selectedMCPServerViewIds,
               selectedSpaceIds,
               origin,
+              hostSelection: hostSelection?.label,
             },
             mentions,
             skipToolsValidation,
@@ -196,6 +199,7 @@ export function useSubmitMessage({
       user,
       conversationId,
       contextOrigin,
+      hostSelection,
       resumeOngoingAgentLoopsPolling,
       t,
     ]

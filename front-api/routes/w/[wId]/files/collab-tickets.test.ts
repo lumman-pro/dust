@@ -2,6 +2,7 @@ import { redeemCollabTicket } from "@app/lib/api/collab/tickets";
 import { DustFileSystem, DustFileSystemError } from "@app/lib/api/file_system";
 import { WRITE_CANONICAL_FILE_CONTENT_MAX_BYTES } from "@app/lib/api/files/file_system_ops";
 import { WorkspaceResource } from "@app/lib/resources/workspace_resource";
+import { writeConversationFile } from "@app/tests/utils/conversation_files";
 import { FeatureFlagFactory } from "@app/tests/utils/FeatureFlagFactory";
 import { createPrivateApiMockRequest } from "@app/tests/utils/generic_private_api_tests";
 import { fileStorageMock } from "@app/tests/utils/mocks/file_storage";
@@ -25,7 +26,7 @@ describe("POST /api/w/:wId/files/collab-tickets", () => {
   it("returns a ticket for the signed-in user and the file", async () => {
     const { workspace, auth, user } = await createPrivateApiMockRequest();
     await FeatureFlagFactory.basic(auth, "co_edition");
-    const filePath = await writeUserFile(auth, "notes.md", "# Notes\n");
+    const filePath = await writeConversationFile(auth, "notes.md", "# Notes\n");
 
     const response = await post(workspace.sId, filePath);
 
@@ -40,7 +41,7 @@ describe("POST /api/w/:wId/files/collab-tickets", () => {
 
   it("refuses without co_edition", async () => {
     const { workspace, auth } = await createPrivateApiMockRequest();
-    const filePath = await writeUserFile(auth, "notes.md", "# Notes\n");
+    const filePath = await writeConversationFile(auth, "notes.md", "# Notes\n");
 
     const response = await post(workspace.sId, filePath);
 
@@ -50,7 +51,7 @@ describe("POST /api/w/:wId/files/collab-tickets", () => {
   it("refuses a workspace in maintenance", async () => {
     const { workspace, auth } = await createPrivateApiMockRequest();
     await FeatureFlagFactory.basic(auth, "co_edition");
-    const filePath = await writeUserFile(auth, "notes.md", "# Notes\n");
+    const filePath = await writeConversationFile(auth, "notes.md", "# Notes\n");
     await WorkspaceResource.updateMetadata(workspace.id, {
       maintenance: "relocation",
     });
@@ -64,7 +65,7 @@ describe("POST /api/w/:wId/files/collab-tickets", () => {
   it("refuses a file that is not Markdown", async () => {
     const { workspace, auth } = await createPrivateApiMockRequest();
     await FeatureFlagFactory.basic(auth, "co_edition");
-    const filePath = await writeUserFile(
+    const filePath = await writeConversationFile(
       auth,
       "notes.txt",
       "Hi.\n",
@@ -80,7 +81,7 @@ describe("POST /api/w/:wId/files/collab-tickets", () => {
   it("refuses a file too large to edit live", async () => {
     const { workspace, auth } = await createPrivateApiMockRequest();
     await FeatureFlagFactory.basic(auth, "co_edition");
-    const filePath = await writeUserFile(auth, "notes.md", "# Notes\n");
+    const filePath = await writeConversationFile(auth, "notes.md", "# Notes\n");
     vi.spyOn(DustFileSystem.prototype, "stat").mockResolvedValue(
       new Ok({
         contentType: "text/markdown",
@@ -97,7 +98,7 @@ describe("POST /api/w/:wId/files/collab-tickets", () => {
   it("returns a ticket for a file the user can only read", async () => {
     const { workspace, auth } = await createPrivateApiMockRequest();
     await FeatureFlagFactory.basic(auth, "co_edition");
-    const filePath = await writeUserFile(auth, "notes.md", "# Notes\n");
+    const filePath = await writeConversationFile(auth, "notes.md", "# Notes\n");
     vi.spyOn(DustFileSystem.prototype, "checkWriteAccess").mockReturnValue(
       new Err(new DustFileSystemError("internal", "Read-only mount."))
     );
@@ -108,15 +109,32 @@ describe("POST /api/w/:wId/files/collab-tickets", () => {
   });
 
   it("refuses a missing file", async () => {
-    const { workspace, auth, user } = await createPrivateApiMockRequest();
+    const { workspace, auth } = await createPrivateApiMockRequest();
     await FeatureFlagFactory.basic(auth, "co_edition");
+    const notes = await writeConversationFile(auth, "notes.md", "# Notes\n");
     fileStorageMock.setFileExists(
       (filePath) => !filePath.endsWith("missing.md")
     );
 
-    const response = await post(workspace.sId, `user-${user.sId}/missing.md`);
+    const response = await post(
+      workspace.sId,
+      notes.replace(/notes\.md$/, "missing.md")
+    );
 
     expect(response.status).toBe(404);
     expect((await response.json()).error.type).toBe("file_not_found");
+  });
+
+  it("refuses a user's own file, which cannot be edited live", async () => {
+    const { workspace, auth } = await createPrivateApiMockRequest();
+    await FeatureFlagFactory.basic(auth, "co_edition");
+    const filePath = await writeUserFile(auth, "notes.md", "# Notes\n");
+
+    const response = await post(workspace.sId, filePath);
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error.type).toBe(
+      "collab_session_unsupported_location"
+    );
   });
 });

@@ -154,6 +154,58 @@ msgstr "Frontier models priced far above Premium, for the most demanding work."
 msgid "all efforts"
 msgstr "all efforts"
 
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "High (always ask for confirmation)"
+msgstr "High (always ask for confirmation)"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Medium (allows input-scoped confirmation save)"
+msgstr "Medium (allows input-scoped confirmation save)"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Low (allows user-global confirmation save)"
+msgstr "Low (allows user-global confirmation save)"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Never ask (automatic execution)"
+msgstr "Never ask (automatic execution)"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgctxt "tool stake level"
+msgid "High"
+msgstr "High"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgctxt "tool stake level"
+msgid "Medium"
+msgstr "Medium"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgctxt "tool stake level"
+msgid "Low"
+msgstr "Low"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgctxt "tool stake level"
+msgid "Never ask"
+msgstr "Never ask"
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Needs explicit user approval."
+msgstr "Needs explicit user approval."
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Users can save confirmations for specific tool inputs."
+msgstr "Users can save confirmations for specific tool inputs."
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Users can completely disable confirmations."
+msgstr "Users can completely disable confirmations."
+
+#: front/lib/client/tool_stakes_descriptions.ts
+msgid "Runs automatically."
+msgstr "Runs automatically."
+
 #: front/lib/client/visualization.ts
 msgid "The visualization code failed with this error:"
 msgstr "The visualization code failed with this error:"

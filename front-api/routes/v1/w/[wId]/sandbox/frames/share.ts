@@ -5,7 +5,6 @@ import {
   getFrameShareLinkFromSource,
 } from "@app/lib/api/frames/share_link_from_source";
 import { isSandboxExecTokenPayload } from "@app/lib/api/sandbox/access_tokens";
-import { hasFeatureFlag } from "@app/lib/auth";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { isDustFileSystemError } from "@app/types/file_system";
 import { assertNever } from "@app/types/shared/utils/assert_never";
@@ -64,15 +63,6 @@ app.get(
         api_error: {
           type: "invalid_request_error",
           message: "This sandbox token cannot retrieve Frame share links.",
-        },
-      });
-    }
-    if (!(await hasFeatureFlag(auth, "frames_v2"))) {
-      return apiError(ctx, {
-        status_code: 403,
-        api_error: {
-          type: "invalid_request_error",
-          message: "Frames v2 is not enabled for this workspace.",
         },
       });
     }

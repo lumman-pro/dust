@@ -106,7 +106,7 @@ export async function addFrameSharingGrants(
   if (permission.isErr()) {
     return permission;
   }
-  await file.ensureShareableFrame(auth);
+  await file.ensureShareable(auth);
   const created = await SharingGrantResource.add(auth, file, {
     emails,
     domains,
@@ -199,7 +199,18 @@ export async function checkFrameShareScopePermission(
     }
   }
 
-  if (workspace.sharingPolicy !== "all_scopes") {
+  return checkShareScopePermission(auth, shareScope);
+}
+
+export function checkShareScopePermission(
+  auth: Authenticator,
+  shareScope: FileShareScope
+): Result<void, DustError<"unauthorized">> {
+  if (shareScope !== "public") {
+    return new Ok(undefined);
+  }
+
+  if (auth.getNonNullableWorkspace().sharingPolicy !== "all_scopes") {
     return new Err(
       new DustError(
         "unauthorized",

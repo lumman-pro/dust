@@ -43,7 +43,7 @@ export function RecentInvoices() {
         accessorKey: "label",
         header: t`Invoice`,
         enableSorting: false,
-        meta: { className: "w-[45%]" },
+        meta: { className: "w-[40%]" },
         cell: ({ row }) => (
           <span className="block truncate text-sm">{row.original.label}</span>
         ),
@@ -63,7 +63,7 @@ export function RecentInvoices() {
         accessorKey: "amountLabel",
         header: t`Amount`,
         enableSorting: false,
-        meta: { headerAlign: "right", className: "w-[17%]" },
+        meta: { headerAlign: "right", className: "w-[22%]" },
         cell: ({ row }) => (
           <span className="block text-right text-sm">
             {row.original.amountLabel}

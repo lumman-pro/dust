@@ -60,6 +60,7 @@ const mockAgentMessage: LightAgentMessageType = {
   activitySteps: [],
   resolvedModel: null,
   modelResolutionMethod: null,
+  fallbackModelId: null,
 };
 
 describe("InlineActivitySteps", () => {

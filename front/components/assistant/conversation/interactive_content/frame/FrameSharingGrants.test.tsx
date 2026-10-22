@@ -26,9 +26,6 @@ it("explains why a public domain is rejected and allows inviting a named address
   expect(alert).toHaveTextContent(
     '"@GMAIL.COM": Public or disposable email domains are not allowed. Invite individual email addresses instead.'
   );
-  expect(
-    screen.queryByText(/Invitations are sent to email addresses only/)
-  ).not.toBeInTheDocument();
   expect(input).toHaveAttribute("aria-describedby", alert.id);
   expect(input).toHaveAttribute("aria-invalid", "true");
   expect(onAdd).not.toHaveBeenCalled();

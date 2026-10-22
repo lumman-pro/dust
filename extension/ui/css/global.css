@@ -13,6 +13,7 @@
 @layer base {
   :root {
     --banner-height: 0px;
+    --title-height: 3rem;
     --panel-height: calc(100dvh - var(--banner-height));
 
     /* `border-darker`: legacy duplicate of `border-dark`, switches via .dark

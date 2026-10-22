@@ -177,6 +177,10 @@ msgstr "Die Filter konnten nicht geladen werden."
 msgid "Select all"
 msgstr "Alle auswählen"
 
+#: front/components/workspace/analytics/UsageFilterPanel.tsx
+msgid "Revoked"
+msgstr "Widerrufen"
+
 #: front/components/workspace/analytics/UsageFilterSummary.tsx
 #: front/components/workspace/analytics/automationsFilter.ts
 msgid "Agent"

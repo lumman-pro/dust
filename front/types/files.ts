@@ -105,6 +105,11 @@ export const fileShareScopeSchema = z.enum([
 
 export type FileShareScope = z.infer<typeof fileShareScopeSchema>;
 
+export const shareableFileKindSchema = z.enum(["frame"]);
+
+/** The kinds of files that can be shared through a share link. */
+export type ShareableFileKind = z.infer<typeof shareableFileKindSchema>;
+
 /**
  * Whether a share scope makes the file visible to every workspace member holding its link.
  * "workspace" is the legacy spelling of "workspace_and_emails".

@@ -5,6 +5,7 @@ import {
   CONSUMPTION_METRICS,
   CONSUMPTION_SCOPE_DIMENSIONS,
   CONSUMPTION_SCOPE_FILTER_KEYS,
+  CONSUMPTION_TOP_RANK_BY,
   CONSUMPTION_TOP_SORT_ORDER,
   DEFAULT_CONSUMPTION_METRIC,
 } from "@app/lib/api/analytics/consumption/scope";
@@ -81,9 +82,9 @@ export const ConsumptionTopBodySchema = ConsumptionBodySchema.extend({
     .transform((limit) => limit ?? DEFAULT_CONSUMPTION_TOP_LIMIT),
   offset: z.number().int().nonnegative().default(0),
   search: z.string().trim().optional(),
-  // Always ranks by gross credits; see the comment on
-  // CONSUMPTION_TOP_SORT_ORDER for why other metrics aren't supported yet.
   sortOrder: z.enum(CONSUMPTION_TOP_SORT_ORDER).optional().default("desc"),
+  // Defaults to gross credits, the only ranking older clients know about.
+  rankBy: z.enum(CONSUMPTION_TOP_RANK_BY).optional().default("credits"),
 });
 
 export type ConsumptionTopBody = z.infer<typeof ConsumptionTopBodySchema>;

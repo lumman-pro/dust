@@ -9,12 +9,12 @@ import {
   isRemoteMCPServerType,
   requiresBearerTokenConfiguration,
 } from "@app/lib/actions/mcp_helper";
+import type { MCPServerViewType } from "@app/lib/api/mcp";
 import {
   MCP_TOOL_STAKE_COLORS,
   MCP_TOOL_STAKE_DESCRIPTIONS,
   MCP_TOOL_STAKE_SHORT_LABELS,
-} from "@app/lib/actions/tool_stakes_descriptions";
-import type { MCPServerViewType } from "@app/lib/api/mcp";
+} from "@app/lib/client/tool_stakes_descriptions";
 import { getMcpServerViewDisplayDescription } from "@app/lib/dust_provided_descriptions";
 import { formatDate } from "@app/lib/i18n/format";
 import { asDisplayName } from "@app/types/shared/utils/string_utils";
@@ -83,12 +83,12 @@ export function MCPServerDetailsGeneral({
                   {asDisplayName(tool.name)}
                 </div>
                 <Tooltip
-                  label={MCP_TOOL_STAKE_DESCRIPTIONS[permission]}
+                  label={t(MCP_TOOL_STAKE_DESCRIPTIONS[permission])}
                   trigger={
                     <Chip
                       size="xs"
                       color={MCP_TOOL_STAKE_COLORS[permission]}
-                      label={MCP_TOOL_STAKE_SHORT_LABELS[permission]}
+                      label={t(MCP_TOOL_STAKE_SHORT_LABELS[permission])}
                     />
                   }
                 />

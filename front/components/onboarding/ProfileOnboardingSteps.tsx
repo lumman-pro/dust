@@ -1,12 +1,15 @@
 import { PronounPresetChips } from "@app/components/me/PronounPresetChips";
-import { useSelectableLocales } from "@app/hooks/useSelectableLocales";
 import type { EmailProviderType } from "@app/lib/utils/email_provider_detection";
 import type { FavoritePlatform } from "@app/types/favorite_platforms";
 import { FAVORITE_PLATFORM_OPTIONS } from "@app/types/favorite_platforms";
 import type { JobType } from "@app/types/job_type";
 import { JOB_TYPE_OPTIONS } from "@app/types/job_type";
 import type { SupportedLocale } from "@app/types/locale";
-import { isSupportedLocale, LOCALE_LABELS } from "@app/types/locale";
+import {
+  isSupportedLocale,
+  LOCALE_LABELS,
+  SUPPORTED_LOCALES,
+} from "@app/types/locale";
 import { asDisplayName } from "@app/types/shared/utils/string_utils";
 import type { WorkspaceType } from "@app/types/user";
 import { MAX_USER_PRONOUNS_LENGTH } from "@app/types/user";
@@ -140,7 +143,6 @@ export function UserProfileStep({
   const pronounsInputRef = useRef<HTMLInputElement>(null);
   const localeLabelId = useId();
   const localeButtonId = useId();
-  const selectableLocales = useSelectableLocales();
   const firstName = formData.firstName;
   const workspaceName = owner.name;
 
@@ -225,7 +227,7 @@ export function UserProfileStep({
                 }
               }}
             >
-              {selectableLocales.map((supportedLocale) => (
+              {SUPPORTED_LOCALES.map((supportedLocale) => (
                 <DropdownMenuRadioItem
                   key={supportedLocale}
                   value={supportedLocale}

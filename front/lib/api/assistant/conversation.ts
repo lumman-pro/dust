@@ -73,6 +73,7 @@ import {
 } from "@app/lib/api/credits/access_control";
 import { maybeAutoUpgradeSeat } from "@app/lib/api/credits/auto_seat_upgrade";
 import { getProgrammaticRateLimiterCreditState } from "@app/lib/api/credits/programmatic_usage_limit";
+import { reflectConversationCreationOnDfs } from "@app/lib/api/dfs/conversations";
 import { maybeUpsertFileAttachment } from "@app/lib/api/files/attachments";
 import { PostHogServerSideTracking } from "@app/lib/api/posthog";
 import { getRemainingKeyCapMicroUsd } from "@app/lib/api/programmatic_usage/key_cap";
@@ -261,6 +262,8 @@ export async function createConversation(
     },
     space
   );
+
+  await reflectConversationCreationOnDfs(auth, conversation);
 
   const conversationAsJson = conversation.toJSON();
 

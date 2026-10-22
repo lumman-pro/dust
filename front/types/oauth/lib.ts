@@ -31,6 +31,7 @@ export function isOAuthUseCase(obj: unknown): obj is OAuthUseCase {
 export const OAUTH_PROVIDERS = [
   "confluence",
   "confluence_tools",
+  "dropbox",
   "fathom",
   "freshservice",
   "github",
@@ -62,6 +63,7 @@ export const OAUTH_PROVIDERS = [
 export const OAUTH_PROVIDER_NAMES: Record<OAuthProvider, string> = {
   confluence: "Confluence",
   confluence_tools: "Confluence Tools",
+  dropbox: "Dropbox",
   fathom: "Fathom",
   freshservice: "Freshservice",
   github: "GitHub",
@@ -468,6 +470,7 @@ export function getProviderRequiredOAuthCredentialInputs({
     case "mcp":
     case "fathom":
     case "productboard":
+    case "dropbox":
       return null;
     case "vanta": {
       const result: OAuthCredentialInputs = {

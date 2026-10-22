@@ -56,10 +56,6 @@ msgid "Restricted"
 msgstr ""
 
 #: front/components/assistant/conversation/tool_validation/PodEditInformationValidationDetails.tsx
-msgid "Unpinned"
-msgstr ""
-
-#: front/components/assistant/conversation/tool_validation/PodEditInformationValidationDetails.tsx
 msgid "No change"
 msgstr ""
 
@@ -81,10 +77,6 @@ msgstr ""
 
 #: front/components/assistant/conversation/tool_validation/PodEditInformationValidationDetails.tsx
 msgid "Access"
-msgstr ""
-
-#: front/components/assistant/conversation/tool_validation/PodEditInformationValidationDetails.tsx
-msgid "Pinned frame"
 msgstr ""
 
 #: front/components/assistant/conversation/tool_validation/PodEditInformationValidationDetails.tsx

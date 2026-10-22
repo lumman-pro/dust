@@ -10,7 +10,7 @@ use dfs_api::storage::{
     resources::{
         file::{self, BLOCK_SIZE_BYTES, FileResource},
         keys::tenant_subspace,
-        object::{self, ObjectResource},
+        object::{self, ObjectResource, locks::LockTokens},
         session::SessionResource,
         tenant::TenantResource,
     },
@@ -106,7 +106,7 @@ pub(crate) async fn updates_patch_metadata_and_preserve_receipt_results() -> Res
                 let calls = &calls;
                 async move {
                     calls.fetch_add(1, Ordering::Relaxed);
-                    ObjectResource::apply(&tx, session, operations)
+                    ObjectResource::apply(&tx, session, operations, &LockTokens::default())
                         .await?
                         .into_iter()
                         .collect::<Result<Vec<_>, _>>()
@@ -164,6 +164,7 @@ pub(crate) async fn updates_patch_metadata_and_preserve_receipt_results() -> Res
             mime_type: Some("inode/directory".to_owned()),
             ..Default::default()
         },
+        &LockTokens::default(),
     )
     .await?;
     let attr = mutation.object.context("missing root attributes")?;
@@ -203,7 +204,8 @@ pub(crate) async fn updates_reject_invalid_patches_without_staging_writes() -> R
                     object_id: object.object_id,
                     size: Some(0),
                     ..Default::default()
-                }
+                },
+                &LockTokens::default()
             )
             .await,
             Err(storage::Error::Resource(object::Error::Forbidden))
@@ -221,7 +223,8 @@ pub(crate) async fn updates_reject_invalid_patches_without_staging_writes() -> R
                     mime_type: Some("application/json".to_owned()),
                     xattrs: vec![XattrChange { name, value: None }],
                     ..Default::default()
-                }
+                },
+                &LockTokens::default()
             )
             .await,
             Err(storage::Error::Resource(object::Error::InvalidXattrName))
@@ -238,7 +241,8 @@ pub(crate) async fn updates_reject_invalid_patches_without_staging_writes() -> R
                     size: Some(0),
                     mime_type: Some(mime_type),
                     ..Default::default()
-                }
+                },
+                &LockTokens::default()
             )
             .await,
             Err(storage::Error::Resource(object::Error::InvalidMimeType))
@@ -257,7 +261,8 @@ pub(crate) async fn updates_reject_invalid_patches_without_staging_writes() -> R
                     value: Some(vec![0; 32 * 1024 - 1])
                 }],
                 ..Default::default()
-            }
+            },
+            &LockTokens::default()
         )
         .await,
         Err(storage::Error::Resource(object::Error::XattrsTooLarge))
@@ -272,6 +277,7 @@ pub(crate) async fn updates_reject_invalid_patches_without_staging_writes() -> R
             mime_type: Some("text/plain".to_owned()),
             ..Default::default()
         },
+        &LockTokens::default(),
     )
     .await;
     assert!(
@@ -287,7 +293,8 @@ pub(crate) async fn updates_reject_invalid_patches_without_staging_writes() -> R
             UpdateOperation {
                 object_id: other.tenant.root_id,
                 ..Default::default()
-            }
+            },
+            &LockTokens::default()
         )
         .await,
         Err(storage::Error::Resource(object::Error::NotFound))
@@ -310,6 +317,7 @@ pub(crate) async fn updates_reject_invalid_patches_without_staging_writes() -> R
             mime_type: Some("application/json".to_owned()),
             ..Default::default()
         },
+        &LockTokens::default(),
     )
     .await;
     assert!(
@@ -348,6 +356,7 @@ pub(crate) async fn updates_resize_files_without_restoring_discarded_bytes() -> 
                 size: Some(size),
                 ..Default::default()
             },
+            &LockTokens::default(),
         )
         .await?;
         let attr = mutation.object.context("missing file attributes")?;
@@ -390,6 +399,7 @@ pub(crate) async fn updates_resize_files_without_restoring_discarded_bytes() -> 
             mtime: Some(42),
             ..Default::default()
         },
+        &LockTokens::default(),
     )
     .await?;
     let attr = mutation.object.context("missing file attributes")?;
@@ -407,7 +417,7 @@ pub(crate) async fn updates_conflict_with_grant_revocation() -> Result<()> {
         mtime: Some(42),
         ..Default::default()
     };
-    ObjectResource::apply_update(&tx, &session, operation.clone()).await?;
+    ObjectResource::apply_update(&tx, &session, operation.clone(), &LockTokens::default()).await?;
     let revoke = fdb::database()?.create_trx()?;
     let mut root = ObjectResource::fetch(&revoke, tenant, &tenant.root_id)
         .await?
@@ -425,7 +435,7 @@ pub(crate) async fn updates_conflict_with_grant_revocation() -> Result<()> {
     assert_eq!(error.code(), 1020);
     let tx = fdb::database()?.create_trx()?;
     assert!(matches!(
-        ObjectResource::apply_update(&tx, &session, operation).await,
+        ObjectResource::apply_update(&tx, &session, operation, &LockTokens::default()).await,
         Err(storage::Error::Resource(object::Error::Forbidden))
     ));
     let stored = ObjectResource::fetch(&tx, tenant, &object.object_id)

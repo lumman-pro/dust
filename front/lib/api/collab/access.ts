@@ -19,7 +19,12 @@ export interface CollabAccess {
 
 /** Why a file cannot open in a live session. */
 export interface CollabFileError {
-  code: "invalid_path" | "unavailable" | "not_markdown" | "too_large";
+  code:
+    | "invalid_path"
+    | "unavailable"
+    | "not_markdown"
+    | "too_large"
+    | "unsupported_location";
   message: string;
 }
 
@@ -29,8 +34,10 @@ export interface CollabFileError {
  * `isMarkdownContentType` as for the browser's editor, and that `auth` can read through the file
  * system, with the same mount permissions as the file API, and only under its normalized path
  * without a trailing slash, so one file never has two live documents. A file larger than the file API can write MUST be
- * refused before it is read, since the session could never save it. `canWrite` MUST be the file
- * system's write check for that path.
+ * refused before it is read, since the session could never save it. So MUST a file the file API
+ * reads without a revision (`toMountFilePath` gives it no storage path), with
+ * `unsupported_location`, since none of its saves could be conditional. `canWrite` MUST be the
+ * file system's write check for that path.
  */
 export async function openCollabAccess(
   auth: Authenticator,
@@ -54,6 +61,12 @@ export async function openCollabAccess(
   const dustFs = await DustFileSystem.fromScopedPath(auth, canonicalPath);
   if (dustFs.isErr()) {
     return new Err({ code: "unavailable", message: dustFs.error.message });
+  }
+  if (dustFs.value.toMountFilePath(canonicalPath) === null) {
+    return new Err({
+      code: "unsupported_location",
+      message: "Only files in a conversation or a Pod can be edited live.",
+    });
   }
   const stat = await dustFs.value.stat(canonicalPath);
   if (stat.isErr()) {

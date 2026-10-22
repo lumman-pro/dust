@@ -3,13 +3,9 @@ import { attachPublishedFrameToParentAction } from "@app/lib/api/frames/attach_p
 import { recordFramePublishAction } from "@app/lib/api/frames/publish_billing";
 import { publishFrameFromSource } from "@app/lib/api/frames/publish_from_source";
 import { isSandboxExecTokenPayload } from "@app/lib/api/sandbox/access_tokens";
-import { hasFeatureFlag } from "@app/lib/auth";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import logger from "@app/logger/logger";
-import {
-  type FramePublicationStatus,
-  FramePublishModeSchema,
-} from "@app/types/api/frame_publication";
+import type { FramePublicationStatus } from "@app/types/api/frame_publication";
 import { assertNever } from "@app/types/shared/utils/assert_never";
 import { frameSourceErrorStatus } from "@front-api/lib/api/frame_source_errors";
 import { sandboxApp } from "@front-api/middlewares/ctx";
@@ -21,14 +17,13 @@ import { z } from "zod";
 import frameById from "./[frameId]";
 import call from "./call";
 import callById from "./call_by_id";
+import draftMode from "./draft-mode";
+import makeLive from "./make-live";
 import share from "./share";
 
 const FramePublishRequestSchema = z.object({
   manifestPath: z.string().min(1),
   replacesPath: z.string().min(1).optional(),
-  // A draft request turns the Frame's draft mode on before publishing. Older dsbx binaries send no
-  // mode; outside draft mode they publish live.
-  mode: FramePublishModeSchema.optional(),
 });
 
 type FramePublishResponse = {
@@ -46,6 +41,8 @@ const app = sandboxApp();
 app.use("*", sandboxAuth({ allowedTokenKinds: ["action"] }));
 app.route("/call", call);
 app.route("/:frameId/call", callById);
+app.route("/draft-mode", draftMode);
+app.route("/make-live", makeLive);
 app.route("/share", share);
 
 /**
@@ -74,15 +71,6 @@ app.post(
         },
       });
     }
-    if (!(await hasFeatureFlag(auth, "frames_v2"))) {
-      return apiError(ctx, {
-        status_code: 403,
-        api_error: {
-          type: "invalid_request_error",
-          message: "Frames v2 is not enabled for this workspace.",
-        },
-      });
-    }
 
     const conversation = await ConversationResource.fetchById(auth, claims.cId);
     if (!conversation) {
@@ -96,22 +84,12 @@ app.post(
     }
 
     // Keep the request field name for compatibility. Legacy Frames pass their entry source path.
-    const { manifestPath, replacesPath, mode } = ctx.req.valid("json");
-    if (mode === "draft" && !(await hasFeatureFlag(auth, "frames_v2_drafts"))) {
-      return apiError(ctx, {
-        status_code: 403,
-        api_error: {
-          type: "feature_not_enabled",
-          message: "Frame drafts are not enabled for this workspace.",
-        },
-      });
-    }
+    const { manifestPath, replacesPath } = ctx.req.valid("json");
     const publication = await publishFrameFromSource(auth, {
       conversation: conversation.toJSON(),
       publishedByAgentConfigurationId: claims.aId,
       sourcePath: manifestPath,
       replacesPath,
-      draftRequested: mode === "draft",
     });
     if (publication.isErr()) {
       const status = frameSourceErrorStatus(publication.error);

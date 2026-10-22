@@ -280,7 +280,10 @@ describe("MCP Servers Metadata Snapshot", () => {
       for (const tool of [...tools].sort((a, b) =>
         a.name.localeCompare(b.name)
       )) {
-        const billing = getToolBillingInfo(serverName, tool.name);
+        const billing = getToolBillingInfo({
+          internalMCPServerName: serverName,
+          toolName: tool.name,
+        });
         expect(
           billing.toolCostCategory,
           `${serverName}/${tool.name} must have toolCostCategory defined`

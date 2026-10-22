@@ -2,7 +2,6 @@ import { listAddablePodTabFiles } from "@app/components/pod/files/addablePodTabF
 import { EditPodFileTabDialog } from "@app/components/pod/files/EditPodFileTabDialog";
 import type { AddablePodTabFile } from "@app/components/pod/settings/AddPodFileMenu";
 import { AddPodFileMenu } from "@app/components/pod/settings/AddPodFileMenu";
-import { useFeatureFlags } from "@app/lib/auth/AuthContext";
 import { usePodFiles } from "@app/lib/swr/pods";
 import type { PodFileTab } from "@app/types/pod_file_tab";
 import {
@@ -34,8 +33,6 @@ export function PodNavAddFileTabButton({
   tabsOrder,
 }: PodNavAddFileTabButtonProps) {
   const { t } = useLingui();
-  const { hasFeature } = useFeatureFlags();
-  const displayFramePackages = hasFeature("frames_v2");
   const [createFileTabDraft, setCreateFileTabDraft] =
     useState<PodFileTab | null>(null);
 
@@ -54,9 +51,8 @@ export function PodNavAddFileTabButton({
       listAddablePodTabFiles({
         podFiles,
         existingTabPaths,
-        displayFramePackages,
       }),
-    [displayFramePackages, existingTabPaths, podFiles]
+    [existingTabPaths, podFiles]
   );
 
   const atTabLimit = fileTabs.length >= MAX_POD_FILE_TABS;

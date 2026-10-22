@@ -1,4 +1,7 @@
-import { withPeriodicHeartbeat } from "@app/lib/utils/async_utils";
+import {
+  raceWithTimeout,
+  withPeriodicHeartbeat,
+} from "@app/lib/utils/async_utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 describe("withPeriodicHeartbeat", () => {
@@ -54,5 +57,27 @@ describe("withPeriodicHeartbeat", () => {
     await expect(promise).rejects.toThrow("boom");
     await vi.advanceTimersByTimeAsync(60_000);
     expect(heartbeatFn).not.toHaveBeenCalled();
+  });
+});
+
+describe("raceWithTimeout", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("returns what the promise settles to, clearing its timer", async () => {
+    expect(await raceWithTimeout(Promise.resolve("done"), 1000)).toBe("done");
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("returns timeout when the promise has not settled in time", async () => {
+    const racing = raceWithTimeout(new Promise(() => {}), 1000);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(await racing).toBe("timeout");
   });
 });

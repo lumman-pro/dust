@@ -1,9 +1,5 @@
 import { ConfigurableToolInputSchemas } from "@app/lib/actions/mcp_internal_actions/input_schemas";
 import type { ServerMetadata } from "@app/lib/actions/mcp_internal_actions/tool_definition";
-import {
-  PodTasksCreateTasksInputSchema,
-  PodTasksUpdateTasksInputSchema,
-} from "@app/lib/api/actions/servers/pod_tasks/types";
 import { INTERNAL_MIME_TYPES } from "@dust-tt/client";
 import { z } from "zod";
 
@@ -61,7 +57,67 @@ export const POD_TASKS_TOOLS_METADATA = [
     name: CREATE_TASKS_TOOL_NAME,
     description:
       "Create one or more new tasks at once in the Pod. Omitting userId (or null) creates an unassigned task unless the Pod has exactly one assignable member, in which case that member is assigned. Pass userId when a specific person should own the task.",
-    schema: PodTasksCreateTasksInputSchema.shape,
+    schema: {
+      creatorType: z
+        .enum(["user", "agent"])
+        .describe(
+          "Who is initiating the task creation? Use 'user' when the user explicitly asked for it."
+        ),
+      tasks: z
+        .array(
+          z.object({
+            text: z
+              .string()
+              .min(16)
+              .max(256)
+              .describe(
+                "The task description. Do not include the assignee's name — " +
+                  "the assignee is tracked separately via userId. Refer to the " +
+                  "assignee with 'you'/'your' pronouns when needed."
+              ),
+            userId: z
+              .union([z.string(), z.null()])
+              .optional()
+              .describe(
+                "Pod member's user sId to assign this task to. Omit userId entirely (or use null) for an unassigned task, unless the Pod has exactly one assignable member (then that member is assigned)."
+              ),
+            doneRationale: z
+              .string()
+              .optional()
+              .describe(
+                "The rationale for marking the task as done. Leave empty if the task should not be marked as done."
+              ),
+            sources: z
+              .array(
+                z.object({
+                  url: z
+                    .string()
+                    .url()
+                    .describe(
+                      "URL of a related source (e.g. Slack thread, GitHub issue, Notion page)"
+                    ),
+                  title: z
+                    .string()
+                    .describe("Human-readable title for the source"),
+                })
+              )
+              .optional()
+              .describe(
+                "Optional context sources to attach to this task when the agent can provide them"
+              ),
+          })
+        )
+        .min(1)
+        .max(30)
+        .describe("List of tasks to create (max 30)."),
+      dustPod: ConfigurableToolInputSchemas[
+        INTERNAL_MIME_TYPES.TOOL_INPUT.DUST_POD
+      ]
+        .optional()
+        .describe(
+          "Optional Pod to create the tasks in; falls back to the conversation's Pod."
+        ),
+    },
     stake: "low",
     displayLabels: {
       running: "Creating tasks",
@@ -73,7 +129,52 @@ export const POD_TASKS_TOOLS_METADATA = [
   {
     name: UPDATE_TASKS_TOOL_NAME,
     description: "Update one or more existing tasks at once in the Pod.",
-    schema: PodTasksUpdateTasksInputSchema.shape,
+    schema: {
+      tasks: z
+        .array(
+          z.object({
+            taskId: z.string().describe("The sId of the task to update."),
+            text: z
+              .string()
+              .min(16)
+              .max(256)
+              .optional()
+              .describe("The new task description."),
+            assigneeUserId: z
+              .union([z.string(), z.null()])
+              .optional()
+              .describe(
+                "The sId of the user to assign the task to (the task's new assignee); must be a member of the Pod. Pass null to unassign. Omit to keep the current assignee."
+              ),
+            doneRationale: z
+              .string()
+              .optional()
+              .describe(
+                "The rationale for marking the task as done. Leave empty if the task should not be marked as done."
+              ),
+            status: z
+              .enum(["todo", "in_progress", "done"])
+              .optional()
+              .describe("The new task status. Defaults to the current status."),
+            markAsDoneByType: z
+              .enum(["user", "agent"])
+              .optional()
+              .describe(
+                "Who should be recorded as having marked this task done. Use 'user' when the user explicitly asked for it; 'agent' when the agent is autonomously closing it. Only consulted when the task transitions to 'done'. Defaults to 'agent' if omitted."
+              ),
+          })
+        )
+        .min(1)
+        .max(30)
+        .describe("List of tasks to update (max 30)."),
+      dustPod: ConfigurableToolInputSchemas[
+        INTERNAL_MIME_TYPES.TOOL_INPUT.DUST_POD
+      ]
+        .optional()
+        .describe(
+          "Optional Pod to look up the tasks in; falls back to the conversation's Pod."
+        ),
+    },
     stake: "low",
     displayLabels: {
       running: "Updating tasks",

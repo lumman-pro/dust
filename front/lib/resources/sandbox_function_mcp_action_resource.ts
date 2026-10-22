@@ -13,7 +13,9 @@ import {
 import { BaseResource } from "@app/lib/resources/base_resource";
 import type { MCPServerViewResource } from "@app/lib/resources/mcp_server_view_resource";
 import type { SandboxFunctionInvocationResource } from "@app/lib/resources/sandbox_function_invocation_resource";
+import { SandboxFunctionInvocationModel } from "@app/lib/resources/storage/models/sandbox_function";
 import { SandboxFunctionMCPActionModel } from "@app/lib/resources/storage/models/sandbox_function_mcp_action";
+import { UserModel } from "@app/lib/resources/storage/models/user";
 import type { ReadonlyAttributesType } from "@app/lib/resources/storage/types";
 import type { ModelStaticWorkspaceAware } from "@app/lib/resources/storage/wrappers/workspace_models";
 import {
@@ -34,6 +36,17 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import assert from "assert";
 import type { Attributes, Transaction } from "sequelize";
 import { Op } from "sequelize";
+
+/** Row returned by {@link SandboxFunctionMCPActionResource.listBlockedForConversation}. */
+export type SandboxFunctionBlockedActionForConversation = {
+  action: SandboxFunctionMCPActionResource;
+  conversationId: string;
+  agentMessageId: string;
+  agentConfigurationId: string;
+  sandboxFunctionId: string;
+  invocationId: string;
+  userSId: string | undefined;
+};
 
 // Outputs share the agent MCP output items GCS prefix (`w/<wsId>/...` so workspace relocation
 // transfers the objects), but with one object per action holding the full content array — dsbx
@@ -203,6 +216,41 @@ export class SandboxFunctionMCPActionResource extends BaseResource<SandboxFuncti
     return action ?? null;
   }
 
+  /**
+   * Parent function + invocation sIds for an action, for conversation validate/resolve routing
+   * that only received an `sfa_` id.
+   */
+  async getFunctionAndInvocationSIds(
+    auth: Authenticator
+  ): Promise<{ sandboxFunctionId: string; invocationId: string } | null> {
+    const owner = auth.getNonNullableWorkspace();
+    if (this.workspaceId !== owner.id) {
+      return null;
+    }
+
+    const invocation = await SandboxFunctionInvocationModel.findOne({
+      where: {
+        id: this.sandboxFunctionInvocationId,
+        workspaceId: owner.id,
+      },
+      attributes: ["id", "sandboxFunctionId"],
+    });
+    if (!invocation) {
+      return null;
+    }
+
+    return {
+      sandboxFunctionId: makeSId("sandbox_function", {
+        id: invocation.sandboxFunctionId,
+        workspaceId: owner.id,
+      }),
+      invocationId: makeSId("sandbox_function_invocation", {
+        id: invocation.id,
+        workspaceId: owner.id,
+      }),
+    };
+  }
+
   // Oldest-first: the actions of a single invocation, in the order the function called them.
   static async listByInvocation(
     auth: Authenticator,
@@ -215,6 +263,102 @@ export class SandboxFunctionMCPActionResource extends BaseResource<SandboxFuncti
         ["id", "ASC"],
       ],
     });
+  }
+
+  /** Still-blocked tools for one invocation (approval or personal auth). */
+  static async listBlockedByInvocation(
+    auth: Authenticator,
+    invocation: SandboxFunctionInvocationResource
+  ): Promise<SandboxFunctionMCPActionResource[]> {
+    return this.baseFetch(auth, {
+      where: {
+        sandboxFunctionInvocationId: invocation.id,
+        status: {
+          [Op.in]: [
+            "blocked_validation_required",
+            "blocked_authentication_required",
+          ],
+        },
+      },
+      order: [
+        ["createdAt", "ASC"],
+        ["id", "ASC"],
+      ],
+    });
+  }
+
+  /**
+   * Blocked Frame-function tools whose invocation was started from this conversation
+   * (`conversationCaller` denormalized on the invocation). Returns resource + routing ids only;
+   * presentation lives in `listConversationBlockedActions`.
+   */
+  static async listBlockedForConversation(
+    auth: Authenticator,
+    { conversationId }: { conversationId: string }
+  ): Promise<SandboxFunctionBlockedActionForConversation[]> {
+    const owner = auth.getNonNullableWorkspace();
+
+    const rows = await SandboxFunctionMCPActionModel.findAll({
+      where: {
+        workspaceId: owner.id,
+        status: {
+          [Op.in]: [
+            "blocked_validation_required",
+            "blocked_authentication_required",
+          ],
+        },
+      },
+      include: [
+        {
+          model: SandboxFunctionInvocationModel,
+          as: "sandboxFunctionInvocation",
+          required: true,
+          where: {
+            workspaceId: owner.id,
+            conversationId,
+          },
+          include: [
+            {
+              model: UserModel,
+              as: "user",
+              required: false,
+              attributes: ["sId"],
+            },
+          ],
+        },
+      ],
+      order: [["createdAt", "ASC"]],
+    });
+
+    const results: SandboxFunctionBlockedActionForConversation[] = [];
+    for (const row of rows) {
+      const invocation = row.sandboxFunctionInvocation;
+      if (
+        !invocation?.conversationId ||
+        !invocation.agentMessageId ||
+        !invocation.agentConfigurationId
+      ) {
+        continue;
+      }
+
+      results.push({
+        action: new this(this.model, row.get()),
+        conversationId: invocation.conversationId,
+        agentMessageId: invocation.agentMessageId,
+        agentConfigurationId: invocation.agentConfigurationId,
+        sandboxFunctionId: makeSId("sandbox_function", {
+          id: invocation.sandboxFunctionId,
+          workspaceId: owner.id,
+        }),
+        invocationId: makeSId("sandbox_function_invocation", {
+          id: invocation.id,
+          workspaceId: owner.id,
+        }),
+        userSId: invocation.user?.sId,
+      });
+    }
+
+    return results;
   }
 
   // Counts the actions of each invocation, keyed by invocation model id. Counting the fetched ids

@@ -36,6 +36,12 @@ export const FRESHSERVICE_TOOLS_METADATA = [
             .enum(["new_and_my_open", "watching", "spam", "deleted"])
             .optional()
             .describe("Predefined Freshservice filter types"),
+          workspace_id: z
+            .number()
+            .optional()
+            .describe(
+              "Freshservice workspace ID (multi-workspace accounts only). Defaults to the primary workspace."
+            ),
         })
         .optional(),
       fields: z

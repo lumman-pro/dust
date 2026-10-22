@@ -24,8 +24,6 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import { visit } from "unist-util-visit";
 
-export { markdownHeaderClasses } from "@sparkle/components/markdown/markdownSizes";
-
 const DEFAULT_ANIMATION_DURATION_SECONDS = 1;
 const DEFAULT_DELIMITER = "";
 

@@ -9,6 +9,11 @@ import {
 } from "@app/lib/api/documents/comment_signatures";
 import { exportDocument } from "@app/lib/api/documents/export";
 import { writeFileContentThroughCollabSession } from "@app/lib/api/documents/file_api_write";
+import {
+  type DocumentPdfExportError,
+  exportDocumentAsPdf,
+  isDocumentPdfExportError,
+} from "@app/lib/api/documents/pdf";
 import type { DfmStoredDocumentError } from "@app/lib/api/documents/read_write";
 import { DustFileSystem } from "@app/lib/api/file_system/dust_file_system";
 import {
@@ -52,6 +57,7 @@ import { readableToReadableStream } from "@app/types/shared/utils/streams";
 import {
   contentDispositionAttachment,
   isContentTypeSafeToDisplay,
+  pdfAttachmentResponse,
 } from "@front-api/lib/file_serving";
 import type { WorkspaceAwareCtx } from "@front-api/middlewares/ctx";
 import { workspaceApp } from "@front-api/middlewares/ctx";
@@ -77,10 +83,10 @@ const GetQuerySchema = z
       .string()
       .optional()
       .transform((download) => !!download && download !== "0"),
-    format: z.literal("markdown").optional(),
+    format: z.enum(["markdown", "pdf"]).optional(),
   })
   .refine(({ download, format }) => format === undefined || download, {
-    message: "format=markdown requires download=1.",
+    message: "format requires download=1.",
   });
 
 /**
@@ -90,6 +96,7 @@ const GetQuerySchema = z
  *   GET    /api/w/:wId/files/path/pod-{pId}/data.csv?download=1         stream + Content-Disposition
  *   GET    /api/w/:wId/files/path/conversation-{cId}/photo.png?thumbnail=1  stream thumbnail
  *   GET    /api/w/:wId/files/path/pod-{pId}/notes.md?download=1&format=markdown  without its comments
+ *   GET    /api/w/:wId/files/path/pod-{pId}/notes.md?download=1&format=pdf  printed, without its comments
  *   HEAD   /api/w/:wId/files/path/{...canonicalPath}                    metadata only
  *   PATCH  /api/w/:wId/files/path/{...canonicalPath}  { action:"rename", fileName }
  *   PATCH  /api/w/:wId/files/path/{...canonicalPath}  { action:"move",   dest }
@@ -98,7 +105,8 @@ const GetQuerySchema = z
  *   DELETE /api/w/:wId/files/path/{...canonicalPath}
  *
  * A Markdown document downloads as its editors see it, live while a session holds it, and
- * without its comments with format=markdown; one the codec cannot read fails to download.
+ * without its comments with format=markdown or format=pdf; one the codec cannot read fails to
+ * download.
  * Raw GCS reads return X-Dust-File-Revision for exactly the streamed bytes. PUT accepts
  * that revision in X-Dust-If-Revision-Match and returns 412 on a revision mismatch.
  * Successful GCS writes return their new X-Dust-File-Revision. Revisions are unquoted
@@ -337,7 +345,7 @@ app.get(
         status_code: 400,
         api_error: {
           type: "file_type_not_supported",
-          message: "Only a Markdown document can be downloaded as markdown.",
+          message: `Only a Markdown document can be downloaded as ${format}.`,
         },
       });
     }
@@ -465,6 +473,22 @@ app.get(
       isDownload &&
       contentTypeFromFileName(canonicalPath) === "text/markdown"
     ) {
+      // format=pdf prints the document via Gotenberg's Chromium route.
+      if (format === "pdf") {
+        const printed = await exportDocumentAsPdf(auth, dustFs, canonicalPath);
+        if (printed.isErr()) {
+          const e = printed.error;
+          return apiError(
+            ctx,
+            isDocumentPdfExportError(e)
+              ? mapDocumentPdfExportError(e)
+              : mapDocumentExportError(e)
+          );
+        }
+        const { buffer, fileName } = printed.value;
+        return pdfAttachmentResponse(buffer, fileName);
+      }
+
       const exported = await exportDocument(
         auth,
         dustFs,
@@ -1045,6 +1069,33 @@ function mapDocumentExportError(
 
     case "conflict":
     case "storage_failed":
+      return {
+        status_code: 500,
+        api_error: { type: "internal_server_error", message: err.message },
+      };
+
+    default:
+      return assertNever(err.code);
+  }
+}
+
+function mapDocumentPdfExportError(
+  err: DocumentPdfExportError
+): APIErrorWithContentfulStatusCode {
+  switch (err.code) {
+    case "not_configured":
+      return {
+        status_code: 503,
+        api_error: { type: "service_unavailable", message: err.message },
+      };
+
+    case "not_exportable":
+      return {
+        status_code: 400,
+        api_error: { type: "file_type_not_supported", message: err.message },
+      };
+
+    case "render_failed":
       return {
         status_code: 500,
         api_error: { type: "internal_server_error", message: err.message },

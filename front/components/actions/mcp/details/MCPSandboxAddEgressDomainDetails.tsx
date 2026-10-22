@@ -1,5 +1,6 @@
 import { ActionDetailsWrapper } from "@app/components/actions/ActionDetailsWrapper";
 import type { ToolExecutionDetailsProps } from "@app/components/actions/mcp/details/types";
+import { validateToolInputs } from "@app/lib/actions/mcp_internal_actions/constants";
 import { isTextContent } from "@app/lib/actions/mcp_internal_actions/output_schemas";
 import { assertNeverAndIgnore } from "@app/types/shared/utils/assert_never";
 import { Globe01 } from "@dust-tt/sparkle";
@@ -29,10 +30,13 @@ export function MCPSandboxAddEgressDomainDetails({
   toolOutput,
 }: ToolExecutionDetailsProps) {
   const { t } = useLingui();
-  const domain =
-    typeof toolParams.domain === "string" ? toolParams.domain : null;
-  const reason =
-    typeof toolParams.reason === "string" ? toolParams.reason : null;
+  const isValidInput = validateToolInputs(
+    "sandbox",
+    "add_egress_domain",
+    toolParams
+  );
+  const domain = isValidInput ? toolParams.domain : null;
+  const reason = isValidInput ? toolParams.reason : null;
 
   const rawOutputText = useMemo(() => {
     if (!toolOutput) {

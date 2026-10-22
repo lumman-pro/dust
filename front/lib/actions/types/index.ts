@@ -207,7 +207,7 @@ export type SandboxFunctionRunContext = {
   action: SandboxFunctionMCPActionResource;
   invocation: SandboxFunctionInvocationResource;
   // The Pod the invoked Frame runs in, resolved once when the context is built. Null for a Frame
-  // outside any Pod: tools that persist files have nowhere to put them and refuse.
+  // outside any Pod.
   pod: SpaceResource | null;
   toolConfiguration: LightMCPToolConfigurationType;
 };

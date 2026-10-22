@@ -13,6 +13,10 @@ import {
   UserMessageModel,
 } from "@app/lib/models/agent/conversation";
 import { ConversationSelectedSpaceModel } from "@app/lib/models/agent/conversation_selected_space";
+import {
+  InferenceHookCheckpointModel,
+  InferenceHookEvaluationModel,
+} from "@app/lib/models/inference_hook";
 import { getReinforcedSkillsMetadata } from "@app/lib/reinforcement/types";
 import { AgentMessageConsumptionItemResource } from "@app/lib/resources/agent_message_consumption_item_resource";
 import { ConversationForkResource } from "@app/lib/resources/conversation_fork_resource";
@@ -30,6 +34,9 @@ import * as wakeUpTemporalClient from "@app/temporal/triggers/wakeup_client";
 import { AgentConfigurationFactory } from "@app/tests/utils/AgentConfigurationFactory";
 import { ConversationFactory } from "@app/tests/utils/ConversationFactory";
 import { createResourceTest } from "@app/tests/utils/generic_resource_tests";
+import { InferenceHookCheckpointFactory } from "@app/tests/utils/InferenceHookCheckpointFactory";
+import { InferenceHookEvaluationFactory } from "@app/tests/utils/InferenceHookEvaluationFactory";
+import { InferenceHookFactory } from "@app/tests/utils/InferenceHookFactory";
 import { KeyFactory } from "@app/tests/utils/KeyFactory";
 import { MembershipFactory } from "@app/tests/utils/MembershipFactory";
 import { RemoteMCPServerFactory } from "@app/tests/utils/RemoteMCPServerFactory";
@@ -41,6 +48,7 @@ import { WorkspaceFactory } from "@app/tests/utils/WorkspaceFactory";
 import type { LightAgentConfigurationType } from "@app/types/assistant/agent";
 import { GLOBAL_AGENTS_SID } from "@app/types/assistant/assistant";
 import type { ConversationWithoutContentType } from "@app/types/assistant/conversation";
+import { isAgentMessageType } from "@app/types/assistant/conversation";
 import { Err, Ok } from "@app/types/shared/result";
 import type { LightWorkspaceType } from "@app/types/user";
 import { assert, beforeEach, describe, expect, it, vi } from "vitest";
@@ -905,6 +913,56 @@ describe("destroyConversation", () => {
           workspaceId: workspace.id,
           conversationId: conversation.id,
         },
+      })
+    ).resolves.toBe(0);
+  });
+
+  it("should delete inference hook checkpoints and evaluations before deleting agent messages", async () => {
+    const conversationType = await ConversationFactory.create(auth, {
+      agentConfigurationId,
+      messagesCreatedAt: [new Date()],
+    });
+    const conversation = await ConversationResource.fetchById(
+      auth,
+      conversationType.sId
+    );
+    if (!conversation) {
+      throw new Error("Conversation should exist");
+    }
+
+    const workspace = auth.getNonNullableWorkspace();
+    const agentMessage = conversationType.content
+      .flat()
+      .find(isAgentMessageType);
+    if (!agentMessage) {
+      throw new Error("Agent message should exist");
+    }
+    const checkpoint = await InferenceHookCheckpointFactory.basic(workspace, {
+      conversationModelId: conversation.id,
+      agentMessageModelId: agentMessage.agentMessageId,
+    });
+    await InferenceHookEvaluationFactory.basic(workspace, {
+      checkpoint,
+      hook: await InferenceHookFactory.basic(
+        workspace,
+        auth.getNonNullableUser()
+      ),
+    });
+
+    const result = await destroyConversation(auth, { conversation });
+
+    expect(result.isOk()).toBe(true);
+    await expect(
+      InferenceHookCheckpointModel.count({
+        where: {
+          workspaceId: workspace.id,
+          conversationId: conversation.id,
+        },
+      })
+    ).resolves.toBe(0);
+    await expect(
+      InferenceHookEvaluationModel.count({
+        where: { workspaceId: workspace.id, checkpointId: checkpoint.id },
       })
     ).resolves.toBe(0);
   });
@@ -7138,6 +7196,7 @@ const KNOWN_CONVERSATION_RELATED_MODELS = [
   "conversation_selected_spaces",
   "conversation_skills",
   "data_source",
+  "inference_hook_checkpoint",
   "message",
   "project_todo_conversation",
   "sandbox_owner",

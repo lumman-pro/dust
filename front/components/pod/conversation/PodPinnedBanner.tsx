@@ -1,3 +1,4 @@
+import type { FrameOpenSource } from "@app/components/assistant/conversation/interactive_content/frameTracking";
 import { PodHoverFrameViewer } from "@app/components/pod/PodHoverFrameViewer";
 import { usePinPodBanner } from "@app/hooks/usePinPodBanner";
 import { usePodFrameRenderableContent } from "@app/hooks/usePodFrameRenderableContent";
@@ -74,8 +75,11 @@ export function PodPinnedBanner({ owner, podInfo }: PodPinnedBannerProps) {
     });
   const isCollapsed = bannerPreferences.collapsed;
   const [startFullscreen, setStartFullscreen] = useState(false);
+  // What made the Frame visible: shown on load, or the user expanding the collapsed banner.
+  const [openedBy, setOpenedBy] = useState<FrameOpenSource>("auto");
 
   const showBanner = useCallback(() => {
+    setOpenedBy("user");
     setBannerPreferences({ collapsed: false });
   }, [setBannerPreferences]);
 
@@ -173,6 +177,10 @@ export function PodPinnedBanner({ owner, podInfo }: PodPinnedBannerProps) {
         tabsOrder={podInfo.tabsOrder ?? []}
         isArchived={Boolean(podInfo.archivedAt)}
         initialFullscreen={startFullscreen}
+        tracking={{
+          openedFrom: { source: openedBy, uiElement: "pod_pinned_banner" },
+          uiElement: "pod_pinned_banner",
+        }}
         overlayLeading={
           <>
             <Button

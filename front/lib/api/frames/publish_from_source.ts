@@ -7,7 +7,6 @@ import {
   buildFramePublication,
 } from "@app/lib/api/frames/build_and_publish";
 import { reconcileFramePublicationDatabasesOnStagedSource } from "@app/lib/api/frames/database_reconciliation";
-import { emitFrameDraftModeAuditLog } from "@app/lib/api/frames/draft_mode";
 import { withFrameSourceLock } from "@app/lib/api/frames/operation_lock";
 import type { FramePublicationSourceFile } from "@app/lib/api/frames/publication_storage";
 import {
@@ -53,6 +52,7 @@ import { splitFrameEntryScopedPath } from "@app/types/mount_path";
 import {
   isFramesV2FunctionsEnabled,
   isFramesV2PublicFunctionsEnabled,
+  isFramesV2SchedulesEnabled,
 } from "@app/types/shared/feature_flags";
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
@@ -93,6 +93,30 @@ async function checkFrameFunctionsFeature(
     "invalid_manifest",
     "Frame functions and databases are not enabled for this workspace. Remove `functions` and " +
       "`databases` from the manifest and keep the Frame client-only."
+  );
+}
+
+/**
+ * @cc [owner:smb2268,label:product] frame-schedules-publish-gate
+ * Publishing a manifest whose functions declare schedules MUST fail with `invalid_manifest`,
+ * before any build, unless Frame schedules are enabled (see isFramesV2SchedulesEnabled). The
+ * previous publication stays live.
+ */
+async function checkFrameSchedulesFeature(
+  auth: Authenticator,
+  manifest: FrameManifest
+): Promise<Result<void, FramePublicationError>> {
+  if (manifest.functions.every((fn) => fn.schedules.length === 0)) {
+    return new Ok(undefined);
+  }
+  const featureFlags = await getFeatureFlags(auth);
+  if (isFramesV2SchedulesEnabled(featureFlags)) {
+    return new Ok(undefined);
+  }
+  return frameError(
+    "invalid_manifest",
+    "Frame schedules are not enabled for this workspace. Remove `schedules` from the manifest's " +
+      "functions."
   );
 }
 
@@ -234,12 +258,6 @@ export type PublishFrameFromSourceParams = {
    * Frame's identity is converted in place once the replacement builds.
    */
   replacesPath?: string;
-  /**
-   * Set by sandbox clients that still ask for a draft per publish: turns draft mode on first when
-   * the Frame has a live publication, so the publish is a draft (a Frame with nothing live goes
-   * live anyway).
-   */
-  draftRequested?: boolean;
 };
 
 export async function publishFrameFromSource(
@@ -249,7 +267,6 @@ export async function publishFrameFromSource(
     publishedByAgentConfigurationId,
     sourcePath,
     replacesPath,
-    draftRequested = false,
   }: PublishFrameFromSourceParams
 ): Promise<Result<PublishFrameFromSourceResult, PublishFrameFromSourceError>> {
   if (replacesPath) {
@@ -276,7 +293,6 @@ export async function publishFrameFromSource(
       frame,
       manifestPath: normalizedPath,
       publishedByAgentConfigurationId,
-      draftRequested,
     });
     if (publication.isErr()) {
       return new Err(publication.error);
@@ -290,13 +306,6 @@ export async function publishFrameFromSource(
       status: publication.value.status,
       created,
     });
-  }
-
-  if (draftRequested) {
-    return frameError(
-      "invalid_source",
-      "Drafts are only supported for Frames v2."
-    );
   }
 
   const splitResult = splitFrameEntryScopedPath(normalizedPath);
@@ -541,6 +550,10 @@ async function replaceLegacyFrameFromSource(
     const featureCheck = await checkFrameFunctionsFeature(auth, manifest);
     if (featureCheck.isErr()) {
       return featureCheck;
+    }
+    const schedulesCheck = await checkFrameSchedulesFeature(auth, manifest);
+    if (schedulesCheck.isErr()) {
+      return schedulesCheck;
     }
 
     const sharingCheck = await checkFrameFunctionSharing(auth, {
@@ -931,9 +944,8 @@ async function readFrameV2SourceTree(
  * While `frame`, read under the source lock, is in draft mode (`isInFrameDraftMode`), a Frames v2
  * publish from source MUST NOT change its live publication, whoever publishes (agent or panel
  * Save): it stores a draft, or changes nothing when the source matches the live publication.
- * Outside draft mode it publishes live. Callers choose only through `draftRequested`, which turns
- * draft mode on first. A draft-mode toggle takes the same lock, so it cannot interleave with a
- * publish.
+ * Outside draft mode it publishes live; callers cannot choose. A draft-mode toggle takes the same
+ * lock, so it cannot interleave with a publish.
  */
 async function publishFrameV2FromCapturedSourceWithSourceLockHeld(
   auth: Authenticator,
@@ -942,13 +954,11 @@ async function publishFrameV2FromCapturedSourceWithSourceLockHeld(
     manifest,
     sourceFiles,
     publishedByAgentConfigurationId,
-    draftRequested = false,
   }: {
     frame: FileResource;
     manifest: FrameManifest;
     sourceFiles: FramePublicationSourceFile[];
     publishedByAgentConfigurationId?: string;
-    draftRequested?: boolean;
   }
 ): Promise<
   Result<
@@ -960,6 +970,10 @@ async function publishFrameV2FromCapturedSourceWithSourceLockHeld(
   if (featureCheck.isErr()) {
     return featureCheck;
   }
+  const schedulesCheck = await checkFrameSchedulesFeature(auth, manifest);
+  if (schedulesCheck.isErr()) {
+    return schedulesCheck;
+  }
 
   const sharingCheck = await checkFrameFunctionSharing(auth, {
     frame,
@@ -967,17 +981,6 @@ async function publishFrameV2FromCapturedSourceWithSourceLockHeld(
   });
   if (sharingCheck.isErr()) {
     return sharingCheck;
-  }
-
-  if (
-    draftRequested &&
-    !frame.isInFrameDraftMode &&
-    frame.useCaseMetadata?.activePublicationId
-  ) {
-    await frame.enterFrameDraftMode({
-      userSId: auth.getNonNullableUser().sId,
-    });
-    emitFrameDraftModeAuditLog(auth, frame, "on");
   }
 
   return buildAndPublishFramePublication(auth, {
@@ -995,13 +998,11 @@ async function publishFrameV2FromSourceWithSourceLockHeld(
     frame,
     manifestPath,
     publishedByAgentConfigurationId,
-    draftRequested,
   }: {
     conversation: ConversationWithoutContentType;
     frame: FileResource;
     manifestPath: string;
     publishedByAgentConfigurationId?: string;
-    draftRequested?: boolean;
   }
 ): Promise<
   Result<
@@ -1022,7 +1023,6 @@ async function publishFrameV2FromSourceWithSourceLockHeld(
     manifest: source.value.manifest,
     sourceFiles: source.value.sourceFiles,
     publishedByAgentConfigurationId,
-    draftRequested,
   });
 }
 
@@ -1033,13 +1033,11 @@ export async function publishFrameV2FromSource(
     frame,
     manifestPath,
     publishedByAgentConfigurationId,
-    draftRequested,
   }: {
     conversation: ConversationWithoutContentType;
     frame: FileResource;
     manifestPath: string;
     publishedByAgentConfigurationId?: string;
-    draftRequested?: boolean;
   }
 ): Promise<
   Result<
@@ -1068,7 +1066,6 @@ export async function publishFrameV2FromSource(
       frame: freshFrame,
       manifestPath,
       publishedByAgentConfigurationId,
-      draftRequested,
     });
   });
   if (publication.isErr()) {

@@ -39,17 +39,14 @@ function isAddablePodTabEntry(
 export function listAddablePodTabFiles({
   podFiles,
   existingTabPaths,
-  displayFramePackages,
 }: {
   podFiles: FileSystemEntry[];
   existingTabPaths: ReadonlySet<string>;
-  displayFramePackages: boolean;
 }): AddablePodTabFile[] {
   const { entryByRelativePath } = getFileExplorerPipeline({
     activeFilter: "all",
     contentNodes: [],
     currentFolderPath: "",
-    displayFramePackages,
     files: podFiles,
     searchQuery: "",
     sortMode: "name-asc",

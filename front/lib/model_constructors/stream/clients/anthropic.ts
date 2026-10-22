@@ -43,7 +43,8 @@ export const THINKING_BINDING_CONTROLS_BETA_HEADER =
 
 // Lets Anthropic answer with a fallback model when the requested model refuses.
 // Claude API only (not Vertex, Bedrock or batches).
-const SERVER_SIDE_FALLBACK_BETA_HEADER = "server-side-fallback-2026-07-01";
+export const SERVER_SIDE_FALLBACK_BETA_HEADER =
+  "server-side-fallback-2026-07-01";
 
 // The request we build for the stream: the base non-beta params plus the beta
 // Messages API extras we attach (cache-diagnostics beta header + `diagnostics`
@@ -123,11 +124,9 @@ export abstract class AnthropicStream extends WithAnthropicAIInputConverter(
    * every failure into a 400 or a dropped thinking block.
    */
   /**
-   * @cc [owner:fontanierh,label:product] server-side-fallback-flag-gated
-   * The request MUST send `fallbacks` and its beta header only when `config.serverSideFallback`
-   * is true, which is set only by the `anthropic_server_side_fallback` workspace flag. Only this
-   * direct Anthropic client may send them: Vertex, Bedrock and batches do not support them, and
-   * the batch client ignores the field.
+   * @cc [owner:fontanierh,label:product] server-side-fallback-direct-anthropic-only
+   * Every request from this direct Anthropic client MUST send `fallbacks` and its beta header.
+   * Vertex, Bedrock and batch clients MUST NOT send them: those APIs do not support them.
    */
   async buildRequestPayload(
     payload: Payload,
@@ -141,7 +140,7 @@ export abstract class AnthropicStream extends WithAnthropicAIInputConverter(
       ...(requiresMidConversationOutputConfigBeta(request.messages)
         ? [MID_CONVERSATION_OUTPUT_CONFIG_BETA_HEADER]
         : []),
-      ...(config.serverSideFallback ? [SERVER_SIDE_FALLBACK_BETA_HEADER] : []),
+      SERVER_SIDE_FALLBACK_BETA_HEADER,
     ];
     return {
       ...request,
@@ -151,8 +150,8 @@ export abstract class AnthropicStream extends WithAnthropicAIInputConverter(
       // Beta headers and the cache-diagnostics `diagnostics` body are attached
       // here, not in `streamRaw`, so the built payload reflects exactly what we
       // send.
-      ...(betas.length > 0 ? { betas } : {}),
-      ...(config.serverSideFallback ? { fallbacks: "default" as const } : {}),
+      betas,
+      fallbacks: "default",
       ...(this.cacheDiagnosticsEnabled
         ? { diagnostics: { previous_message_id: this.previousMessageId } }
         : {}),

@@ -87,7 +87,15 @@ export function getPaginationParams(
 
 // For `z.preprocess`: parses a query param like `parseInt` ("10.5" -> 10, "abc" -> NaN, which
 // `z.number()` rejects).
+/**
+ * @cc [owner:avervaet,label:api] parse-like-parse-int
+ * Parses like `parseInt(v, 10)`, maps `""` to `undefined`, returns non-strings unchanged.
+ * Legacy endpoints only: new ones MUST coerce in their schema and reject non-integers with a 400.
+ */
 export function parseIntParam(v: unknown): unknown {
+  if (v === "") {
+    return undefined;
+  }
   return isString(v) ? parseInt(v, 10) : v;
 }
 

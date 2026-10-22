@@ -10,12 +10,12 @@ import {
 import { BulkSelectionBar } from "@app/components/shared/BulkSelectionBar";
 import type { MCPToolStakeLevelType } from "@app/lib/actions/constants";
 import { MCP_TOOL_STAKE_LEVELS } from "@app/lib/actions/constants";
+import type { MCPServerViewType } from "@app/lib/api/mcp";
 import {
   MCP_TOOL_STAKE_DESCRIPTIONS,
   MCP_TOOL_STAKE_LABELS,
   MCP_TOOL_STAKE_SHORT_LABELS,
-} from "@app/lib/actions/tool_stakes_descriptions";
-import type { MCPServerViewType } from "@app/lib/api/mcp";
+} from "@app/lib/client/tool_stakes_descriptions";
 import { asDisplayName } from "@app/types/shared/utils/string_utils";
 import {
   Button,
@@ -245,12 +245,17 @@ export function MCPServerDetailsTools({
         title={t`User approval settings`}
       >
         <ul>
-          {MCP_TOOL_STAKE_LEVELS.map((stakeLevel) => (
-            <li key={stakeLevel}>
-              <b>{MCP_TOOL_STAKE_SHORT_LABELS[stakeLevel]}</b>:{" "}
-              {MCP_TOOL_STAKE_DESCRIPTIONS[stakeLevel]}
-            </li>
-          ))}
+          {MCP_TOOL_STAKE_LEVELS.map((stakeLevel) => {
+            const stakeLabel = t(MCP_TOOL_STAKE_SHORT_LABELS[stakeLevel]);
+            const stakeDescription = t(MCP_TOOL_STAKE_DESCRIPTIONS[stakeLevel]);
+            return (
+              <li key={stakeLevel}>
+                <Trans>
+                  <b>{stakeLabel}</b>: {stakeDescription}
+                </Trans>
+              </li>
+            );
+          })}
         </ul>
       </ContentMessage>
 
@@ -381,7 +386,7 @@ function ToolRow({
               <Button
                 size="sm"
                 variant="outline"
-                label={MCP_TOOL_STAKE_LABELS[settings.permission]}
+                label={t(MCP_TOOL_STAKE_LABELS[settings.permission])}
                 isSelect
               />
             </DropdownMenuTrigger>
@@ -389,7 +394,7 @@ function ToolRow({
               {stakeLevels.map((stakeLevel) => (
                 <DropdownMenuItem
                   key={stakeLevel}
-                  label={MCP_TOOL_STAKE_LABELS[stakeLevel]}
+                  label={t(MCP_TOOL_STAKE_LABELS[stakeLevel])}
                   onClick={() => onPatch({ permission: stakeLevel })}
                 />
               ))}
@@ -486,7 +491,7 @@ export function MCPServerDetailsToolsBulkBar({
           {selectionStakeLevels.map((stakeLevel) => (
             <DropdownMenuItem
               key={stakeLevel}
-              label={MCP_TOOL_STAKE_LABELS[stakeLevel]}
+              label={t(MCP_TOOL_STAKE_LABELS[stakeLevel])}
               onClick={() => applyToSelection({ permission: stakeLevel })}
             />
           ))}

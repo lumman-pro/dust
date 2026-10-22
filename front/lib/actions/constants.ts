@@ -55,6 +55,18 @@ export const FALLBACK_MCP_TOOL_STAKE_LEVEL = "high" as const;
 
 export const DEFAULT_CLIENT_SIDE_MCP_TOOL_STAKE_LEVEL = "low" as const;
 
+// Names under which Dust's own clients register their client-side MCP servers. Their tools are
+// billed at the price they declare, unlike client-side servers registered by third-party apps (see
+// `getToolBillingInfo`).
+export const DUST_CLIENT_SIDE_MCP_SERVER_NAMES = {
+  agentBuilderSidekick: "agent-builder-sidekick-client",
+  analyticsPanel: "analytics-panel-client",
+  chromeExtension: "dust-chrome-extension",
+  excelAddIn: "excel-add-in-client",
+  firefoxExtension: "dust-firefox-extension",
+  frontExtension: "front-extension-client",
+} as const;
+
 export const MCP_VALIDATION_OUTPUTS = [
   "approved",
   "rejected",

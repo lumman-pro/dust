@@ -11,6 +11,7 @@ import {
 import { Authenticator } from "@app/lib/auth";
 import { DfsClient } from "@app/lib/dfs/client";
 import { DfsFileSystem } from "@app/lib/dfs/file_system";
+import { userFolderUri } from "@app/lib/dfs/folders";
 import { formatDfsUri } from "@app/lib/dfs/uri";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import { DfsUserFolderResource } from "@app/lib/resources/dfs_user_folder_resource";
@@ -24,13 +25,15 @@ import { SpaceFactory } from "@app/tests/utils/SpaceFactory";
 import { UserFactory } from "@app/tests/utils/UserFactory";
 import type { DfsObjectId } from "@app/types/dfs";
 import { Ok } from "@app/types/shared/result";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 function setup() {
   const dfs = new InMemoryDfs();
+  const fs = new DfsFileSystem(dfs);
   const transport = new FakeDfsTransport({ UpdateGrants: new Ok({}) });
   const context: DfsFolderContext = {
-    fs: new DfsFileSystem(dfs),
+    fs,
+    getSuperuserFs: async () => new Ok(fs),
     tenantClient: new DfsClient(transport, "t".repeat(64)),
     rootId: dfs.rootId,
   };
@@ -52,12 +55,16 @@ async function metadataOf(
 
 async function createConversation(
   auth: Authenticator,
-  { spaceModelId }: { spaceModelId?: number } = {}
+  {
+    spaceModelId,
+    requestedSpaceIds,
+  }: { spaceModelId?: number; requestedSpaceIds?: number[] } = {}
 ) {
   const conversation = await ConversationFactory.create(auth, {
     agentConfigurationId: "dust",
     messagesCreatedAt: [],
     spaceId: spaceModelId,
+    requestedSpaceIds,
   });
   const resource = await ConversationResource.fetchById(auth, conversation.sId);
   if (!resource) {
@@ -196,6 +203,34 @@ describe("getOrCreatePodFolder", () => {
     });
   });
 
+  it("creates the user folder with the superuser file system and the pod folder with the user's", async () => {
+    const { authenticator, workspace, user } = await createResourceTest({});
+    const { dfs, context } = setup();
+    const userFs = new DfsFileSystem(dfs);
+    const superuserFs = new DfsFileSystem(dfs);
+    const userMkdir = vi.spyOn(userFs, "mkdir");
+    const superuserMkdir = vi.spyOn(superuserFs, "mkdir");
+    const pod = await SpaceFactory.project(workspace);
+
+    const res = await getOrCreatePodFolder(
+      authenticator,
+      {
+        ...context,
+        fs: userFs,
+        getSuperuserFs: async () => new Ok(superuserFs),
+      },
+      pod,
+      { user }
+    );
+
+    expect(res.isOk()).toBe(true);
+    expect(superuserMkdir.mock.calls.map(([uri]) => uri)).toEqual([
+      userFolderUri(dfs.rootId, user.sId),
+    ]);
+    expect(userMkdir).toHaveBeenCalledTimes(1);
+    expect(userMkdir.mock.calls[0]?.[0]).toContain("/pods/");
+  });
+
   it("uses the first editor of the pod when no user is given", async () => {
     const { authenticator, workspace } = await createResourceTest({});
     const { dfs, context } = setup();
@@ -277,9 +312,87 @@ describe("getOrCreateConversationFolder", () => {
     );
   });
 
+  it("gives every participant of a conversation outside pods read and write access to its folder", async () => {
+    const { authenticator, workspace, user } = await createResourceTest({});
+    const { transport, context } = setup();
+    const other = await UserFactory.basic();
+    await MembershipFactory.associate(workspace, other, { role: "user" });
+    const conversation = await createConversation(authenticator);
+    for (const participant of [user, other]) {
+      await ConversationResource.upsertParticipation(authenticator, {
+        conversation,
+        action: "posted",
+        user: participant.toJSON(),
+      });
+    }
+
+    const res = await getOrCreateConversationFolder(
+      authenticator,
+      context,
+      conversation
+    );
+
+    expect(res.isOk()).toBe(true);
+    expect(transport.calls.at(-1)?.request).toEqual({
+      objectId: { value: Buffer.from(res.isOk() ? res.value : "", "hex") },
+      changes: [user, other].map((participant) => ({
+        grant: { allow: { subject: `u:${participant.sId}`, mode: 6 } },
+        remove: false,
+      })),
+    });
+  });
+
+  it("gives no access to participants who cannot read a requested space", async () => {
+    const { workspace, user } = await createResourceTest({});
+    const { transport, context } = setup();
+    const space = await SpaceFactory.regular(workspace);
+    const adminAuth = await Authenticator.internalAdminForWorkspace(
+      workspace.sId
+    );
+    const reader = await UserFactory.basic();
+    const outsider = await UserFactory.basic();
+    for (const member of [reader, outsider]) {
+      await MembershipFactory.associate(workspace, member, { role: "user" });
+    }
+    const added = await space.addMembers(adminAuth, {
+      userIds: [user.sId, reader.sId],
+    });
+    expect(added.isOk()).toBe(true);
+    // Refreshed so that it includes the space's group.
+    const auth = await Authenticator.fromUserIdAndWorkspaceId(
+      user.sId,
+      workspace.sId
+    );
+    const conversation = await createConversation(auth, {
+      requestedSpaceIds: [space.id],
+    });
+    for (const participant of [user, reader, outsider]) {
+      await ConversationResource.upsertParticipation(auth, {
+        conversation,
+        action: "posted",
+        user: participant.toJSON(),
+      });
+    }
+
+    const res = await getOrCreateConversationFolder(
+      auth,
+      context,
+      conversation
+    );
+
+    expect(res.isOk()).toBe(true);
+    expect(transport.calls.at(-1)?.request).toEqual({
+      objectId: { value: Buffer.from(res.isOk() ? res.value : "", "hex") },
+      changes: [user, reader].map((participant) => ({
+        grant: { allow: { subject: `u:${participant.sId}`, mode: 6 } },
+        remove: false,
+      })),
+    });
+  });
+
   it("creates a conversation of a pod under the pod's folder", async () => {
     const { workspace, user } = await createResourceTest({});
-    const { dfs, context } = setup();
+    const { dfs, transport, context } = setup();
     const pod = await SpaceFactory.project(workspace, user.id);
     // Refreshed so that it includes the new pod's groups.
     const auth = await Authenticator.fromUserIdAndWorkspaceId(
@@ -301,5 +414,14 @@ describe("getOrCreateConversationFolder", () => {
     expect(dfs.paths()).toContain(
       `/users/${user.sId}/pods/${pod.name}/.conversations/conv-${conversation.sId}`
     );
+    // Its access is the pod folder's.
+    const folderId = { value: Buffer.from(res.isOk() ? res.value : "", "hex") };
+    expect(
+      transport.calls.filter(
+        (call) =>
+          call.method === "UpdateGrants" &&
+          JSON.stringify(call.request.objectId) === JSON.stringify(folderId)
+      )
+    ).toEqual([]);
   });
 });

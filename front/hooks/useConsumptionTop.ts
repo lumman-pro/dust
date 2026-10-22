@@ -24,6 +24,7 @@ import type { GetConsumptionTopUsersResponse } from "@app/lib/api/analytics/cons
 import { emptyArray } from "@app/lib/swr/swr";
 import type {
   ConsumptionScopeFilter,
+  ConsumptionTopRankBy,
   ConsumptionTopSortOrder,
 } from "@app/types/api/analytics/consumption";
 import { assertNeverAndIgnore } from "@app/types/shared/utils/assert_never";
@@ -86,6 +87,7 @@ export interface UseConsumptionTopParams {
   filter?: ConsumptionScopeFilter;
   analyticsScope?: ConsumptionAnalyticsScope;
   sortOrder?: ConsumptionTopSortOrder;
+  rankBy?: ConsumptionTopRankBy;
   disabled?: boolean;
 }
 
@@ -276,6 +278,7 @@ export function useConsumptionTop({
   filter,
   analyticsScope,
   sortOrder = "desc",
+  rankBy = "credits",
   disabled,
 }: UseConsumptionTopParams) {
   const url = getConsumptionAnalyticsUrl({
@@ -292,6 +295,7 @@ export function useConsumptionTop({
     offset,
     search: search?.trim(),
     sortOrder,
+    rankBy,
   };
 
   const { data, error, isLoading, isValidating } = useConsumptionQuery<

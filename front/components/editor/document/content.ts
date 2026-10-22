@@ -4,6 +4,7 @@ import type {
 } from "@app/components/editor/document/DocumentCommentAnchor";
 import {
   anchorsToMarks,
+  getMarkedCommentIds,
   marksToAnchors,
   substituteAnchorDirectives,
 } from "@app/components/editor/document/DocumentCommentAnchor";
@@ -21,13 +22,14 @@ import {
 } from "@app/components/editor/document/DocumentListItem";
 import {
   hasExtraCells,
-  TABLE_CELL_NODE_NAME,
+  TIPTAP_DEFAULT_PRIORITY,
   withColumnAlignments,
 } from "@app/components/editor/document/DocumentTable";
 import { documentExtensions } from "@app/components/editor/document/extensions";
 import { createDocumentMarked } from "@app/components/editor/document/marked_instance";
 import {
   parseFrameEmbedHeight,
+  parseFrameEmbedProps,
   serializeFrameEmbedDirective,
 } from "@app/lib/markdown/frame_embed";
 import type { Result } from "@app/types/shared/result";
@@ -42,11 +44,19 @@ import { flattenExtensions, getExtensionField, getSchema } from "@tiptap/core";
 import { MarkdownManager } from "@tiptap/markdown";
 import type { Mark, Node } from "@tiptap/pm/model";
 import { Fragment } from "@tiptap/pm/model";
+import { renderToHTMLString } from "@tiptap/static-renderer/pm/html-string";
 import isEqual from "lodash/isEqual";
 
 export const documentSchema = getSchema(documentExtensions);
 const documentMarkdown = new MarkdownManager({
-  extensions: documentExtensions,
+  // Markdown reads a mark written inside a code span as text: code ranks back inside the others.
+  // TODO(louisjc): drop once TipTap writes code marks innermost whatever their priority:
+  // https://github.com/ueberdosis/tiptap/issues/8568
+  extensions: documentExtensions.map((extension) =>
+    extension.name === "code"
+      ? extension.extend({ priority: TIPTAP_DEFAULT_PRIORITY })
+      : extension
+  ),
   marked: createDocumentMarked(),
 });
 
@@ -326,7 +336,8 @@ const framesOpeningListItemsAsText = (node: JSONContent): JSONContent => {
           type: "text",
           text: serializeFrameEmbedDirective(
             first.attrs.path,
-            parseFrameEmbedHeight(first.attrs.height)
+            parseFrameEmbedHeight(first.attrs.height),
+            parseFrameEmbedProps(first.attrs.props)
           ),
         },
       ],
@@ -357,48 +368,132 @@ const parseMarkdown = (markdown: LexedMarkdown): JSONContent =>
     imagesInParagraphs(parseMarkdownTokens(markdown))
   );
 
-const withoutEdgeSpaces = (inlines: JSONContent[]): JSONContent[] => {
-  const trimmed = [...inlines];
-  if (trimmed[0]?.type === "text") {
-    trimmed[0] = { ...trimmed[0], text: trimmed[0].text?.trimStart() };
+const isWhitespace = (inline: JSONContent, keptComments: ReadonlySet<string>) =>
+  inline.type === "text" &&
+  !inline.text?.trim() &&
+  !(inline.marks ?? []).some(
+    (mark) =>
+      mark.type === COMMENT_MARK_NAME && keptComments.has(mark.attrs?.id)
+  );
+
+const trimmedStart = (inline: JSONContent): JSONContent =>
+  inline.type === "text" && inline.text?.trim()
+    ? { ...inline, text: inline.text.trimStart() }
+    : inline;
+
+const trimmedEnd = (inline: JSONContent): JSONContent =>
+  inline.type === "text" && inline.text?.trim()
+    ? { ...inline, text: inline.text.trimEnd() }
+    : inline;
+
+const withoutLineStartWhitespace = (
+  inlines: JSONContent[],
+  keptComments: ReadonlySet<string>
+): JSONContent[] => {
+  const content: JSONContent[] = [];
+  let atLineStart = true;
+  for (const inline of inlines) {
+    if (inline.type === "hardBreak") {
+      content.push(inline);
+      atLineStart = true;
+    } else if (!atLineStart || !isWhitespace(inline, keptComments)) {
+      content.push(atLineStart ? trimmedStart(inline) : inline);
+      atLineStart = false;
+    }
   }
-  const last = trimmed.length - 1;
-  if (trimmed[last]?.type === "text") {
-    trimmed[last] = { ...trimmed[last], text: trimmed[last].text?.trimEnd() };
-  }
-  return trimmed.filter((inline) => inline.type !== "text" || inline.text);
+  return content;
 };
 
-const asWritten = (node: JSONContent): JSONContent => {
-  if (node.type === TABLE_CELL_NODE_NAME) {
-    return {
-      ...node,
-      content: node.content?.map((paragraph) => ({
-        ...paragraph,
-        content: withoutEdgeSpaces(paragraph.content ?? []),
-      })),
-    };
+const withoutLineEndWhitespace = (
+  inlines: JSONContent[],
+  keptComments: ReadonlySet<string>
+): JSONContent[] => {
+  const reversed: JSONContent[] = [];
+  let atLineEnd = true;
+  for (let index = inlines.length - 1; index >= 0; index -= 1) {
+    const inline = inlines[index];
+    if (inline.type === "hardBreak") {
+      if (reversed.length > 0) {
+        reversed.push(inline);
+      }
+      atLineEnd = true;
+    } else if (!atLineEnd || !isWhitespace(inline, keptComments)) {
+      reversed.push(atLineEnd ? trimmedEnd(inline) : inline);
+      atLineEnd = false;
+    }
   }
-  if (
-    node.type === LIST_ITEM_NODE_NAME &&
-    node.attrs?.task &&
-    !isWritableTask(node)
-  ) {
-    return asWritten({
-      ...node,
-      attrs: { ...node.attrs, task: false, checked: false },
-    });
+  return reversed.reverse();
+};
+
+const inMarkdownForm = (
+  node: JSONContent,
+  keptComments: ReadonlySet<string>
+): JSONContent => {
+  const formed = node.content
+    ? {
+        ...node,
+        content: node.content.map((child) =>
+          inMarkdownForm(child, keptComments)
+        ),
+      }
+    : node;
+  switch (formed.type) {
+    case "doc":
+      return withoutTrailingParagraphs(formed);
+    case "paragraph":
+    case "heading":
+      return {
+        ...formed,
+        content: withoutLineEndWhitespace(
+          withoutLineStartWhitespace(formed.content ?? [], keptComments),
+          keptComments
+        ),
+      };
+    case "table":
+      return withColumnAlignments(formed);
+    case LIST_ITEM_NODE_NAME:
+      return formed.attrs?.task && !isWritableTask(formed)
+        ? { ...formed, attrs: { ...formed.attrs, task: false, checked: false } }
+        : formed;
+    default:
+      return formed;
   }
-  const aligned = node.type === "table" ? withColumnAlignments(node) : node;
-  return aligned.content
-    ? { ...aligned, content: aligned.content.map(asWritten) }
-    : aligned;
+};
+
+/**
+ * @cc [owner:rfrenoy,label:product] document-markdown-form-losses
+ * The Markdown form MUST differ from the document only by these losses, apart from the whitespace
+ * `document-markdown-form-comment-whitespace` keeps, none of which changes the text a reader sees
+ * once whitespace is collapsed:
+ * - empty paragraphs ending the document;
+ * - whitespace starting or ending a line of a paragraph or a heading, at the block's edges or
+ *   next to a hard break, across text nodes whatever their marks, never in a code block;
+ * - hard breaks ending a paragraph or a heading, so one holding only whitespace and hard breaks
+ *   becomes empty;
+ * - a table cell's alignment where it differs from its column's, the first aligned cell's;
+ * - the task of a list item whose first paragraph is empty in the form, which becomes a plain
+ *   item.
+ * Encodings that keep structure, such as `#` for an empty heading, MUST stay in the writers.
+ */
+/**
+ * @cc [owner:rfrenoy,label:product] document-markdown-form-comment-whitespace
+ * Whitespace `document-markdown-form-losses` drops MUST be kept when it carries the mark of a
+ * comment that marks no other text the form keeps, so the comment keeps its anchor.
+ */
+/**
+ * @cc [owner:rfrenoy,label:product] document-markdown-form-stable
+ * The Markdown form of a document's Markdown form MUST be that form.
+ */
+export const toMarkdownForm = (document: JSONContent): JSONContent => {
+  const anchored = getMarkedCommentIds(inMarkdownForm(document, new Set()));
+  const keptComments = new Set(
+    [...getMarkedCommentIds(document)].filter((id) => !anchored.has(id))
+  );
+  return inMarkdownForm(document, keptComments);
 };
 
 const comparable = (document: JSONContent) =>
-  normalizeTextNodes(
-    documentSchema.nodeFromJSON(asWritten(withoutTrailingParagraphs(document)))
-  );
+  normalizeTextNodes(documentSchema.nodeFromJSON(document));
 
 /** A node's type, with its marks' names when it has any: no text. */
 const describeNode = (node: Node | null): string => {
@@ -423,8 +518,8 @@ const describePosition = (document: Node, position: number): string => {
 };
 
 /**
- * Where `reopened` differs from `document`, or null when they are the same. Compares in the
- * editor's form, comment marks included, as the user would reopen it.
+ * Where `reopened` differs from the Markdown form `document` was written in, or null when they
+ * are the same. Compares in the editor's form, comment marks included, as the user would reopen it.
  */
 const roundTripDifference = ({
   document,
@@ -596,11 +691,9 @@ const serializeReadingBack = (
 
 /**
  * @cc [owner:flvndvd,label:product] document-markdown-save
- * Markdown output MUST reopen with the same content and formatting, ignoring empty trailing
- * paragraphs, spaces at the edges of a table cell, which GFM trims, a cell's alignment where
- * it differs from its column's, which GFM holds per column, and the task of an item with no
- * text on its first line, which GFM reads as a plain item. A failed conversion MUST NOT reach
- * persistence or acknowledge the draft.
+ * Markdown output MUST be written from the document's `toMarkdownForm`, and MUST reopen as that
+ * form with the same content and formatting. A failed conversion MUST NOT reach persistence or
+ * acknowledge the draft.
  */
 /**
  * @cc [owner:tdraier,label:product] document-anchors-in-formatting
@@ -612,12 +705,16 @@ export const serializeDocumentMarkdown = (
   document: JSONContent,
   anchorOrder: string[] = []
 ): Result<string, string> => {
-  const content = withoutTrailingParagraphs(document);
+  const content = toMarkdownForm(document);
   const commented = serializeReadingBack(content, anchorOrder, "commented");
   return commented.isOk()
     ? commented
     : serializeReadingBack(content, anchorOrder, "shared");
 };
+
+// Resolves no image source: images render as their alt text, and Frames as their path.
+export const serializeDocumentHtml = (document: JSONContent): string =>
+  renderToHTMLString({ extensions: documentExtensions, content: document });
 
 const INLINE_NODE_TYPES = new Set(["text", "hardBreak"]);
 

@@ -1,7 +1,8 @@
 import config from "@app/lib/api/config";
 import type { Authenticator } from "@app/lib/auth";
-import type { CollabAgent } from "@app/types/collab";
+import type { AgentActivity, CollabAgent } from "@app/types/collab";
 import type {
+  CollabAgentActivityRequest,
   CollabSourceEdit,
   CollabSourceEditRequest,
   CollabSourceEditResult,
@@ -11,11 +12,13 @@ import type {
   CollabSourceWriteResult,
 } from "@app/types/collab_internal";
 import {
+  COLLAB_AGENT_ACTIVITY_PATH,
   COLLAB_INTERNAL_ROUTES_PREFIX,
   COLLAB_SOURCE_EDIT_PATH,
   COLLAB_SOURCE_READ_PATH,
   COLLAB_SOURCE_WRITE_PATH,
   COLLAB_SOURCE_WRITE_WAIT_MS,
+  collabAgentActivityResponseSchema,
   collabSourceEditResponseSchema,
   collabSourceReadResponseSchema,
   collabSourceWriteResponseSchema,
@@ -66,7 +69,8 @@ async function postToCollabServer<S extends z.ZodTypeAny>(
   body:
     | CollabSourceReadRequest
     | CollabSourceWriteRequest
-    | CollabSourceEditRequest,
+    | CollabSourceEditRequest
+    | CollabAgentActivityRequest,
   schema: S
 ): Promise<Result<z.infer<S> | null, CollabSourceError>> {
   const url = config.getCollabServerInternalUrl();
@@ -237,4 +241,39 @@ export async function editCollabSource(
     return new Err({ code: "refused", message: answer.value.message });
   }
   return new Ok(answer.value);
+}
+
+/**
+ * @cc [owner:adrien,label:product;security] collab-client-agent-activity
+ * The activity MUST be sent as `auth`'s user, and MUST be refused without asking the collab server
+ * when `auth` has no user. Nothing listening at the collab server's address MUST succeed without
+ * showing anything, since no session can be open then.
+ */
+export async function showCollabAgentActivity(
+  auth: Authenticator,
+  {
+    canonicalPath,
+    agent,
+    activity,
+  }: { canonicalPath: string; agent: CollabAgent; activity: AgentActivity }
+): Promise<Result<void, CollabSourceError>> {
+  const user = auth.user();
+  if (!user) {
+    return new Err({
+      code: "refused",
+      message: "An agent's activity can only be shown on behalf of a user.",
+    });
+  }
+  const answer = await postToCollabServer(
+    COLLAB_AGENT_ACTIVITY_PATH,
+    {
+      workspaceId: auth.getNonNullableWorkspace().sId,
+      userId: user.sId,
+      canonicalPath,
+      agent,
+      activity,
+    },
+    collabAgentActivityResponseSchema
+  );
+  return answer.isErr() ? answer : new Ok(undefined);
 }

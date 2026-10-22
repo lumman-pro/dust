@@ -1,5 +1,9 @@
 import { MCPError } from "@app/lib/actions/mcp_errors";
-import type { ToolHandlers } from "@app/lib/actions/mcp_internal_actions/tool_definition";
+import type {
+  ToolHandlerExtra,
+  ToolHandlerResultWithStructuredContent,
+  ToolHandlers,
+} from "@app/lib/actions/mcp_internal_actions/tool_definition";
 import { buildTools } from "@app/lib/actions/mcp_internal_actions/tool_definition";
 import { getAgentDataSourceConfigurations } from "@app/lib/actions/mcp_internal_actions/tools/utils";
 import {
@@ -25,7 +29,12 @@ import { INTERNAL_MIME_TYPES } from "@dust-tt/client";
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
 
-const handlers: ToolHandlers<typeof DATA_WAREHOUSES_TOOLS_METADATA> = {
+const handlers: ToolHandlers<
+  typeof DATA_WAREHOUSES_TOOLS_METADATA,
+  (typeof DATA_WAREHOUSES_TOOLS_METADATA)[number]["name"],
+  ToolHandlerExtra,
+  ToolHandlerResultWithStructuredContent
+> = {
   list: async ({ nodeId, limit, nextPageCursor, dataSources }, { auth }) => {
     const effectiveNodeId = !!nodeId ? nodeId : null;
     const effectiveCursor = !!nextPageCursor ? nextPageCursor : undefined;

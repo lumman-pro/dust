@@ -108,6 +108,7 @@ export class ConversationFactory {
       visibility = "unlisted",
       depth,
       triggerId,
+      authorless = false,
       t,
     }: {
       agentConfigurationId: string;
@@ -118,6 +119,7 @@ export class ConversationFactory {
       visibility?: ConversationVisibility;
       depth?: number;
       triggerId?: ModelId | null;
+      authorless?: boolean;
       t?: Transaction;
     }
   ): Promise<ConversationType> {
@@ -155,7 +157,7 @@ export class ConversationFactory {
     for (let i = 0; i < messagesCreatedAt.length; i++) {
       const createdAt = messagesCreatedAt[i];
       const userMessageRow = await createUserMessage({
-        user,
+        user: authorless ? null : user,
         workspace,
         conversationModelId: conversation.id,
         createdAt,
@@ -564,6 +566,7 @@ export class ConversationFactory {
       costCredits: null,
       resolvedModel: null,
       modelResolutionMethod: null,
+      fallbackModelId: null,
     };
 
     if (!mcpAction) {

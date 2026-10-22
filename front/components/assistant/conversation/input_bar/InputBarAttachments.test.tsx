@@ -1,4 +1,5 @@
 import { InputBarAttachments } from "@app/components/assistant/conversation/input_bar/InputBarAttachments";
+import type { InputBarHostSelection } from "@app/components/assistant/conversation/input_bar/InputBarContext";
 import type {
   FileBlob,
   FileBlobUploadState,
@@ -71,14 +72,21 @@ function makeService(fileBlobs: FileBlob[]): FileUploaderService {
 
 function renderAttachments({
   fileBlobs = [],
+  hostSelection,
   disable,
 }: {
   fileBlobs?: FileBlob[];
+  hostSelection?: InputBarHostSelection;
   disable?: boolean;
 } = {}) {
   const service = makeService(fileBlobs);
   const result = render(
-    <InputBarAttachments owner={owner} files={{ service }} disable={disable} />
+    <InputBarAttachments
+      owner={owner}
+      files={{ service }}
+      hostSelection={hostSelection}
+      disable={disable}
+    />
   );
   return { ...result, service };
 }
@@ -240,6 +248,25 @@ describe("InputBarAttachments", () => {
     expect(image?.compareDocumentPosition(screen.getByText("a.pdf"))).toBe(
       Node.DOCUMENT_POSITION_PRECEDING
     );
+  });
+
+  it("renders the host selection as a removable chip before the files", async () => {
+    const user = userEvent.setup();
+    const onRemove = vi.fn();
+    renderAttachments({
+      fileBlobs: [makeFileBlob()],
+      hostSelection: { label: "C11", icon: () => null, onRemove },
+    });
+
+    const selectionChip = screen.getByLabelText("C11");
+    expect(
+      selectionChip.compareDocumentPosition(
+        screen.getByRole("button", { name: "report.pdf" })
+      )
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+
+    await user.click(screen.getAllByRole("button", { name: "Remove" })[0]);
+    expect(onRemove).toHaveBeenCalledOnce();
   });
 
   it("removes a file attachment from the remove button", async () => {

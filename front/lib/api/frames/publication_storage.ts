@@ -33,6 +33,7 @@ import { FramePublicationResource } from "@app/lib/resources/frame_publication_r
 import type { FramePublicationFunctionDefinition } from "@app/lib/resources/sandbox_function_resource";
 import { SandboxFunctionResource } from "@app/lib/resources/sandbox_function_resource";
 import { concurrentExecutor } from "@app/lib/utils/async_utils";
+import { checkValueAgainstJsonSchema } from "@app/lib/utils/json_schemas";
 import { withTransaction } from "@app/lib/utils/sql_utils";
 import logger from "@app/logger/logger";
 import type { FrameManifest } from "@app/types/api/frame_manifest";
@@ -95,6 +96,7 @@ export class FramePublicationError extends Error {
       | "invalid_function_reference"
       | "invalid_manifest"
       | "invalid_publication"
+      | "invalid_schedule"
       | "invalid_source"
       | "invalid_tailwind"
       | "allowlist_failed"
@@ -218,6 +220,12 @@ function sourceContentByPath(
   return sourceByPath;
 }
 
+/**
+ * @cc [owner:smb2268,label:product] schedule-input-matches-function-contract
+ * Every schedule's `input` MUST validate against the generated `inputSchema` of the function that
+ * declares it. A mismatch MUST fail with `invalid_schedule` naming the function and the schedule,
+ * before any publication object or row is written.
+ */
 export function buildFramePublicationContracts({
   functionArtifacts,
   manifest,
@@ -369,6 +377,23 @@ export function buildFramePublicationContracts({
       );
     }
     requiredTools.push(...toolCalls);
+
+    for (const schedule of fn.schedules) {
+      const scheduleInput = checkValueAgainstJsonSchema(
+        artifact.inputSchema,
+        schedule.input
+      );
+      if (scheduleInput.isErr()) {
+        return new Err(
+          new FramePublicationError(
+            "invalid_schedule",
+            `Frame function "${fn.name}" schedule (cron "${schedule.cron}", ${schedule.timezone}): ` +
+              `input does not match the function's input schema: ${scheduleInput.error}`
+          )
+        );
+      }
+    }
+
     functions.push({
       name: fn.name,
       bundleSha256: sha256(artifact.bundleCode),

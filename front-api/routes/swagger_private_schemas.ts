@@ -42,6 +42,9 @@
  *           type: string
  *           enum: [cost_efficient, balanced, premium, ultra]
  *           description: Default reasoning-effort tier, for known model facets.
+ *         revoked:
+ *           type: boolean
+ *           description: Set on user facets whose workspace membership was revoked.
  *     PrivateUser:
  *       type: object
  *       description: Authenticated user with their workspaces and subscriber hash.
@@ -577,6 +580,10 @@
  *           nullable: true
  *           enum: [agent, user, auto, auto_fast, auto_complex, fair_use_downgrade]
  *           description: How resolvedModel was chosen - agent (configured model), user (per-message picker), auto/auto_fast/auto_complex (routed through a model stream), or fair_use_downgrade (premium allowance spent, ran the Standard stream instead). Null (legacy).
+ *         fallbackModelId:
+ *           type: string
+ *           nullable: true
+ *           description: Model that answered instead of the requested one after a provider-side fallback. Null when the requested model answered.
  *     PrivateLightAgentMessage:
  *       type: object
  *       description: A lighter agent message used in paginated message list responses.
@@ -707,6 +714,10 @@
  *           nullable: true
  *           enum: [agent, user, auto, auto_fast, auto_complex, fair_use_downgrade]
  *           description: How resolvedModel was chosen - agent (configured model), user (per-message picker), auto/auto_fast/auto_complex (routed through a model stream), or fair_use_downgrade (premium allowance spent, ran the Standard stream instead). Null (legacy).
+ *         fallbackModelId:
+ *           type: string
+ *           nullable: true
+ *           description: Model that answered instead of the requested one after a provider-side fallback. Null when the requested model answered.
  *         activitySteps:
  *           type: array
  *           items:
@@ -1516,6 +1527,10 @@
  *           description: Data source tags to exclude from retrieval for this run, as opaque `key:value` strings.
  *           items:
  *             type: string
+ *         hostSelection:
+ *           type: string
+ *           nullable: true
+ *           description: What the user had selected in the app hosting Dust when sending the message, e.g. `Sheet1!C5:D6` in Excel. Stored with the message and shown to the agent in that message's metadata.
  *     PrivateReaction:
  *       type: object
  *       description: A reaction on a message.

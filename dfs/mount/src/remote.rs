@@ -185,7 +185,10 @@ impl Remote {
         let response = self
             .client
             .clone()
-            .apply(self.request(ApplyRequest { operations }))
+            .apply(self.request(ApplyRequest {
+                operations,
+                locks: Vec::new(),
+            }))
             .await?
             .into_inner();
         if response.results.len() != count {

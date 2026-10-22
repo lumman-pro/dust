@@ -251,6 +251,11 @@ msgstr "La demande de l’agent d’utiliser l’outil `{toolName}` a été ✅ 
 
 #. js-lingui-explicit-id
 #: connectors/src/connectors/slack/bot.ts
+msgid "The agent's request to use tool `{toolName}` was ✅ always allowed"
+msgstr "La demande de l’agent d’utiliser l’outil `{toolName}` a été ✅ autorisée de façon permanente"
+
+#. js-lingui-explicit-id
+#: connectors/src/connectors/slack/bot.ts
 msgid "The agent's request to use tool `{toolName}` was ❌ rejected"
 msgstr "La demande de l’agent d’utiliser l’outil `{toolName}` a été ❌ refusée"
 
@@ -388,6 +393,11 @@ msgstr "L’agent réfléchit… ({thinkingAction})"
 #: connectors/src/connectors/slack/chat/blocks.ts
 msgid "The agent is requesting permission to use tool `{toolName}`"
 msgstr "L’agent demande l’autorisation d’utiliser l’outil `{toolName}`"
+
+#. js-lingui-explicit-id
+#: connectors/src/connectors/slack/chat/blocks.ts
+msgid "Always allow"
+msgstr "Toujours autoriser"
 
 #. js-lingui-explicit-id
 #: connectors/src/connectors/slack/chat/blocks.ts

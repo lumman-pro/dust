@@ -4,23 +4,19 @@ import { MCPServerViewFactory } from "@app/tests/utils/MCPServerViewFactory";
 import { RemoteMCPServerFactory } from "@app/tests/utils/RemoteMCPServerFactory";
 import {
   createPersistedFrameFunctionInvocationTokenTestContext,
+  createPersistedSandboxActionToken,
   createPersistedSandboxFunctionInvocationTokenTestContext,
+  createSandboxTokenTestContext,
 } from "@app/tests/utils/SandboxTokenFactory";
 import { SpaceFactory } from "@app/tests/utils/SpaceFactory";
 import { Ok } from "@app/types/shared/result";
 import { honoApp } from "@front-api/app";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { assert, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@app/lib/api/sandbox_functions/events", async (importOriginal) => {
-  const actual =
-    await importOriginal<
-      typeof import("@app/lib/api/sandbox_functions/events")
-    >();
-  return {
-    ...actual,
-    publishSandboxFunctionInvocationEvent: vi.fn(),
-  };
-});
+vi.mock("@app/lib/api/sandbox_functions/publish_blocking_event", () => ({
+  publishSandboxFunctionBlockingEvent: vi.fn(),
+  getSandboxFunctionBlockingEventChannel: vi.fn(),
+}));
 
 vi.mock("@app/temporal/sandbox_functions/client", async (importOriginal) => {
   const actual =
@@ -33,7 +29,7 @@ vi.mock("@app/temporal/sandbox_functions/client", async (importOriginal) => {
   };
 });
 
-import { publishSandboxFunctionInvocationEvent } from "@app/lib/api/sandbox_functions/events";
+import { publishSandboxFunctionBlockingEvent } from "@app/lib/api/sandbox_functions/publish_blocking_event";
 import { launchSandboxFunctionToolWorkflow } from "@app/temporal/sandbox_functions/client";
 
 function callSandboxTool(
@@ -120,7 +116,7 @@ describe("POST /api/v1/w/[wId]/sandbox/actions/call (function invocation)", () =
       { action: expect.objectContaining({ sId: action?.sId }) }
     );
     expect(
-      vi.mocked(publishSandboxFunctionInvocationEvent)
+      vi.mocked(publishSandboxFunctionBlockingEvent)
     ).not.toHaveBeenCalled();
   });
 
@@ -206,9 +202,8 @@ describe("POST /api/v1/w/[wId]/sandbox/actions/call (function invocation)", () =
     expect(action?.toolConfiguration.permission).toBe("high");
     expect(action?.status).toBe("blocked_validation_required");
     expect(vi.mocked(launchSandboxFunctionToolWorkflow)).not.toHaveBeenCalled();
-    expect(
-      vi.mocked(publishSandboxFunctionInvocationEvent)
-    ).toHaveBeenCalledWith(
+    expect(vi.mocked(publishSandboxFunctionBlockingEvent)).toHaveBeenCalledWith(
+      expect.anything(),
       expect.objectContaining({
         type: "tool_approve_execution",
         actionId: action?.sId,
@@ -220,7 +215,7 @@ describe("POST /api/v1/w/[wId]/sandbox/actions/call (function invocation)", () =
           toolName: "tool",
         }),
       }),
-      { invocationId: context.invocation.sId }
+      { invocation: expect.objectContaining({ sId: context.invocation.sId }) }
     );
   });
 
@@ -291,15 +286,14 @@ describe("POST /api/v1/w/[wId]/sandbox/actions/call (function invocation)", () =
       blockedBody.actionId
     );
     expect(blockedAction?.status).toBe("blocked_validation_required");
-    expect(
-      vi.mocked(publishSandboxFunctionInvocationEvent)
-    ).toHaveBeenCalledWith(
+    expect(vi.mocked(publishSandboxFunctionBlockingEvent)).toHaveBeenCalledWith(
+      expect.anything(),
       expect.objectContaining({
         actionId: blockedAction?.sId,
         stake: "medium",
         argumentsRequiringApproval: ["to"],
       }),
-      { invocationId: context.invocation.sId }
+      { invocation: expect.objectContaining({ sId: context.invocation.sId }) }
     );
   });
 
@@ -364,5 +358,34 @@ describe("POST /api/v1/w/[wId]/sandbox/actions/call (function invocation)", () =
     });
 
     expect(response.status).toBe(404);
+  });
+});
+
+describe("POST /api/v1/w/[wId]/sandbox/actions/call (conversation sandbox)", () => {
+  it("refuses personal-credential servers when the message has no author", async () => {
+    const context = await createSandboxTokenTestContext({
+      usePodSpaceForConversation: true,
+      authorless: true,
+    });
+    const { agentServerView, auth, workspace } = context;
+    assert(agentServerView, "Expected an agent server view.");
+    const updateRes = await agentServerView.updateOAuthUseCase(
+      auth,
+      "personal_actions"
+    );
+    if (updateRes.isErr()) {
+      throw updateRes.error;
+    }
+    const { token } = await createPersistedSandboxActionToken(context);
+
+    const response = await callSandboxTool(workspace, token, {
+      serverViewId: agentServerView.sId,
+      toolName: "tool",
+      arguments: {},
+    });
+
+    expect(response.status).toBe(403);
+    const body = await response.json();
+    expect(body.error.type).toBe("personal_tools_unavailable");
   });
 });

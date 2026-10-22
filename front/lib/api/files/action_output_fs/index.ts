@@ -1,6 +1,9 @@
 import { FILE_OFFLOAD_TEXT_SIZE_BYTES } from "@app/lib/actions/action_output_limits";
 import { isResourceContentWithText } from "@app/lib/actions/mcp_internal_actions/output_schemas";
-import type { ToolRunContext } from "@app/lib/actions/types";
+import type {
+  SandboxFunctionRunContext,
+  ToolRunContext,
+} from "@app/lib/actions/types";
 import { DustFileSystem } from "@app/lib/api/file_system/dust_file_system";
 import { makeFileName } from "@app/lib/api/files/action_output_fs/naming";
 import {
@@ -11,15 +14,21 @@ import type { Authenticator } from "@app/lib/auth";
 import type { SpaceResource } from "@app/lib/resources/space_resource";
 import logger from "@app/logger/logger";
 import type { ConversationWithoutContentType } from "@app/types/assistant/conversation";
-import { conversationScopedPath, podScopedPath } from "@app/types/file_system";
+import {
+  conversationScopedPath,
+  frameScopedPath,
+  podScopedPath,
+} from "@app/types/file_system";
 import type { AllSupportedFileContentType } from "@app/types/files";
-import { TOOL_OUTPUTS_FOLDER_NAME } from "@app/types/mount_path";
+import {
+  getFramePersistentFilesMountPoint,
+  TOOL_OUTPUTS_FOLDER_NAME,
+} from "@app/types/mount_path";
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
 import { assertNever } from "@app/types/shared/utils/assert_never";
 import { slugify } from "@app/types/shared/utils/string_utils";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import assert from "assert";
 
 export interface PersistedToolOutput {
   contentType: AllSupportedFileContentType;
@@ -31,9 +40,9 @@ export interface PersistedToolOutput {
 }
 
 /**
- * Builds the DustFileSystem associated with a tool run context: the conversation file system when
- * running in an agent loop, the file system of the Pod the Frame runs in when running in a
- * sandbox function invocation.
+ * Builds the DustFileSystem for agent-loop tool-output offload (conversation mount only).
+ * Sandbox function invocations must not use conversation/pod `.tool_outputs`: Frame sandboxes
+ * do not mount `/files/pod-*` or conversation mounts. Use `writeToFramePersistentFilesFolder`.
  */
 async function getDustFileSystemForRunContext(
   auth: Authenticator,
@@ -43,14 +52,11 @@ async function getDustFileSystemForRunContext(
     case "agent_loop":
       return DustFileSystem.forConversation(auth, runContext.conversation);
     case "sandbox_function":
-      if (!runContext.pod) {
-        return new Err(
-          new Error(
-            "This Frame does not run in a Pod, so its tools have nowhere to write files."
-          )
-        );
-      }
-      return DustFileSystem.forPod(auth, runContext.pod);
+      return new Err(
+        new Error(
+          "Frame function tools cannot write conversation/pod .tool_outputs; use the Frame persistent files folder."
+        )
+      );
     default:
       return assertNever(runContext);
   }
@@ -59,25 +65,20 @@ async function getDustFileSystemForRunContext(
 function getToolOutputsScopedPath(
   runContext: ToolRunContext,
   fileName: string
-): string {
+): Result<string, Error> {
   switch (runContext.contextType) {
     case "agent_loop":
-      return conversationScopedPath({
-        conversationId: runContext.conversation.sId,
-        rel: `${TOOL_OUTPUTS_FOLDER_NAME}/${fileName}`,
-      });
-    case "sandbox_function":
-      // Scoped by function slug (unique within the pod): a pod outlives its functions, so a
-      // flat folder would mix outputs across functions. The slug is preferred over the
-      // invocation sId as it is shorter and less error-prone for the model to reference. The
-      // folder is visible in-sandbox at /files/pod-{pId}/.tool_outputs/{slug}/.
-      assert(
-        runContext.pod,
-        "This Frame does not run in a Pod, so its tools have no output folder."
+      return new Ok(
+        conversationScopedPath({
+          conversationId: runContext.conversation.sId,
+          rel: `${TOOL_OUTPUTS_FOLDER_NAME}/${fileName}`,
+        })
       );
-      return podScopedPath(
-        runContext.pod.sId,
-        `${TOOL_OUTPUTS_FOLDER_NAME}/${runContext.invocation.sandboxFunction.slug}/${fileName}`
+    case "sandbox_function":
+      return new Err(
+        new Error(
+          "Frame function tools cannot write conversation/pod .tool_outputs; use the Frame persistent files folder."
+        )
       );
     default:
       return assertNever(runContext);
@@ -162,10 +163,9 @@ export async function writeToPodFolder(
 }
 
 /**
- * Writes content to the .tool_outputs folder of the file system associated with the tool run
- * context (conversation in an agent loop, pod in a sandbox function invocation) via
- * DustFileSystem. Returns the scoped path (e.g. "conversation-{cId}/.tool_outputs/{fileName}" or
- * "pod-{pId}/.tool_outputs/{fileName}") on success.
+ * Writes content to the conversation `.tool_outputs` folder (agent-loop only) via DustFileSystem.
+ * Returns the scoped path (e.g. "conversation-{cId}/.tool_outputs/{fileName}") on success.
+ * Refuses sandbox_function contexts — use `writeToFramePersistentFilesFolder` instead.
  */
 export async function writeToToolOutputsFolder(
   auth: Authenticator,
@@ -186,7 +186,80 @@ export async function writeToToolOutputsFolder(
   }
 
   const scopedPath = getToolOutputsScopedPath(runContext, fileName);
+  if (scopedPath.isErr()) {
+    return scopedPath;
+  }
 
+  const writeResult = await fsResult.value.write(
+    scopedPath.value,
+    content,
+    contentType
+  );
+  if (writeResult.isErr()) {
+    return new Err(new Error(writeResult.error.message));
+  }
+
+  return new Ok(scopedPath.value);
+}
+
+export type FramePersistentFileWrite = {
+  /** DustFileSystem scoped path, e.g. `frame-{frameId}/.tool_outputs/{slug}/{file}`. */
+  scopedPath: string;
+  /**
+   * Absolute path inside the Frame sandbox (under `persistentFilesDir()` /
+   * `DUST_FRAME_PERSISTENT_FILES_DIR`), suitable for `node:fs`.
+   */
+  sandboxPath: string;
+};
+
+/**
+ * Embedded in sandbox_function tool `structuredContent` so Frame authors get a copy-pasteable
+ * `node:fs` read from the first exploratory `tools.call` (prefer `result.json()`).
+ * Paths are absolute under the Frame mount — do not pass them to `useFile()`.
+ */
+export function frameSandboxFilePathHint(
+  path: string,
+  { encoding }: { encoding?: "utf8" } = {}
+): string {
+  const call =
+    encoding === "utf8"
+      ? `await readFile(${JSON.stringify(path)}, "utf8")`
+      : `await readFile(${JSON.stringify(path)})`;
+  return `Read with node:fs/promises: ${call}. Do not pass this path to useFile().`;
+}
+
+/** Max rows included in sandbox query `structuredContent.rows` (full CSV remains at `path`). */
+export const FRAME_SANDBOX_QUERY_RESULT_PREVIEW_ROWS = 100;
+
+/**
+ * Writes content into the Frame's persistent files folder for a sandbox_function tool run.
+ * Same GCS prefix the Frame sandbox mounts at `/frames/{frameId}/files`. Namespaced under
+ * `.tool_outputs/{functionSlug}/` so outputs from different functions do not collide.
+ *
+ * Auth: call only with a `SandboxFunctionRunContext` for the Frame that owns the invocation;
+ * do not re-check `authMethod` (approval/personal-auth resume may use session auth).
+ */
+export async function writeToFramePersistentFilesFolder(
+  auth: Authenticator,
+  runContext: SandboxFunctionRunContext,
+  {
+    fileName,
+    content,
+    contentType,
+  }: {
+    fileName: string;
+    content: string | Buffer;
+    contentType: AllSupportedFileContentType;
+  }
+): Promise<Result<FramePersistentFileWrite, Error>> {
+  const { frame } = runContext.invocation.sandboxFunction;
+  const fsResult = await DustFileSystem.forFramePersistentFiles(auth, frame);
+  if (fsResult.isErr()) {
+    return new Err(new Error(fsResult.error.message));
+  }
+
+  const rel = `${TOOL_OUTPUTS_FOLDER_NAME}/${runContext.invocation.sandboxFunction.slug}/${fileName}`;
+  const scopedPath = frameScopedPath(frame.sId, rel);
   const writeResult = await fsResult.value.write(
     scopedPath,
     content,
@@ -196,7 +269,19 @@ export async function writeToToolOutputsFolder(
     return new Err(new Error(writeResult.error.message));
   }
 
-  return new Ok(scopedPath);
+  const sandboxPathResult = fsResult.value.toSandboxPath(scopedPath);
+  if (sandboxPathResult.isErr()) {
+    // Mount point is always set for frame mounts; fall back to the known mount root.
+    return new Ok({
+      scopedPath,
+      sandboxPath: `${getFramePersistentFilesMountPoint(frame.sId)}/${rel}`,
+    });
+  }
+
+  return new Ok({
+    scopedPath,
+    sandboxPath: sandboxPathResult.value,
+  });
 }
 
 /**

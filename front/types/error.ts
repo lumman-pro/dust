@@ -131,6 +131,7 @@ const API_ERROR_TYPES = [
   "file_read_only",
   "collab_session_conflict",
   "collab_session_write_refused",
+  "collab_session_unsupported_location",
   // Runs:
   "run_not_found",
   // Spaces:
@@ -172,6 +173,7 @@ const API_ERROR_TYPES = [
   ...CONVERSATION_ERROR_TYPES,
   // MCP:
   "mcp_auth_error",
+  "personal_tools_unavailable",
   "invalid_mcp_server_id",
   "mcp_server_not_found",
   // Workos:

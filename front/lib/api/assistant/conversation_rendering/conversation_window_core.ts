@@ -418,20 +418,10 @@ async function buildConversationWindow(
   });
 }
 
-function finalizeConversationWindow(
-  built: BuiltConversationWindow
-): Result<RenderConversationForModelResult, Error> {
-  const {
-    interactions: prunedInteractions,
-    prunedContext,
-    stats: pruningStats,
-  } = built.window;
-  const totalTokens = sumInteractionTokens(prunedInteractions);
-  const selected = prunedInteractions.flatMap(
-    (interaction) => interaction.messages
-  );
-  const tokensUsed = built.baseTokens + totalTokens;
-
+// Folds each run of content fragments into the user message that follows it and drops token counts.
+function toModelMessages(
+  messages: MessageWithTokens[]
+): Result<ModelMessageTypeMultiActionsWithoutContentFragment[], Error> {
   const finalMessages: ModelMessageTypeMultiActionsWithoutContentFragment[] =
     [];
   let pendingContentFragments: Extract<
@@ -439,25 +429,12 @@ function finalizeConversationWindow(
     { role: "content_fragment" }
   >[] = [];
 
-  for (const message of selected) {
+  for (const message of messages) {
     if (
       pendingContentFragments.length > 0 &&
       message.role !== "user" &&
       message.role !== "content_fragment"
     ) {
-      logger.error(
-        {
-          workspaceId: built.conversation.owner.sId,
-          conversationId: built.conversation.sId,
-          selected: selected.map((message) => ({
-            ...message,
-            content:
-              getTextContentFromMessage(message)?.slice(0, 100) +
-              " (truncated...)",
-          })),
-        },
-        "Unexpected state, cannot find user message after a Content Fragment"
-      );
       return new Err(
         new Error(
           "Unexpected state, cannot find user message after a Content Fragment"
@@ -501,6 +478,62 @@ function finalizeConversationWindow(
       )
     );
   }
+
+  return new Ok(finalMessages);
+}
+
+/**
+ * @cc [owner:frankaloia,label:product] checkpoint-window-matches-render
+ * The returned conversation MUST equal the `modelConversation` that `renderConversationWindow`
+ * returns for a `checkpoint_exact` source built from `checkpoint`.
+ */
+export function renderConversationWindowCheckpoint(
+  checkpoint: ConversationWindowCheckpoint
+): Result<ModelConversationTypeMultiActions, Error> {
+  const messagesRes = toModelMessages(
+    checkpoint.state.interactions.flatMap((interaction) =>
+      interaction.messages.map((node) => node.message)
+    )
+  );
+  if (messagesRes.isErr()) {
+    return messagesRes;
+  }
+
+  return new Ok({ messages: messagesRes.value });
+}
+
+function finalizeConversationWindow(
+  built: BuiltConversationWindow
+): Result<RenderConversationForModelResult, Error> {
+  const {
+    interactions: prunedInteractions,
+    prunedContext,
+    stats: pruningStats,
+  } = built.window;
+  const totalTokens = sumInteractionTokens(prunedInteractions);
+  const selected = prunedInteractions.flatMap(
+    (interaction) => interaction.messages
+  );
+  const tokensUsed = built.baseTokens + totalTokens;
+
+  const finalMessagesRes = toModelMessages(selected);
+  if (finalMessagesRes.isErr()) {
+    logger.error(
+      {
+        workspaceId: built.conversation.owner.sId,
+        conversationId: built.conversation.sId,
+        selected: selected.map((message) => ({
+          ...message,
+          content:
+            getTextContentFromMessage(message)?.slice(0, 100) +
+            " (truncated...)",
+        })),
+      },
+      finalMessagesRes.error.message
+    );
+    return finalMessagesRes;
+  }
+  const finalMessages = finalMessagesRes.value;
 
   if (finalMessages.length === 0) {
     logger.error(

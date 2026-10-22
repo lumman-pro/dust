@@ -84,11 +84,21 @@ type PluginTextWithLinkResponse = {
   linkText: string;
 };
 
+type PluginFileResponse = {
+  display: "file";
+  value: string;
+  filename: string;
+  contentType: string;
+  // Base64-encoded file content.
+  content: string;
+};
+
 export type PluginResponse =
   | PluginTextResponse
   | PluginJSONResponse
   | PluginMarkdownResponse
-  | PluginTextWithLinkResponse;
+  | PluginTextWithLinkResponse
+  | PluginFileResponse;
 
 // Base plugin interface.
 interface BasePlugin<

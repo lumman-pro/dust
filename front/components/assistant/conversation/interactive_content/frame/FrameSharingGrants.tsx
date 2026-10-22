@@ -1,8 +1,9 @@
-import { FrameSharingRow } from "@app/components/assistant/conversation/interactive_content/frame/FrameSharingRow";
+import {
+  FrameSharingList,
+  FrameSharingRow,
+} from "@app/components/assistant/conversation/interactive_content/frame/FrameSharingRow";
 import { Section } from "@app/components/assistant/conversation/interactive_content/frame/ShareFrameSection";
-import { useAwaitableDialog } from "@app/hooks/useAwaitableDialog";
-import { getActiveLocale } from "@app/lib/i18n/active_locale";
-import { compareStrings, formatTimeDistance } from "@app/lib/i18n/format";
+import { compareStrings } from "@app/lib/i18n/format";
 import { MAX_EMAILS_OR_DOMAINS_PER_INVITE } from "@app/types/files";
 import type {
   FileSharingGrantType,
@@ -13,7 +14,13 @@ import {
   sharingDomainSchema,
   sharingEmailSchema,
 } from "@app/types/sharing_grants";
-import { Button, Globe01, Input, ListGroup, Spinner } from "@dust-tt/sparkle";
+import {
+  Button,
+  Globe01,
+  Input,
+  ListGroup,
+  LoadingBlock,
+} from "@dust-tt/sparkle";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { MessageDescriptor } from "@lingui/core";
 import { msg } from "@lingui/core/macro";
@@ -137,8 +144,7 @@ export function FrameSharingGrants({
       reValidateMode: "onSubmit",
     }
   );
-  const { AwaitableDialog, showDialog } = useAwaitableDialog();
-  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [revokingIds, setRevokingIds] = useState<string[]>([]);
 
   const grants = [...(sharing?.accessGrants ?? [])].sort(
     (a, b) =>
@@ -147,33 +153,11 @@ export function FrameSharingGrants({
   );
 
   const revoke = async (grant: FileSharingGrantType) => {
-    const label =
-      grant.target.kind === "domain"
-        ? `@${grant.target.value}`
-        : grant.target.value;
-    const confirmed = await showDialog({
-      title: t`Remove access rule`,
-      validateLabel: t`Remove`,
-      validateVariant: "warning",
-      cancelLabel: t`Cancel`,
-      children: (
-        <p>
-          <Trans>
-            Remove access for <strong>{label}</strong>? People may still have
-            access through another invitation, domain or the frame’s general
-            access setting.
-          </Trans>
-        </p>
-      ),
-    });
-    if (!confirmed) {
-      return;
-    }
-    setRevokingId(grant.sId);
+    setRevokingIds((ids) => [...ids, grant.sId]);
     try {
       await onRevoke(grant.sId);
     } finally {
-      setRevokingId(null);
+      setRevokingIds((ids) => ids.filter((id) => id !== grant.sId));
     }
   };
 
@@ -183,10 +167,34 @@ export function FrameSharingGrants({
       ? t`Invite by email`
       : t`Invite workspace members by email`;
 
+  // The section title, placeholder and validation depend on `canGrantDomains`, only known once
+  // loaded: show a placeholder of the same height rather than the form with the wrong copy.
+  if (isLoading) {
+    return (
+      <div role="status" aria-label={t`Loading access rules`}>
+        <div aria-hidden="true" className="flex flex-col gap-2">
+          <div className="flex h-6 items-center">
+            <LoadingBlock className="h-4 w-36" />
+          </div>
+          <div className="flex gap-2">
+            <LoadingBlock className="h-8 flex-1 rounded-xl" />
+            <LoadingBlock className="h-8 w-13 rounded-xl" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
-      <AwaitableDialog />
-      <Section label={inviteLabel}>
+      <Section
+        label={inviteLabel}
+        description={
+          canGrantDomains
+            ? t`Invitations are sent to email addresses only. People at an added domain can open the link after verifying their email.`
+            : undefined
+        }
+      >
         <form
           className="flex flex-col gap-2"
           onSubmit={handleSubmit(async ({ recipients }) => {
@@ -203,87 +211,53 @@ export function FrameSharingGrants({
                 aria-label={inviteLabel}
                 placeholder={
                   canGrantDomains
-                    ? "alice@example.com, example.com"
+                    ? "alice@acme.com, acme.com"
                     : t`Add comma separated emails`
                 }
                 {...register("recipients")}
                 isError={!!errors.recipients}
                 aria-invalid={!!errors.recipients}
                 aria-describedby={errors.recipients ? errorId : undefined}
-                disabled={isLoading || hasError || isSubmitting}
+                disabled={hasError || isSubmitting}
               />
             </div>
             <Button
-              variant="primary"
+              variant="outline"
               label={canGrantDomains ? t`Add` : t`Invite`}
               type="submit"
               isLoading={isSubmitting}
-              disabled={isLoading || hasError}
+              disabled={hasError}
             />
           </div>
           {errors.recipients && (
-            <p
-              id={errorId}
-              role="alert"
-              className="text-xs text-foreground px-2"
-            >
+            <p id={errorId} role="alert" className="text-xs text-foreground">
               {errors.recipients.message}
-            </p>
-          )}
-          {canGrantDomains && !errors.recipients && (
-            <p className="text-xs text-muted-foreground px-2">
-              <Trans>
-                Invitations are sent to email addresses only. People at an added
-                domain can open the link after verifying their email.
-              </Trans>
             </p>
           )}
         </form>
       </Section>
 
-      {isLoading ? (
-        <div
-          role="status"
-          aria-label={t`Loading access rules`}
-          className="flex justify-center py-4"
-        >
-          <div aria-hidden="true">
-            <Spinner size="sm" />
-          </div>
-        </div>
-      ) : hasError ? (
+      {hasError ? (
         <div role="alert" className="flex items-center justify-between gap-2">
           <p className="text-sm text-muted-foreground">
             <Trans>Could not load access rules.</Trans>
           </p>
           <Button label={t`Retry`} variant="outline" onClick={onRetry} />
         </div>
-      ) : grants.length === 0 ? (
-        <p className="px-2 text-sm text-muted-foreground">
-          {canGrantDomains
-            ? t`No people or domains have been added yet.`
-            : t`No one has been invited yet.`}
-        </p>
-      ) : (
-        <Section label={t`People with access`}>
-          <ListGroup className="border-0">
-            <ul>
-              {grants.map((grant) => (
-                <li key={grant.sId}>
-                  <GrantRow
-                    grant={grant}
-                    isRevoking={revokingId === grant.sId}
-                    onRevoke={
-                      canRevoke && revokingId === null
-                        ? () => revoke(grant)
-                        : undefined
-                    }
-                  />
-                </li>
-              ))}
-            </ul>
-          </ListGroup>
-        </Section>
+      ) : grants.length === 0 ? null : (
+        <ListGroup className="border-0">
+          <FrameSharingList label={t`People with access`}>
+            {grants.map((grant) => (
+              <li key={grant.sId}>
+                <GrantRow
+                  grant={grant}
+                  isRevoking={revokingIds.includes(grant.sId)}
+                  onRevoke={canRevoke ? () => revoke(grant) : undefined}
+                />
+              </li>
+            ))}
+          </FrameSharingList>
+        </ListGroup>
       )}
     </div>
   );
@@ -299,21 +273,7 @@ function GrantRow({ grant, isRevoking, onRevoke }: GrantRowProps) {
   const { t } = useLingui();
   const isDomain = grant.target.kind === "domain";
   const label = isDomain ? `@${grant.target.value}` : grant.target.value;
-  const now = new Date();
   const grantedBy = grant.grantedBy?.fullName ?? grant.grantedBy?.email;
-  const grantedAgo = formatTimeDistance(
-    new Date(grant.grantedAt),
-    now,
-    undefined,
-    getActiveLocale()
-  );
-  const grantedLabel = isDomain
-    ? grantedBy
-      ? t`Added by ${grantedBy} ${grantedAgo}`
-      : t`Added ${grantedAgo}`
-    : grantedBy
-      ? t`Invited by ${grantedBy} ${grantedAgo}`
-      : t`Invited ${grantedAgo}`;
 
   return (
     <FrameSharingRow
@@ -322,7 +282,11 @@ function GrantRow({ grant, isRevoking, onRevoke }: GrantRowProps) {
       onRemove={onRevoke}
       isRemoving={isRevoking}
     >
-      <span>{grantedLabel}</span>
+      {grantedBy && (
+        <span>
+          {isDomain ? t`Added by ${grantedBy}` : t`Invited by ${grantedBy}`}
+        </span>
+      )}
       {grant.blockedByPolicy && (
         <span>
           {isDomain

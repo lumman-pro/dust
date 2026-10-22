@@ -15,6 +15,7 @@ export type {
   ConsumptionScopeDimension,
   ConsumptionScopeFilter,
   ConsumptionScopeFilterKey,
+  ConsumptionTopRankBy,
   ConsumptionTopSortOrder,
 } from "@app/types/api/analytics/consumption";
 export {
@@ -22,6 +23,7 @@ export {
   CONSUMPTION_FACET_SCOPES,
   CONSUMPTION_SCOPE_DIMENSIONS,
   CONSUMPTION_SCOPE_FILTER_KEYS,
+  CONSUMPTION_TOP_RANK_BY,
   CONSUMPTION_TOP_SORT_ORDER,
 } from "@app/types/api/analytics/consumption";
 
@@ -126,10 +128,6 @@ export const CONSUMPTION_TOP_DIMENSION_UNIT: Record<
   tag: "message",
   reasoning_effort: "message",
 };
-
-export const CONSUMPTION_TOP_RANK_BY = ["credits", "count"] as const;
-
-export type ConsumptionTopRankBy = (typeof CONSUMPTION_TOP_RANK_BY)[number];
 
 export const CONSUMPTION_MESSAGE_DIMENSIONS = [
   "agent",

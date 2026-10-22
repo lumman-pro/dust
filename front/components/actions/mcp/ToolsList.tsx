@@ -9,12 +9,12 @@ import {
 } from "@app/components/actions/mcp/forms/mcpServerFormSchema";
 import type { MCPToolStakeLevelType } from "@app/lib/actions/constants";
 import { MCP_TOOL_STAKE_LEVELS } from "@app/lib/actions/constants";
+import type { MCPServerViewType } from "@app/lib/api/mcp";
 import {
   MCP_TOOL_STAKE_DESCRIPTIONS,
   MCP_TOOL_STAKE_LABELS,
   MCP_TOOL_STAKE_SHORT_LABELS,
-} from "@app/lib/actions/tool_stakes_descriptions";
-import type { MCPServerViewType } from "@app/lib/api/mcp";
+} from "@app/lib/client/tool_stakes_descriptions";
 import { asDisplayName } from "@app/types/shared/utils/string_utils";
 import type { LightWorkspaceType } from "@app/types/user";
 import { isAdmin } from "@app/types/user";
@@ -108,7 +108,7 @@ function ToolItem({
               >
                 <Button
                   variant="outline"
-                  label={MCP_TOOL_STAKE_LABELS[toolPermission]}
+                  label={t(MCP_TOOL_STAKE_LABELS[toolPermission])}
                   isSelect
                 />
               </DropdownMenuTrigger>
@@ -117,7 +117,7 @@ function ToolItem({
                   <DropdownMenuItem
                     key={permission}
                     onClick={() => handlePermissionChange(permission)}
-                    label={MCP_TOOL_STAKE_LABELS[permission]}
+                    label={t(MCP_TOOL_STAKE_LABELS[permission])}
                     disabled={!toolEnabled}
                   />
                 ))}
@@ -164,12 +164,19 @@ export const ToolsList = memo(
               title={t`User approval settings`}
             >
               <ul>
-                {MCP_TOOL_STAKE_LEVELS.map((stakeLevel) => (
-                  <li key={stakeLevel}>
-                    <b>{MCP_TOOL_STAKE_SHORT_LABELS[stakeLevel]}</b>:{" "}
-                    {MCP_TOOL_STAKE_DESCRIPTIONS[stakeLevel]}
-                  </li>
-                ))}
+                {MCP_TOOL_STAKE_LEVELS.map((stakeLevel) => {
+                  const stakeLabel = t(MCP_TOOL_STAKE_SHORT_LABELS[stakeLevel]);
+                  const stakeDescription = t(
+                    MCP_TOOL_STAKE_DESCRIPTIONS[stakeLevel]
+                  );
+                  return (
+                    <li key={stakeLevel}>
+                      <Trans>
+                        <b>{stakeLabel}</b>: {stakeDescription}
+                      </Trans>
+                    </li>
+                  );
+                })}
               </ul>
             </ContentMessage>
 

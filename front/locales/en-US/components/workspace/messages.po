@@ -1247,16 +1247,13 @@ msgid "{allowanceCreditCount, plural, one {{consumedLabel} / {allowanceLabel} cr
 msgstr "{allowanceCreditCount, plural, one {{consumedLabel} / {allowanceLabel} credit used} other {{consumedLabel} / {allowanceLabel} credits used}}"
 
 #: front/components/workspace/MembersUsageTable.tsx
+msgctxt "column header"
 msgid "Credit usage"
 msgstr "Credit usage"
 
 #: front/components/workspace/MembersUsageTable.tsx
 msgid "Premium messages"
 msgstr "Premium messages"
-
-#: front/components/workspace/MembersUsageTable.tsx
-msgid "Resets on a rolling {windowDays}-day basis"
-msgstr "Resets on a rolling {windowDays}-day basis"
 
 #: front/components/workspace/MembersUsageTable.tsx
 msgid "Premium message usage"
@@ -1269,6 +1266,10 @@ msgstr "{usedMessages} of {limitMessages, plural, one {# premium message} other 
 #: front/components/workspace/MembersUsageTable.tsx
 msgid "Reset schedule:"
 msgstr "Reset schedule:"
+
+#: front/components/workspace/MembersUsageTable.tsx
+msgid "Resets on a rolling {windowDays}-day basis"
+msgstr "Resets on a rolling {windowDays}-day basis"
 
 #: front/components/workspace/MembersUsageTable.tsx
 msgid "Fair usage credits"

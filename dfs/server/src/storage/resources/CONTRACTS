@@ -10,3 +10,14 @@ another resource MUST appear as explicit typed variants, such as
 `session::Error::Tenant(tenant::Error)`. Cross-resource `From` conversions MUST support `?`, wrapping
 only `storage::Error::Resource` and preserving all other variants, including FDB failures, unchanged.
 API translation MUST delegate wrapped domain errors to the originating resource's status mapping.
+
+@cc [owner:id13,label:backend;concurrency] lock-expiry-index-atomicity
+Each lock MUST have exactly one expiry index entry with the same tenant, object, and expiry.
+Expiry index entries MUST NOT outlive their locks.
+Acquisition, refresh, unlock, removal, and invalidation MUST update the lock and its index atomically.
+Cleanup MUST read the expiry range with conflict tracking and clear each indexed lock and its index
+entry in the same transaction, so concurrent renewal and cleanup cannot both commit.
+
+@cc [owner:id13,label:security] lock-token-unpredictability
+Each acquired lock token MUST have 74 independently cryptographically random UUIDv7 payload bits.
+Lock tokens MUST NOT share an ordering counter with object IDs or other lock tokens.

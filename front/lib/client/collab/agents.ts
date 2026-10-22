@@ -10,9 +10,9 @@ import {
 } from "@app/types/collab";
 import type { HocuspocusProvider } from "@hocuspocus/provider";
 
-export interface AgentEvent {
+export interface AgentEvent<A extends AgentActivity = AgentActivity> {
   agent: CollabAgent;
-  activity: AgentActivity;
+  activity: A;
 }
 
 /**

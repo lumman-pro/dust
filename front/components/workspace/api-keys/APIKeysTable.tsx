@@ -367,7 +367,7 @@ function buildColumns({
       header: labels.name,
       enableSorting: true,
       meta: {
-        className: showAnalyticsConsumption ? "h-16 w-40" : "h-16 w-44",
+        className: "h-16",
         headerAlign: "left",
       },
       cell: (info) => (
@@ -388,8 +388,8 @@ function buildColumns({
       enableSorting: false,
       meta: {
         className: showAnalyticsConsumption
-          ? "hidden h-16 w-20 px-1 @md-table:table-cell"
-          : "hidden h-16 w-20 @lg-table:table-cell",
+          ? "hidden h-16 w-40 px-1 @md-table:table-cell"
+          : "hidden h-16 w-42 @lg-table:table-cell",
         headerAlign: "left",
       },
       cell: (info) => (
@@ -434,8 +434,8 @@ function buildColumns({
       enableSorting: false,
       meta: {
         className: showAnalyticsConsumption
-          ? "hidden h-16 w-12 @lg-table:table-cell"
-          : "hidden h-16 w-12 @md-table:table-cell",
+          ? "hidden h-16 w-20 @lg-table:table-cell"
+          : "hidden h-16 w-20 @md-table:table-cell",
         headerAlign: "left",
       },
       cell: (info) => (
@@ -468,7 +468,7 @@ function buildColumns({
       meta: {
         className: showAnalyticsConsumption
           ? "hidden h-16 w-24 @md-table:table-cell"
-          : "hidden h-16 w-28 @md-table:table-cell",
+          : "hidden h-16 w-44 @md-table:table-cell",
         headerAlign: "left",
       },
       cell: (info) => (
@@ -485,8 +485,8 @@ function buildColumns({
       enableSorting: true,
       meta: {
         className: showAnalyticsConsumption
-          ? "hidden h-16 w-24 px-1 @sm-table:table-cell"
-          : "hidden h-16 w-30 @sm-table:table-cell",
+          ? "hidden h-16 w-40 px-1 @sm-table:table-cell"
+          : "hidden h-16 w-42 @sm-table:table-cell",
         headerAlign: "left",
       },
       cell: (info) => (

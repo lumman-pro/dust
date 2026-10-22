@@ -23,6 +23,8 @@ export type FileCitationCardIcon =
   | React.ReactElement;
 
 interface FileCitationCardPropsBase {
+  // Only used by the `chip` variant.
+  chipColor?: "primary" | "success";
   description?: React.ReactNode;
   icon: FileCitationCardIcon;
   isLoading?: boolean;
@@ -110,6 +112,7 @@ interface FileCitationChipProps extends Omit<
 }
 
 function FileCitationChip({
+  chipColor = "primary",
   description,
   href,
   icon,
@@ -129,7 +132,7 @@ function FileCitationChip({
     : () => <>{icon}</>;
 
   const chipProps = {
-    color: "primary" as const,
+    color: chipColor,
     icon: { visual: iconVisual },
     isBusy: isLoading,
     label: title,

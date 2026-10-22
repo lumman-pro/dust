@@ -41,6 +41,7 @@ type FilterOptionCheckboxListProps<Option extends FilterOptionBase> = {
   onToggleOption: (option: Option) => void;
   hasSelectableOptions?: boolean;
   renderIcon?: (option: Option) => ReactNode;
+  renderBadge?: (option: Option) => ReactNode;
   status?: FilterOptionListStatus;
   scrollContainer?: HTMLDivElement | null;
 } & (
@@ -61,6 +62,7 @@ export function FilterOptionCheckboxList<Option extends FilterOptionBase>({
   selectAllLabel,
   hasSelectableOptions,
   renderIcon,
+  renderBadge,
   status = "idle",
   scrollContainer = null,
 }: FilterOptionCheckboxListProps<Option>) {
@@ -144,6 +146,7 @@ export function FilterOptionCheckboxList<Option extends FilterOptionBase>({
                   >
                     <span className="block truncate">{option.name}</span>
                   </Label>
+                  {renderBadge?.(option)}
                   {option.disabled && (
                     <FilterAvailabilityStatus id={availabilityDescriptionId} />
                   )}

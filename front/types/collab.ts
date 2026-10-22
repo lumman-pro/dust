@@ -37,13 +37,38 @@ export function parseSessionName(
 
 const commentIdSchema = z.string().min(1);
 
+const yIdSchema = z.object({
+  client: z.number().int().nonnegative(),
+  clock: z.number().int().nonnegative(),
+});
+
+/** A Yjs relative position right after a character, as `Y.relativePositionToJSON` writes it. */
+const relativePositionSchema = z.object({
+  item: yIdSchema,
+  assoc: z.literal(-1),
+});
+
+/**
+ * The text a new thread anchors to, by the relative positions right after its first and last
+ * characters a comment mark can sit on, so it follows the edits made while the command travels.
+ */
+export const commentAnchorSchema = z.object({
+  first: relativePositionSchema,
+  last: relativePositionSchema,
+});
+
+export type CommentAnchor = z.infer<typeof commentAnchorSchema>;
+
 export const commentRequestSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("add"),
     commentId: commentIdSchema,
     body: z.string().min(1),
-    // The text the browser anchors once the thread exists, which agents get as the quote.
+    // The text the thread anchors to, which agents get as the quote.
     quote: z.string().optional(),
+    // TODO(co-edition): require it once no browser anchors its threads itself.
+    // The session marks it; without it, the browser anchors the thread once accepted.
+    anchor: commentAnchorSchema.optional(),
   }),
   z.object({
     type: z.literal("reply"),
@@ -77,6 +102,7 @@ export const COMMENT_REQUEST_ERROR_CODES = [
   "not_found",
   "thread_changed",
   "unwritable",
+  "unanchored",
 ] as const;
 
 export type CommentRequestErrorCode =
@@ -98,12 +124,16 @@ export const commentServerMessageSchema = z.discriminatedUnion("type", [
 
 export type CommentServerMessage = z.infer<typeof commentServerMessageSchema>;
 
-/** The agent at work in a live document and the user it works for, as editors show them. */
+/**
+ * The agent at work in a live document, the user it works for and, when a comment mentioned it,
+ * the thread it answers, as editors show them.
+ */
 export const collabAgentSchema = z.object({
   agentId: z.string().min(1),
   name: z.string().min(1),
   userId: z.string().min(1).nullable().default(null),
   userName: z.string().default(""),
+  commentId: z.string().min(1).nullable().default(null),
 });
 
 export type CollabAgent = z.infer<typeof collabAgentSchema>;
@@ -111,11 +141,27 @@ export type CollabAgent = z.infer<typeof collabAgentSchema>;
 /**
  * What an agent is doing in a live document, pushed to its editors as a stateless message.
  * `editing` goes out just before the agent's change is applied: Hocuspocus may batch document
- * updates but sends stateless messages at once, so an editor receives it first.
+ * updates but sends stateless messages at once, so an editor receives it first. An agent a comment
+ * mentioned is `waiting` while another run holds its conversation, then `thinking` until its
+ * reply in the thread.
  */
-export const AGENT_ACTIVITIES = ["reading", "editing"] as const;
+export const AGENT_ACTIVITIES = [
+  "waiting",
+  "thinking",
+  "reading",
+  "editing",
+] as const;
 
 export type AgentActivity = (typeof AGENT_ACTIVITIES)[number];
+
+export type WorkingAgentActivity = Exclude<AgentActivity, "waiting">;
+
+export type DocumentActivity = Extract<AgentActivity, "reading" | "editing">;
+
+export const isDocumentActivity = (
+  activity: AgentActivity
+): activity is DocumentActivity =>
+  activity === "reading" || activity === "editing";
 
 export const agentActivityMessageSchema = z.object({
   type: z.literal("agent_activity"),
@@ -181,3 +227,28 @@ export const saveStateMessageSchema = saveStateSchema.extend({
 });
 
 export type SaveStateMessage = z.infer<typeof saveStateMessageSchema>;
+
+/**
+ * The Yjs history of the server's document, sent to each editor once connected. It changes only
+ * when the server builds the document from its file again, giving its text new Yjs ids.
+ */
+export const epochMessageSchema = z.object({
+  type: z.literal("epoch"),
+  epoch: z.string().min(1),
+});
+
+export type EpochMessage = z.infer<typeof epochMessageSchema>;
+
+/**
+ * What an editor authenticates with once it kept its document from an earlier connection: its
+ * ticket and that document's epoch. An editor with no document kept sends its ticket alone.
+ */
+export const collabTokenSchema = z.object({
+  ticket: z.string().min(1),
+  epoch: z.string().min(1),
+});
+
+export type CollabToken = z.infer<typeof collabTokenSchema>;
+
+/** Why the server closes a connection whose kept document has another epoch than its own. */
+export const EPOCH_CHANGED_CLOSE_REASON = "epoch_changed";

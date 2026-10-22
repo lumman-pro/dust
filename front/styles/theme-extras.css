@@ -9,10 +9,13 @@
 
 /* Fixed heights (was theme.extend.height). */
 @utility h-title {
-  height: 3rem;
+  height: var(--title-height); /* defined in global.css */
 }
 @utility h-panel {
   height: var(--panel-height); /* defined in global.css */
+}
+@utility h-panel-sm {
+  height: calc(var(--panel-height) - var(--title-height));
 }
 @utility min-h-panel {
   min-height: var(--panel-height);

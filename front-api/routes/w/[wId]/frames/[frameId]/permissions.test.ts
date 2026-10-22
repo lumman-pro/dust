@@ -1,6 +1,5 @@
 import { FramePublicationResource } from "@app/lib/resources/frame_publication_resource";
 import { ConversationFactory } from "@app/tests/utils/ConversationFactory";
-import { FeatureFlagFactory } from "@app/tests/utils/FeatureFlagFactory";
 import { FileFactory } from "@app/tests/utils/FileFactory";
 import {
   createTestFrameFunction,
@@ -19,7 +18,6 @@ describe("GET /api/w/:wId/frames/:frameId/permissions", () => {
     const { auth, workspace } = await createPrivateApiMockRequest({
       role: "admin",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const conversation = await ConversationFactory.create(auth, {
       agentConfigurationId: "test-agent",
       messagesCreatedAt: [],
@@ -64,7 +62,6 @@ describe("GET /api/w/:wId/frames/:frameId/permissions", () => {
     const { auth, workspace } = await createPrivateApiMockRequest({
       role: "admin",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const conversation = await ConversationFactory.create(auth, {
       agentConfigurationId: "test-agent",
       messagesCreatedAt: [],
@@ -109,7 +106,6 @@ describe("GET /api/w/:wId/frames/:frameId/permissions", () => {
     const { auth, workspace } = await createPrivateApiMockRequest({
       role: "admin",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const conversation = await ConversationFactory.create(auth, {
       agentConfigurationId: "test-agent",
       messagesCreatedAt: [],
@@ -191,7 +187,6 @@ describe("GET /api/w/:wId/frames/:frameId/permissions", () => {
     const { auth, workspace } = await createPrivateApiMockRequest({
       role: "admin",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const space = await SpaceFactory.project(workspace);
     const { frame } = await createTestFrameFunction(auth, { space });
     const publication = await FramePublicationResource.makeNew(auth, {
@@ -215,7 +210,6 @@ describe("GET /api/w/:wId/frames/:frameId/permissions", () => {
     const { auth, workspace } = await createPrivateApiMockRequest({
       role: "admin",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const space = await SpaceFactory.project(workspace);
     const { frame } = await createTestFrameFunction(auth, { space });
     await frame.setLatestFramePublication({
@@ -242,7 +236,6 @@ describe("GET /api/w/:wId/frames/:frameId/permissions", () => {
     const { auth, workspace } = await createPrivateApiMockRequest({
       role: "admin",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const frame = await FileFactory.create(auth, null, {
       contentType: frameV2ContentType,
       fileName: FRAME_MANIFEST_FILE,
@@ -278,7 +271,6 @@ describe("GET /api/w/:wId/frames/:frameId/permissions", () => {
     const { auth, workspace } = await createPrivateApiMockRequest({
       role: "admin",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const space = await SpaceFactory.project(workspace);
     const { frame } = await createTestFrameFunction(auth, { space });
 
@@ -296,7 +288,6 @@ describe("GET /api/w/:wId/frames/:frameId/permissions", () => {
     const { auth, workspace } = await createPrivateApiMockRequest({
       role: "admin",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const frame = await FileFactory.create(auth, null, {
       contentType: frameContentType,
       fileName: "legacy.tsx",

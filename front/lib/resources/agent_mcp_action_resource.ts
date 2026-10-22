@@ -24,12 +24,15 @@ import {
   isSandboxChildActionInfo,
   parseUserQuestionResumeState,
 } from "@app/lib/actions/types";
-import { isLightServerSideMCPToolConfiguration } from "@app/lib/actions/types/guards";
+import {
+  isLightClientSideMCPToolConfiguration,
+  isLightServerSideMCPToolConfiguration,
+} from "@app/lib/actions/types/guards";
 import { AGENT_DELEGATION_SERVER_NAME } from "@app/lib/api/actions/servers/agent_delegation/metadata";
 import { RUN_AGENT_SERVER_NAME } from "@app/lib/api/actions/servers/run_agent/metadata";
 import { isRunAgentResumeState } from "@app/lib/api/actions/servers/run_agent/types";
 import { getCitationsFromToolOutput } from "@app/lib/api/assistant/citations";
-import type { ToolDisplayLabels } from "@app/lib/api/mcp";
+import type { ToolBillingInfo, ToolDisplayLabels } from "@app/lib/api/mcp";
 import type { Authenticator } from "@app/lib/auth";
 import { AgentStepContentToolExecutionModel } from "@app/lib/models/agent/actions/agent_step_content_tool_execution";
 import {
@@ -123,6 +126,12 @@ export class AgentMCPActionResource extends BaseResource<AgentMCPActionModel> {
     }
   ) {
     super(model, blob);
+  }
+
+  get declaredBilling(): ToolBillingInfo | null {
+    return isLightClientSideMCPToolConfiguration(this.toolConfiguration)
+      ? (this.toolConfiguration.declaredBilling ?? null)
+      : null;
   }
 
   private static async baseFetch(

@@ -1,8 +1,8 @@
+import { getMCPServerIdFromServerName } from "@app/lib/api/actions/mcp/client_side_server_id";
 import { runOnRedis } from "@app/lib/api/redis";
 import type { Authenticator } from "@app/lib/auth";
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
-import { slugify } from "@app/types/shared/utils/string_utils";
 import { randomBytes } from "crypto";
 
 // TTL for MCP server registrations (10 minutes).
@@ -52,14 +52,6 @@ export function getBaseServerId(serverId: string): string {
   // Only remove suffix if it matches our strict pattern (dot followed by hex characters,
   // which also covers legacy numeric suffixes).
   return serverId.replace(/\.[0-9a-f]+$/, "");
-}
-
-function getMCPServerIdFromServerName({
-  serverName,
-}: {
-  serverName: string;
-}): string {
-  return `mcp-client-side:${slugify(serverName)}`;
 }
 
 /**

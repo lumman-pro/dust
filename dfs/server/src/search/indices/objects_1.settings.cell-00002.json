@@ -1,0 +1,182 @@
+{
+  "number_of_shards": 10,
+  "number_of_routing_shards": 50,
+  "routing_partition_size": 49,
+  "number_of_replicas": 1,
+  "refresh_interval": "5s",
+  "analysis": {
+    "normalizer": {
+      "dfs_folded": {
+        "type": "custom",
+        "filter": [
+          "icu_folding"
+        ]
+      }
+    },
+    "filter": {
+      "dfs_name_parts": {
+        "type": "word_delimiter_graph",
+        "split_on_numerics": false,
+        "preserve_original": false,
+        "stem_english_possessive": false
+      },
+      "dfs_english_stem": {
+        "type": "stemmer",
+        "language": "porter2"
+      },
+      "dfs_english_possessive": {
+        "type": "stemmer",
+        "language": "possessive_english"
+      },
+      "dfs_french_stem": {
+        "type": "stemmer",
+        "language": "light_french"
+      },
+      "dfs_token_length": {
+        "type": "length",
+        "min": 0,
+        "max": 8191
+      }
+    },
+    "analyzer": {
+      "dfs_text": {
+        "type": "custom",
+        "tokenizer": "icu_tokenizer",
+        "filter": [
+          "icu_folding",
+          "dfs_token_length"
+        ],
+        "char_filter": [
+          "dfs_nfkc",
+          "dfs_apostrophe_boundaries"
+        ]
+      },
+      "dfs_text_en": {
+        "type": "custom",
+        "tokenizer": "icu_tokenizer",
+        "filter": [
+          "dfs_english_possessive",
+          "icu_folding",
+          "dfs_english_stem",
+          "dfs_token_length"
+        ],
+        "char_filter": [
+          "dfs_nfkc"
+        ]
+      },
+      "dfs_text_fr": {
+        "type": "custom",
+        "tokenizer": "icu_tokenizer",
+        "filter": [
+          "elision",
+          "icu_folding",
+          "dfs_french_stem",
+          "dfs_token_length"
+        ],
+        "char_filter": [
+          "dfs_nfkc"
+        ]
+      },
+      "dfs_filename_parts": {
+        "type": "custom",
+        "tokenizer": "whitespace",
+        "filter": [
+          "dfs_name_parts",
+          "icu_folding",
+          "dfs_token_length"
+        ],
+        "char_filter": [
+          "dfs_nfkc"
+        ]
+      },
+      "dfs_filename_parts_en": {
+        "type": "custom",
+        "tokenizer": "whitespace",
+        "filter": [
+          "dfs_name_parts",
+          "icu_folding",
+          "dfs_english_stem",
+          "dfs_token_length"
+        ],
+        "char_filter": [
+          "dfs_nfkc"
+        ]
+      },
+      "dfs_filename_parts_fr": {
+        "type": "custom",
+        "tokenizer": "whitespace",
+        "filter": [
+          "dfs_name_parts",
+          "icu_folding",
+          "dfs_french_stem",
+          "dfs_token_length"
+        ],
+        "char_filter": [
+          "dfs_nfkc"
+        ]
+      },
+      "dfs_filename": {
+        "type": "custom",
+        "tokenizer": "icu_tokenizer",
+        "char_filter": [
+          "dfs_nfkc",
+          "dfs_filename_boundaries",
+          "dfs_apostrophe_boundaries"
+        ],
+        "filter": [
+          "icu_folding",
+          "dfs_token_length"
+        ]
+      },
+      "dfs_filename_en": {
+        "type": "custom",
+        "tokenizer": "icu_tokenizer",
+        "char_filter": [
+          "dfs_nfkc",
+          "dfs_filename_boundaries",
+          "dfs_apostrophe_boundaries"
+        ],
+        "filter": [
+          "icu_folding",
+          "dfs_english_stem",
+          "dfs_token_length"
+        ]
+      },
+      "dfs_filename_fr": {
+        "type": "custom",
+        "tokenizer": "icu_tokenizer",
+        "char_filter": [
+          "dfs_nfkc",
+          "dfs_filename_boundaries",
+          "dfs_apostrophe_boundaries"
+        ],
+        "filter": [
+          "icu_folding",
+          "dfs_french_stem",
+          "dfs_token_length"
+        ]
+      }
+    },
+    "char_filter": {
+      "dfs_apostrophe_boundaries": {
+        "type": "mapping",
+        "mappings": [
+          "\\u0027 => \\u0020",
+          "\\u2019 => \\u0020",
+          "\\u2018 => \\u0020"
+        ]
+      },
+      "dfs_nfkc": {
+        "type": "icu_normalizer",
+        "name": "nfkc"
+      },
+      "dfs_filename_boundaries": {
+        "type": "mapping",
+        "mappings": [
+          ". => \\u0020",
+          "_ => \\u0020"
+        ]
+      }
+    }
+  }
+}

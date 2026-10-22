@@ -38,7 +38,6 @@ import {
   getConversationFilesBasePath,
   getPodFilesBasePath,
 } from "@app/types/mount_path";
-import type { WhitelistableFeature } from "@app/types/shared/feature_flags";
 import { Err, Ok } from "@app/types/shared/result";
 import assert from "assert";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -559,7 +558,6 @@ describe("publishFrameFromSource replacing a legacy Frame", () => {
         "databases/items.db.ts": "export const items = {};",
       },
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     await FeatureFlagFactory.basic(auth, "frames_v2_functions");
 
     const sandbox = await SandboxResource.makeNew(auth, {
@@ -798,19 +796,16 @@ describe("publishFrameV2FromSource", () => {
 
   it.each<{
     declares: string;
-    flags: WhitelistableFeature[];
     manifestContent: string;
     extraSources: Record<string, string>;
   }>([
     {
       declares: "functions",
-      flags: [],
       manifestContent: functionManifest,
       extraSources: functionSources,
     },
     {
       declares: "databases",
-      flags: ["frames_v2"],
       manifestContent: JSON.stringify({
         version: 1,
         description: "Store items.",
@@ -818,22 +813,13 @@ describe("publishFrameV2FromSource", () => {
       }),
       extraSources: { "databases/items.db.ts": "export {};" },
     },
-    {
-      declares: "functions",
-      flags: ["frames_v2_functions"],
-      manifestContent: functionManifest,
-      extraSources: functionSources,
-    },
   ])(
-    "rejects a manifest declaring $declares with flags $flags",
-    async ({ flags, manifestContent, extraSources }) => {
+    "rejects a manifest declaring $declares without Frame functions",
+    async ({ manifestContent, extraSources }) => {
       const { auth, conversation, frame, manifestPath } = await setup({
         manifestContent,
         extraSources,
       });
-      for (const flag of flags) {
-        await FeatureFlagFactory.basic(auth, flag);
-      }
 
       const result = await publishFrameV2FromSource(auth, {
         conversation,
@@ -850,6 +836,45 @@ describe("publishFrameV2FromSource", () => {
       expect(reloaded?.useCaseMetadata?.activePublicationId).toBeUndefined();
     }
   );
+
+  it("rejects a manifest declaring schedules without the schedules flag", async () => {
+    const { auth, conversation, frame, manifestPath } = await setup({
+      manifestContent: JSON.stringify({
+        version: 1,
+        description: "Run a function on a schedule.",
+        functions: [
+          {
+            name: "run",
+            description: "Run it.",
+            entryPoint: "functions/run.ts",
+            schedules: [
+              {
+                cron: "0 * * * *",
+                timezone: "UTC",
+                input: {},
+              },
+            ],
+          },
+        ],
+      }),
+      extraSources: functionSources,
+    });
+    await FeatureFlagFactory.basic(auth, "frames_v2_functions");
+
+    const result = await publishFrameV2FromSource(auth, {
+      conversation,
+      frame,
+      manifestPath,
+    });
+
+    assert(result.isErr());
+    expect(result.error).toMatchObject({ code: "invalid_manifest" });
+    expect(result.error.message).toContain("Frame schedules are not enabled");
+    expect(ensureFrameSandboxReady).not.toHaveBeenCalled();
+    expect(ensureConversationSandboxReadyWithScope).not.toHaveBeenCalled();
+    const reloaded = await FileResource.fetchById(auth, frame.sId);
+    expect(reloaded?.useCaseMetadata?.activePublicationId).toBeUndefined();
+  });
 
   it("infers TSX source content type from its extension", async () => {
     const { auth, conversation, frame, manifestPath } = await setup({

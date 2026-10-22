@@ -982,9 +982,17 @@ function buildPoolCreditUsageColumn(
     header: () => (
       <div className="flex min-w-0 flex-col">
         <span className="flex min-w-0 items-center gap-1">
-          <Icon visual={CoinsStacked03} size="xs" />
+          <Icon
+            visual={CoinsStacked03}
+            size="xs"
+            className="hidden @xs:block"
+          />
           <span className="truncate">
-            {hasPool ? <Trans>Pool usage</Trans> : <Trans>Credit usage</Trans>}
+            {hasPool ? (
+              <Trans>Pool usage</Trans>
+            ) : (
+              <Trans context="column header">Credit usage</Trans>
+            )}
           </span>
         </span>
       </div>
@@ -1007,6 +1015,7 @@ function buildPoolCreditUsageColumn(
       </div>
     ),
     enableSorting: true,
+    meta: { className: "w-46 @xs:w-60" },
   };
 }
 
@@ -1017,15 +1026,10 @@ function buildPremiumMessageUsageColumn(
   return {
     id: "premiumMessageUsage" as const,
     header: () => (
-      <div className="flex flex-col">
-        <span className="flex items-center gap-1">
-          <Icon visual={CoinsStacked03} size="xs" />
-          <Trans>Premium messages</Trans>
-        </span>
-        <span className="text-xs font-normal text-muted-foreground">
-          <Trans>Resets on a rolling {windowDays}-day basis</Trans>
-        </span>
-      </div>
+      <span className="flex items-center gap-1">
+        <Icon visual={CoinsStacked03} size="xs" className="hidden @xs:block" />
+        <Trans>Premium messages</Trans>
+      </span>
     ),
     accessorFn: (row) =>
       (row.premiumMessageUsage?.usedMessages ?? 0).toString(),
@@ -1115,6 +1119,10 @@ function buildPremiumMessageUsageColumn(
       );
     },
     enableSorting: true,
+    meta: {
+      className: "w-46 @xs:w-60",
+      tooltip: t(msg`Resets on a rolling ${windowDays}-day basis`),
+    },
   };
 }
 
@@ -1125,15 +1133,10 @@ function buildFairUseCreditsColumn(
   return {
     id: "fairUse" as const,
     header: () => (
-      <div className="flex flex-col">
-        <span className="flex items-center gap-1">
-          <Icon visual={CoinsStacked03} size="xs" />
-          <Trans>Fair usage credits</Trans>
-        </span>
-        <span className="text-xs font-normal text-muted-foreground">
-          <Trans>Resets on a rolling {windowDays}-day basis</Trans>
-        </span>
-      </div>
+      <span className="flex items-center gap-1">
+        <Icon visual={CoinsStacked03} size="xs" />
+        <Trans>Fair usage credits</Trans>
+      </span>
     ),
     accessorFn: (row) => (row.fairUse?.usedCredits ?? 0).toString(),
     cell: (info: Info) => {
@@ -1224,7 +1227,9 @@ function buildFairUseCreditsColumn(
     enableSorting: true,
     sortDescFirst: true,
     meta: {
-      className: "w-56",
+      // Secondary to the premium messages column, so it yields first on narrow containers.
+      className: "hidden w-72 @md:table-cell",
+      tooltip: t(msg`Resets on a rolling ${windowDays}-day basis`),
     },
   };
 }
@@ -1468,12 +1473,9 @@ function buildCreditPlanColumns({
     ...(showPremiumMessageUsage
       ? []
       : [buildSeatsIconColumn(t), buildSeatUsageColumn(t)]),
-    {
-      ...(showPremiumMessageUsage
-        ? buildPremiumMessageUsageColumn(premiumMessageWindowDays, t)
-        : buildPoolCreditUsageColumn(hasPool)),
-      meta: { className: "w-32 @xs:w-60" },
-    },
+    showPremiumMessageUsage
+      ? buildPremiumMessageUsageColumn(premiumMessageWindowDays, t)
+      : buildPoolCreditUsageColumn(hasPool),
     // Premium message plans also carry a fixed AWU credit allowance for
     // usage on non-premium models, alongside the rolling message limit.
     ...(showPremiumMessageUsage && fairUseWindowDays !== null

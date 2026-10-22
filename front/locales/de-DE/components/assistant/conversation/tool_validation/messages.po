@@ -56,10 +56,6 @@ msgid "Restricted"
 msgstr "Eingeschränkt"
 
 #: front/components/assistant/conversation/tool_validation/PodEditInformationValidationDetails.tsx
-msgid "Unpinned"
-msgstr "Nicht angeheftet"
-
-#: front/components/assistant/conversation/tool_validation/PodEditInformationValidationDetails.tsx
 msgid "No change"
 msgstr "Keine Änderung"
 
@@ -82,10 +78,6 @@ msgstr "Beschreibung"
 #: front/components/assistant/conversation/tool_validation/PodEditInformationValidationDetails.tsx
 msgid "Access"
 msgstr "Zugriff"
-
-#: front/components/assistant/conversation/tool_validation/PodEditInformationValidationDetails.tsx
-msgid "Pinned frame"
-msgstr "Angeheftetes Frame"
 
 #: front/components/assistant/conversation/tool_validation/PodEditInformationValidationDetails.tsx
 msgid "The agent wants to update information for <0>{podName}</0>."

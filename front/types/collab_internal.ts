@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { collabAgentSchema } from "@app/types/collab";
+import { AGENT_ACTIVITIES, collabAgentSchema } from "@app/types/collab";
 
 /**
  * Agents change a live document through the collab server's internal routes: they read the
@@ -13,6 +13,7 @@ export const COLLAB_INTERNAL_ROUTES_PREFIX = "/internal";
 export const COLLAB_SOURCE_READ_PATH = "/documents/read";
 export const COLLAB_SOURCE_WRITE_PATH = "/documents/write";
 export const COLLAB_SOURCE_EDIT_PATH = "/documents/edit";
+export const COLLAB_AGENT_ACTIVITY_PATH = "/documents/agent_activity";
 
 export const collabSourceReadRequestSchema = z.object({
   workspaceId: z.string().min(1),
@@ -123,3 +124,16 @@ export type CollabSourceEditResult = Exclude<
   CollabSourceEditResponse,
   { result: "refused" }
 >;
+export const collabAgentActivityRequestSchema = z.object({
+  workspaceId: z.string().min(1),
+  userId: z.string().min(1),
+  canonicalPath: z.string().min(1),
+  agent: collabAgentSchema,
+  activity: z.enum(AGENT_ACTIVITIES),
+});
+
+export type CollabAgentActivityRequest = z.infer<
+  typeof collabAgentActivityRequestSchema
+>;
+
+export const collabAgentActivityResponseSchema = z.object({});

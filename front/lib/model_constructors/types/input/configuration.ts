@@ -62,8 +62,6 @@ export const inputConfigSchema = z.object({
   outputFormat: outputFormatSchema.optional(),
   cacheKey: z.string().optional(),
   serviceTier: serviceTierSchema.optional(),
-  // When true, the direct Anthropic stream client asks for server-side fallback.
-  serverSideFallback: z.boolean().optional(),
 });
 export type InputConfig = z.infer<typeof inputConfigSchema>;
 

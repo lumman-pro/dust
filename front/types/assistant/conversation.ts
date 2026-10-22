@@ -164,6 +164,8 @@ export type UserMessageContext = {
   apiKeyId?: number | null;
   authMethod?: string | null;
   excludedRetrievalTags?: string[] | null;
+  // What the user had selected in the app hosting Dust when sending, e.g. "Sheet1!C5:D6" in Excel.
+  hostSelection?: string | null;
 };
 
 export type AgenticMessageData = {
@@ -428,6 +430,9 @@ export type AgentMessageType = BaseAgentMessageType & {
   // (per-message model picked from the input-bar picker), or "auto" (routed
   // through the auto model). Legacy: null.
   modelResolutionMethod: ModelResolutionMethodType | null;
+  // Model that answered instead of the requested one after a provider-side fallback. Null when
+  // the requested model answered.
+  fallbackModelId: string | null;
 };
 
 export type AgentMessageTypeWithoutMentions = Omit<
@@ -453,6 +458,7 @@ export type LightAgentMessageType = BaseAgentMessageType & {
   // label messages that ran on a per-message picker override. Legacy: null.
   resolvedModel: ResolvedRequestedModel | null;
   modelResolutionMethod: ModelResolutionMethodType | null;
+  fallbackModelId: string | null;
 };
 
 // This type represents the agent message we can reconstruct by accumulating streaming events

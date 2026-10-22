@@ -2,7 +2,7 @@ import { processAndStoreFile } from "@app/lib/api/files/processing";
 import { canWriteFrameV2Source } from "@app/lib/api/frames/permissions";
 import { prewarmFrameSandbox } from "@app/lib/api/frames/prewarm_frame_sandbox";
 import { addFileToProject } from "@app/lib/api/projects/context";
-import { type Authenticator, hasFeatureFlag } from "@app/lib/auth";
+import type { Authenticator } from "@app/lib/auth";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import type { FileVersion } from "@app/lib/resources/file_resource";
 import { FileResource } from "@app/lib/resources/file_resource";
@@ -249,7 +249,7 @@ app.get(
 
     const action = getSecureFileAction(ctx.req.query("action"), file);
     if (action === "view") {
-      if (file.isFrameV2 && (await hasFeatureFlag(auth, "frames_v2"))) {
+      if (file.isFrameV2) {
         // Start waking the Frame's sandbox while its UI loads; the pre-warm gates itself.
         void prewarmFrameSandbox(auth, file);
 

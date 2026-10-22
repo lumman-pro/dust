@@ -1,6 +1,7 @@
 {
   "number_of_shards": 1,
   "number_of_replicas": 1,
+  "routing.allocation.require.workload": "default",
   "refresh_interval": "30s",
   "analysis": {
     "normalizer": {
@@ -33,10 +34,7 @@
         "type": "custom",
         "char_filter": ["nfc"],
         "tokenizer": "icu_tokenizer",
-        "filter": [
-          "preserve_words",
-          "icu_folding"
-        ]
+        "filter": ["preserve_words", "icu_folding"]
       }
     }
   }

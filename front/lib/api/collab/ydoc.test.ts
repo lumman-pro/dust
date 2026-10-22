@@ -6,6 +6,7 @@ import {
   UNSAVABLE_BODY_MESSAGE,
 } from "@app/components/editor/document/dfm_persistence";
 import {
+  anchorYDocComment,
   dfmToYDoc,
   ENVELOPE_MAP_NAME,
   getYDocUnsavableBodyReason,
@@ -13,8 +14,10 @@ import {
   yDocCommentedTexts,
   yDocToDfm,
 } from "@app/lib/api/collab/ydoc";
+import type { DfmComment } from "@app/lib/markdown/dfm";
 import { serializeDfm } from "@app/lib/markdown/dfm";
 import { FIXTURE, FIXTURES } from "@app/lib/markdown/dfm/tests/dfm.test_utils";
+import { commentAnchorOf } from "@app/tests/utils/comment_anchors";
 import { BODY_FRAGMENT_NAME } from "@app/types/collab";
 import { Ok } from "@app/types/shared/result";
 import type { LocalTransactionOrigin } from "@hocuspocus/server";
@@ -328,9 +331,9 @@ describe("getYDocUnsavableBodyReason", () => {
     ],
   });
 
-  const indented: JSONContent = {
+  const headingLike: JSONContent = {
     type: "paragraph",
-    content: [{ type: "text", text: "    secret plan" }],
+    content: [{ type: "text", text: "# secret plan" }],
   };
 
   const liveDocument = (content: JSONContent[]) => {
@@ -349,7 +352,7 @@ describe("getYDocUnsavableBodyReason", () => {
   };
 
   it("names what a live body cannot write, without its text", () => {
-    const live = liveDocument([indented]);
+    const live = liveDocument([headingLike]);
     const saved = yDocToDfm(live);
     if (saved.isOk()) {
       throw new Error("The body saved.");
@@ -358,7 +361,7 @@ describe("getYDocUnsavableBodyReason", () => {
     expect(saved.error).toBe(UNSAVABLE_BODY_MESSAGE);
     const reason = getYDocUnsavableBodyReason(live, saved.error);
     expect(reason).toBe(
-      "The document would not read back the same as Markdown, from paragraph, which reads back as codeBlock."
+      "The document would not read back the same as Markdown, from paragraph, which reads back as heading."
     );
     expect(reason).not.toContain("secret");
   });
@@ -371,8 +374,155 @@ describe("getYDocUnsavableBodyReason", () => {
   });
 
   it("is null for a failure that is not about the body", () => {
-    const live = liveDocument([indented]);
+    const live = liveDocument([headingLike]);
 
     expect(getYDocUnsavableBodyReason(live, "The storage is down.")).toBeNull();
+  });
+});
+
+describe("anchorYDocComment", () => {
+  const ORIGIN: LocalTransactionOrigin = {
+    source: "local",
+    context: "commenter",
+  };
+  const SOURCE = "First paragraph.\n\nSecond paragraph.\n";
+  const THREAD: DfmComment = {
+    id: "c1",
+    status: "open",
+    messages: [
+      {
+        author: { kind: "user", id: "usr_tom", name: "Tom" },
+        createdAt: "2026-10-05T12:00:00.000Z",
+        body: "Why?",
+      },
+    ],
+  };
+
+  function loadLive() {
+    const live = dfmToYDoc(SOURCE);
+    if (live.isErr()) {
+      throw new Error(live.error);
+    }
+    return live.value.doc;
+  }
+
+  function secondParagraphText(doc: Y.Doc) {
+    const paragraph = doc.getXmlFragment(BODY_FRAGMENT_NAME).get(1);
+    if (!(paragraph instanceof Y.XmlElement)) {
+      throw new Error("No second paragraph.");
+    }
+    const text = paragraph.get(0);
+    if (!(text instanceof Y.XmlText)) {
+      throw new Error("No text in the second paragraph.");
+    }
+    return text;
+  }
+
+  it("marks the anchored text, in one transaction with the origin", () => {
+    const doc = loadLive();
+    const origins: unknown[] = [];
+    doc.on("update", (_update: Uint8Array, origin: unknown) =>
+      origins.push(origin)
+    );
+
+    const anchored = anchorYDocComment(
+      doc,
+      {
+        commentId: "c1",
+        anchor: commentAnchorOf(doc, "Second"),
+        comments: [THREAD],
+      },
+      ORIGIN
+    );
+
+    expect(anchored.isOk()).toBe(true);
+    expect(origins).toEqual([ORIGIN]);
+    expect(yDocCommentedTexts(doc)).toEqual(new Map([["c1", "Second"]]));
+  });
+
+  it("follows the edits made since the anchor was taken, without taking text typed at its edges", () => {
+    const doc = loadLive();
+    const anchor = commentAnchorOf(doc, "Second");
+    const text = secondParagraphText(doc);
+    text.insert("Second".length, " big");
+    text.insert(0, "The ");
+
+    const anchored = anchorYDocComment(
+      doc,
+      { commentId: "c1", anchor, comments: [THREAD] },
+      ORIGIN
+    );
+
+    expect(anchored.isOk()).toBe(true);
+    expect(yDocCommentedTexts(doc)).toEqual(new Map([["c1", "Second"]]));
+  });
+
+  it("starts at the first character left when the first ones were deleted", () => {
+    const doc = loadLive();
+    const anchor = commentAnchorOf(doc, "Second");
+    secondParagraphText(doc).delete(0, 2);
+
+    const anchored = anchorYDocComment(
+      doc,
+      { commentId: "c1", anchor, comments: [THREAD] },
+      ORIGIN
+    );
+
+    expect(anchored.isOk()).toBe(true);
+    expect(yDocCommentedTexts(doc)).toEqual(new Map([["c1", "cond"]]));
+  });
+
+  it("refuses an anchor whose characters were all deleted, changing nothing", () => {
+    const doc = loadLive();
+    const anchor = commentAnchorOf(doc, "Second");
+    secondParagraphText(doc).delete(0, "Second".length);
+    const updates: Uint8Array[] = [];
+    doc.on("update", (update: Uint8Array) => updates.push(update));
+
+    const anchored = anchorYDocComment(
+      doc,
+      { commentId: "c1", anchor, comments: [THREAD] },
+      ORIGIN
+    );
+
+    expect(anchored.isErr() && anchored.error).toBe("unanchored");
+    expect(updates).toEqual([]);
+  });
+
+  it("refuses an anchor whose text is gone, changing nothing", () => {
+    const doc = loadLive();
+    const anchor = commentAnchorOf(doc, "Second");
+    doc.getXmlFragment(BODY_FRAGMENT_NAME).delete(1, 1);
+    const updates: Uint8Array[] = [];
+    doc.on("update", (update: Uint8Array) => updates.push(update));
+
+    const anchored = anchorYDocComment(
+      doc,
+      { commentId: "c1", anchor, comments: [THREAD] },
+      ORIGIN
+    );
+
+    expect(anchored.isErr() && anchored.error).toBe("unanchored");
+    expect(updates).toEqual([]);
+  });
+
+  it("refuses positions outside the body, changing nothing", () => {
+    const doc = loadLive();
+    const updates: Uint8Array[] = [];
+    doc.on("update", (update: Uint8Array) => updates.push(update));
+    const outside = { item: { client: 1, clock: 999_999 }, assoc: -1 as const };
+
+    const anchored = anchorYDocComment(
+      doc,
+      {
+        commentId: "c1",
+        anchor: { first: outside, last: outside },
+        comments: [THREAD],
+      },
+      ORIGIN
+    );
+
+    expect(anchored.isErr() && anchored.error).toBe("unanchored");
+    expect(updates).toEqual([]);
   });
 });

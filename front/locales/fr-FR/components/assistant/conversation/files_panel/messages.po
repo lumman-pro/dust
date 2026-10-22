@@ -116,12 +116,26 @@ msgid "Markdown with comments"
 msgstr "Markdown avec commentaires"
 
 #: front/components/assistant/conversation/files_panel/FilePreviewPanel.tsx
+msgid "PDF"
+msgstr "PDF"
+
+#: front/components/assistant/conversation/files_panel/FilePreviewPanel.tsx
 msgid "Exit full screen mode"
 msgstr "Quitter le mode plein écran"
 
 #: front/components/assistant/conversation/files_panel/FilePreviewPanel.tsx
 msgid "Go to full screen mode"
 msgstr "Passer en mode plein écran"
+
+#: front/components/assistant/conversation/files_panel/FilePreviewPanel.tsx
+msgctxt "file view mode label beside the file name"
+msgid "[source]"
+msgstr "[source]"
+
+#: front/components/assistant/conversation/files_panel/FilePreviewPanel.tsx
+msgctxt "file view mode label beside the file name"
+msgid "[read-only]"
+msgstr "[lecture seule]"
 
 #: front/components/assistant/conversation/files_panel/FilesTab.tsx
 msgid "Conversation attachments & generated content will appear here."

@@ -85,6 +85,7 @@ export function MemberGroupLimitTable({
         id: "memberCount",
         header: t`Members`,
         accessorFn: (row) => row.memberCount.toString(),
+        enableSorting: false,
         meta: { headerAlign: "right" },
         cell: ({ row }) => (
           <DataTable.BasicCellContent

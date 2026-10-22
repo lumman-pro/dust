@@ -2,6 +2,7 @@ import { useAgentBuilderContext } from "@app/components/agent_builder/AgentBuild
 import type { AgentBuilderFormData } from "@app/components/agent_builder/agentBuilderFormSchema";
 import { useSidekickSuggestions } from "@app/components/agent_builder/sidekick/SidekickSuggestionsContext";
 import { registerGetAgentConfigTool } from "@app/components/agent_builder/sidekick/tools/getAgentConfig";
+import { DUST_CLIENT_SIDE_MCP_SERVER_NAMES } from "@app/lib/actions/constants";
 import { useFeatureFlags } from "@app/lib/auth/AuthContext";
 import { BrowserMCPTransport } from "@app/lib/client/BrowserMCPTransport";
 import datadogLogger from "@app/logger/datadogLogger";
@@ -12,7 +13,7 @@ import { useFormContext } from "react-hook-form";
 
 // Server name used for MCP registration. This is a client-side MCP server
 // exclusively used by the Agent Builder Sidekick to access live form state.
-const SERVER_NAME = "agent-builder-sidekick-client";
+const SERVER_NAME = DUST_CLIENT_SIDE_MCP_SERVER_NAMES.agentBuilderSidekick;
 
 interface UseSidekickMCPServerResult {
   serverId: string | undefined;

@@ -1,7 +1,6 @@
 import { computeFrameContentHash } from "@app/lib/api/viz/authorized_file_access_policy";
 import { FileResource } from "@app/lib/resources/file_resource";
 import { ConversationFactory } from "@app/tests/utils/ConversationFactory";
-import { FeatureFlagFactory } from "@app/tests/utils/FeatureFlagFactory";
 import { FileFactory } from "@app/tests/utils/FileFactory";
 import { createPrivateApiMockRequest } from "@app/tests/utils/generic_private_api_tests";
 import { SpaceFactory } from "@app/tests/utils/SpaceFactory";
@@ -38,7 +37,6 @@ describe("GET /api/w/:wId/frames/:frameId/authorized-files", () => {
     const { auth, workspace, user } = await createPrivateApiMockRequest({
       role: "user",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const conversation = await ConversationFactory.create(auth, {
       agentConfigurationId: "test-agent",
       messagesCreatedAt: [],
@@ -70,7 +68,6 @@ describe("GET /api/w/:wId/frames/:frameId/authorized-files", () => {
     const { auth, workspace, user } = await createPrivateApiMockRequest({
       role: "user",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const frame = await FileFactory.create(auth, null, {
       contentType: frameContentType,
       fileName: "Frame.tsx",
@@ -97,7 +94,6 @@ describe("GET /api/w/:wId/frames/:frameId/authorized-files", () => {
     const { auth, workspace } = await createPrivateApiMockRequest({
       role: "user",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const frame = await FileFactory.create(auth, null, {
       contentType: frameContentType,
       fileName: "Frame.tsx",
@@ -118,7 +114,6 @@ describe("GET /api/w/:wId/frames/:frameId/authorized-files", () => {
     const { auth, workspace } = await createPrivateApiMockRequest({
       role: "user",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const restrictedSpace = await SpaceFactory.regular(workspace);
     const frame = await FileFactory.create(auth, null, {
       contentType: frameContentType,
@@ -140,7 +135,6 @@ describe("GET /api/w/:wId/frames/:frameId/authorized-files", () => {
     const { auth, workspace } = await createPrivateApiMockRequest({
       role: "user",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const file = await FileFactory.create(auth, null, {
       contentType: "text/plain",
       fileName: "data.txt",

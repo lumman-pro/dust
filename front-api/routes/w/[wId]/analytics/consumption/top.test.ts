@@ -467,6 +467,7 @@ describe("POST /api/w/:wId/analytics/consumption/top-*", () => {
         search: undefined,
         filter: {},
         sortOrder: "desc",
+        rankBy: "credits",
       });
     }
   );

@@ -38,8 +38,10 @@ import { internalAgent } from "@app/lib/api/internal_fetch";
 import type {
   MCPServerType,
   MCPToolType,
+  ToolBillingInfo,
   ToolDisplayLabels,
 } from "@app/lib/api/mcp";
+import { isToolCostCategory } from "@app/lib/api/mcp";
 import { isInClusterMCPUrlAllowed } from "@app/lib/api/mcp/in_cluster";
 import { isStaticIpForcedRemoteMcpUrl } from "@app/lib/api/mcp/static_ip_forced_urls";
 import { invalidateOAuthConnectionAccessTokenCache } from "@app/lib/api/oauth_access_token";
@@ -883,6 +885,7 @@ type DustToolMeta = {
   argumentsRequiringApproval?: string[];
   timeoutMs?: number;
   eager?: boolean;
+  billing?: ToolBillingInfo;
 };
 
 function isValidStake(value: unknown): value is MCPToolStakeLevelType {
@@ -938,6 +941,16 @@ export function getDustToolMeta(
   }
   if (typeof dust.eager === "boolean") {
     result.eager = dust.eager;
+  }
+  if (
+    typeof dust.toolCostCategory === "string" &&
+    isToolCostCategory(dust.toolCostCategory) &&
+    typeof dust.freeUsage === "boolean"
+  ) {
+    result.billing = {
+      toolCostCategory: dust.toolCostCategory,
+      freeUsage: dust.freeUsage,
+    };
   }
 
   return Object.keys(result).length > 0 ? result : undefined;

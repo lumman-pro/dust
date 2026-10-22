@@ -1,4 +1,10 @@
 import {
+  cronFiresAtMostHourly,
+  isValidIanaTimezone,
+  validateCronExpression,
+} from "@app/lib/utils/cron_validation";
+
+import {
   DEFAULT_SANDBOX_FUNCTION_EXECUTION_MODE,
   DEFAULT_SANDBOX_FUNCTION_STAKE,
   SANDBOX_DATABASE_NAME_REGEX,
@@ -10,6 +16,7 @@ import { hasControlCharacters } from "@app/types/file_system";
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
 import { normalizeError } from "@app/types/shared/utils/error_utils";
+import { stableStringify } from "@app/types/shared/utils/stable_stringify";
 import { z } from "zod";
 import { fromError } from "zod-validation-error";
 
@@ -96,6 +103,40 @@ const FrameRelativePathSchema = z
       "Path must be relative to the Frame folder, using forward slashes and no '.', '..' or empty segments.",
   });
 
+const FrameScheduleSourceManifestSchema = z
+  .object({
+    cron: z.string(),
+    timezone: z.string(),
+    // The manifest is parsed from JSON, so the value is JSON by construction; its shape is checked
+    // against the function's input schema at publish time.
+    input: z.custom<unknown>((value) => value !== undefined, {
+      message: "Schedule input is required.",
+    }),
+  })
+  .superRefine((schedule, context) => {
+    const timezoneIsValid = isValidIanaTimezone(schedule.timezone);
+    if (!timezoneIsValid) {
+      context.addIssue({
+        code: "custom",
+        message: `Schedule timezone '${schedule.timezone}' is not an IANA timezone (e.g. "Europe/Paris").`,
+        path: ["timezone"],
+      });
+    }
+
+    // Parse in UTC when the timezone is invalid so a bad cron is still reported alongside it.
+    const cron = validateCronExpression({
+      cron: schedule.cron,
+      timezone: timezoneIsValid ? schedule.timezone : "UTC",
+    });
+    if (cron.isErr()) {
+      context.addIssue({
+        code: "custom",
+        message: `Schedule cron '${schedule.cron}' is invalid: ${cron.error}`,
+        path: ["cron"],
+      });
+    }
+  });
+
 export const FrameFunctionManifestSchema = z.object({
   name: z
     .string()
@@ -112,7 +153,64 @@ export const FrameFunctionManifestSchema = z.object({
   defaultStake: z
     .enum(SANDBOX_FUNCTION_STAKES)
     .default(DEFAULT_SANDBOX_FUNCTION_STAKE),
+  schedules: z.array(FrameScheduleSourceManifestSchema).default([]),
 });
+
+type FrameFunctionSourceManifest = z.infer<typeof FrameFunctionManifestSchema>;
+
+/**
+ * @cc [owner:smb2268,label:product] schedule-declarations-unique-per-function
+ * A function declaring the same cron, timezone and input twice MUST fail to parse; input equality
+ * ignores key order. Any other combination of schedules, on one function or across functions, is
+ * allowed.
+ */
+/**
+ * @cc [owner:smb2268,label:product] schedules-require-durable-functions
+ * A function with a non-empty `schedules` list MUST declare the `durable` execution mode.
+ */
+/**
+ * @cc [owner:smb2268,label:product] schedules-fire-at-most-hourly
+ * A schedule's cron MUST fire at most once per hour (see cronFiresAtMostHourly); a more frequent
+ * cron MUST fail to parse.
+ */
+function refineFrameScheduleDeclarations(
+  functions: FrameFunctionSourceManifest[],
+  context: z.RefinementCtx
+): void {
+  functions.forEach((fn, functionIndex) => {
+    const seenDeclarations = new Set<string>();
+    fn.schedules.forEach((schedule, scheduleIndex) => {
+      const path = ["functions", functionIndex, "schedules", scheduleIndex];
+      if (fn.executionMode !== "durable") {
+        context.addIssue({
+          code: "custom",
+          message: `Function '${fn.name}' declares schedules, so it must declare "executionMode": "durable".`,
+          path,
+        });
+      }
+      if (!cronFiresAtMostHourly(schedule.cron)) {
+        context.addIssue({
+          code: "custom",
+          message: `Schedule cron '${schedule.cron}' fires more than once per hour; the minute field must be a single value, e.g. "0 * * * *".`,
+          path: [...path, "cron"],
+        });
+      }
+      const declaration = JSON.stringify([
+        schedule.cron,
+        schedule.timezone,
+        stableStringify(schedule.input),
+      ]);
+      if (seenDeclarations.has(declaration)) {
+        context.addIssue({
+          code: "custom",
+          message: `Function '${fn.name}' declares the same schedule twice (cron '${schedule.cron}', timezone '${schedule.timezone}', same input).`,
+          path,
+        });
+      }
+      seenDeclarations.add(declaration);
+    });
+  });
+}
 
 export const FrameDatabaseManifestSchema = z.object({
   name: z.string().regex(FRAME_DATABASE_NAME_REGEX, {
@@ -158,6 +256,8 @@ export const FrameSourceManifestSchema = z
       }
       databaseNames.add(database.name);
     });
+
+    refineFrameScheduleDeclarations(manifest.functions, context);
   });
 
 export const FrameManifestSchema = FrameSourceManifestSchema.transform(
@@ -168,6 +268,8 @@ export const FrameManifestSchema = FrameSourceManifestSchema.transform(
 );
 
 export type FrameManifest = z.infer<typeof FrameManifestSchema>;
+export type FrameFunctionManifest = FrameManifest["functions"][number];
+export type FrameScheduleManifest = FrameFunctionManifest["schedules"][number];
 
 export function parseFrameManifest(
   buffer: Buffer

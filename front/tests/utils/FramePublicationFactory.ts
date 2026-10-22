@@ -1,10 +1,14 @@
-import { storeFramePublication } from "@app/lib/api/frames/publication_storage";
+import {
+  publishFramePublication,
+  storeFramePublication,
+} from "@app/lib/api/frames/publication_storage";
 import type { Authenticator } from "@app/lib/auth";
 import type { FileResource } from "@app/lib/resources/file_resource";
 import { SandboxFunctionResource } from "@app/lib/resources/sandbox_function_resource";
 import { FramePublicationModel } from "@app/lib/resources/storage/models/frame_publication";
 import { withTransaction } from "@app/lib/utils/sql_utils";
 import { FrameManifestSchema } from "@app/types/api/frame_manifest";
+import type { FramePublishMode } from "@app/types/api/frame_publication";
 import { ONE_DAY_MS } from "@app/types/shared/utils/date_utils";
 import type { JSONSchema7 as JSONSchema } from "json-schema";
 
@@ -113,4 +117,39 @@ export async function storeTestFramePublication(
   }
 
   return publicationId;
+}
+
+/**
+ * Stores and publishes a client-only Frames v2 bundle for `frame`, through the real publish path:
+ * `live` activates it, `draft` only moves the latest pointer. Returns its publication id.
+ */
+export async function publishTestFrameBundle(
+  auth: Authenticator,
+  {
+    frame,
+    uiBundleCode,
+    mode,
+  }: { frame: FileResource; uiBundleCode: string; mode: FramePublishMode }
+): Promise<string> {
+  const published = await publishFramePublication(auth, {
+    frame,
+    functionArtifacts: [],
+    manifest: FrameManifestSchema.parse({
+      version: 1,
+      description: "Track tasks.",
+    }),
+    sourceFiles: [
+      {
+        relativePath: "index.tsx",
+        content: Buffer.from(uiBundleCode),
+        contentType: "text/typescript",
+      },
+    ],
+    uiBundleCode,
+    mode,
+  });
+  if (published.isErr()) {
+    throw published.error;
+  }
+  return published.value.publicationId;
 }

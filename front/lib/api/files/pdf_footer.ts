@@ -1,3 +1,10 @@
+import type { Authenticator } from "@app/lib/auth";
+import {
+  isDustCompanyPlan,
+  isEnterprisePlanPrefix,
+  isFriendsAndFamilyPlan,
+} from "@app/lib/plans/plan_codes";
+
 // 16x16 inline version of public/static/landing/logos/dust/Dust_LogoSquare.svg.
 // Inlined to avoid bundler-dependent __dirname / cwd path resolution across
 // front (Next.js standalone) and front-api (esbuild bundle).
@@ -42,3 +49,14 @@ export const PDF_FOOTER_HTML = `<!DOCTYPE html>
   </div>
 </body>
 </html>`;
+
+// Only show footer for non-Enterprise plans and non-FriendsAndFamily plans.
+export function shouldShowPdfFooter(auth: Authenticator): boolean {
+  const plan = auth.plan();
+  const shouldHideFooter =
+    plan &&
+    (isDustCompanyPlan(plan.code) ||
+      isEnterprisePlanPrefix(plan.code) ||
+      isFriendsAndFamilyPlan(plan.code));
+  return !shouldHideFooter;
+}

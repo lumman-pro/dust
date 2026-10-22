@@ -5,10 +5,10 @@ use dfs_protocol::{
     error::status,
     rpc::{
         ApplyRequest, AttrBatch, CreateSessionRequest, CreateTenantRequest, Empty, EntryPage,
-        ErrorCode, FileResult, FilesBatch, GrantPage, ListGrantsRequest, ListRequest,
-        LookupRequest, OperationBatch, OperationResult, ReadData, ReadFilesRequest, ReadRequest,
-        RevokeSessionRequest, SearchRequest, SearchResults, Session, StatRequest, Tenant,
-        UpdateGrantsRequest, dfs_server::Dfs,
+        ErrorCode, FileResult, FilesBatch, GrantPage, ListGrantsRequest, ListRequest, LockRequest,
+        LockState, LookupRequest, ObjectLock, OperationBatch, OperationResult, ReadData,
+        ReadFilesRequest, ReadRequest, RevokeSessionRequest, SearchRequest, SearchResults, Session,
+        StatRequest, Tenant, UpdateGrantsRequest, dfs_server::Dfs,
     },
 };
 use prost::Message;
@@ -22,7 +22,10 @@ use crate::{
         resources::{
             directory::DirectoryResource,
             file::FileResource,
-            object::{self, ObjectResource},
+            object::{
+                self, ObjectResource,
+                locks::{LockTokens, validate_lock_id},
+            },
             session::SessionResource,
             tenant::TenantResource,
         },
@@ -373,6 +376,7 @@ impl Dfs for API {
         if request.operations.is_empty() {
             return Err(status(ErrorCode::InvalidInput));
         }
+        let locks = LockTokens::new(request.locks)?;
         let operations = request
             .operations
             .into_iter()
@@ -386,8 +390,9 @@ impl Dfs for API {
             let session = session.as_ref();
             // Grouping consumes the operations, so every FDB attempt needs its own copy.
             let operations = operations.clone();
+            let locks = &locks;
             async move {
-                let results = ObjectResource::apply(&tx, session, operations).await?;
+                let results = ObjectResource::apply(&tx, session, operations, locks).await?;
                 let response = OperationBatch {
                     results: results
                         .into_iter()
@@ -417,6 +422,38 @@ impl Dfs for API {
             }
         }
         Ok(Response::new(response))
+    }
+
+    async fn lock(&self, request: Request<LockRequest>) -> Result<Response<LockState>, Status> {
+        let session = self.require_session(&request).await?;
+        let request = request.into_inner();
+        if let Some(lock_id) = &request.lock_id {
+            validate_lock_id(lock_id)?;
+        }
+        let (lock, _) = fdb::with_idempotent_transaction(|tx| {
+            let session = session.as_ref();
+            let request = &request;
+            async move {
+                ObjectResource::lock(&tx, session, request.object_id, request.lock_id.as_deref())
+                    .await
+            }
+        })
+        .await?;
+        Ok(Response::new(lock))
+    }
+
+    async fn unlock(&self, request: Request<ObjectLock>) -> Result<Response<Empty>, Status> {
+        let session = self.require_session(&request).await?;
+        let request = request.into_inner();
+        fdb::with_idempotent_transaction(|tx| {
+            let tenant_id = &session.tenant.tenant_id;
+            let request = &request;
+            async move {
+                ObjectResource::unlock(&tx, tenant_id, request.object_id, &request.lock_id).await
+            }
+        })
+        .await?;
+        Ok(Response::new(Empty {}))
     }
 
     async fn search(

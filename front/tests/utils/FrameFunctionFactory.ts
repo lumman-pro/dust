@@ -36,7 +36,6 @@ export const TEST_FRAME_BUNDLE_CODE =
 export async function enablePublicFrameFunctions(
   auth: Authenticator
 ): Promise<void> {
-  await FeatureFlagFactory.basic(auth, "frames_v2");
   await FeatureFlagFactory.basic(auth, "frames_v2_functions");
   await FeatureFlagFactory.basic(auth, "frames_v2_public_functions");
 }
@@ -77,7 +76,13 @@ export async function createTestConversationFrameFile(
   {
     conversationId,
     folderName = "Frame",
-  }: { conversationId: string; folderName?: string }
+    activePublicationId,
+  }: {
+    conversationId: string;
+    folderName?: string;
+    /** Marks the Frame as published at this publication (pointers only, no stored bundle). */
+    activePublicationId?: string;
+  }
 ): Promise<FileResource> {
   return FileFactory.create(auth, null, {
     contentType: frameV2ContentType,
@@ -85,7 +90,12 @@ export async function createTestConversationFrameFile(
     fileSize: 100,
     status: "created",
     useCase: "conversation",
-    useCaseMetadata: { conversationId },
+    // A published Frame's two pointers, as activating that publication leaves them.
+    useCaseMetadata: {
+      conversationId,
+      activePublicationId,
+      latestPublicationId: activePublicationId,
+    },
     mountFilePath: `${getConversationFilesBasePath({
       workspaceId: auth.getNonNullableWorkspace().sId,
       conversationId,
@@ -110,10 +120,7 @@ export async function createTestLiveConversationFrame(
   });
   const frame = await createTestConversationFrameFile(auth, {
     conversationId: conversation.sId,
-  });
-  await frame.setActiveFramePublication({
-    publicationId: activePublicationId,
-    description: "Track tasks.",
+    activePublicationId,
   });
   return { conversation, frame };
 }
@@ -227,7 +234,7 @@ const TEST_DRAFT_FRAME_DRAFT_PUBLICATION_ID = "publication-draft";
 
 /**
  * A Frame in a conversation `auth` authored, with a live and a pending draft publication that each
- * carry a `run-function`. Enables `frames_v2` and `frames_v2_functions` for the workspace. The
+ * carry a `run-function`. Enables `frames_v2_functions` for the workspace. The
  * caller owns `auth`, so it can write the conversation's source.
  */
 export async function createTestAuthorFrameWithDraft(
@@ -237,7 +244,6 @@ export async function createTestAuthorFrameWithDraft(
     messagesCreatedAt = [new Date()],
   }: { agentConfigurationId?: string; messagesCreatedAt?: Date[] } = {}
 ) {
-  await FeatureFlagFactory.basic(auth, "frames_v2");
   await FeatureFlagFactory.basic(auth, "frames_v2_functions");
   const conversation = await ConversationFactory.create(auth, {
     agentConfigurationId,
@@ -331,12 +337,10 @@ export async function makeTestPublicFrameFunction({
 }
 
 export async function makeTestFrameFunction({
-  enableFramesV2 = true,
-  enableFramesV2Functions = enableFramesV2,
+  enableFramesV2Functions = true,
   isSuperUser = false,
   shareScope = "workspace_and_emails",
 }: {
-  enableFramesV2?: boolean;
   enableFramesV2Functions?: boolean;
   isSuperUser?: boolean;
   shareScope?: "emails_only" | "workspace_and_emails";
@@ -350,9 +354,6 @@ export async function makeTestFrameFunction({
     isSuperUser,
     role: "admin",
   });
-  if (enableFramesV2) {
-    await FeatureFlagFactory.basic(adminAuth, "frames_v2");
-  }
   if (enableFramesV2Functions) {
     await FeatureFlagFactory.basic(adminAuth, "frames_v2_functions");
   }
@@ -421,18 +422,15 @@ export async function makeTestFrameFunction({
 }
 
 export async function makeTestFrameInvocation({
-  enableFramesV2 = true,
-  enableFramesV2Functions = enableFramesV2,
+  enableFramesV2Functions = true,
   isSuperUser = false,
   shareScope = "workspace_and_emails",
 }: {
-  enableFramesV2?: boolean;
   enableFramesV2Functions?: boolean;
   isSuperUser?: boolean;
   shareScope?: "emails_only" | "workspace_and_emails";
 } = {}) {
   const setup = await makeTestFrameFunction({
-    enableFramesV2,
     enableFramesV2Functions,
     isSuperUser,
     shareScope,

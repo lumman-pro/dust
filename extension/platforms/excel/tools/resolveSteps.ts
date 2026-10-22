@@ -1,6 +1,7 @@
 import { Err, Ok, type Result } from "@app/types/shared/result";
 import { assertNever } from "@app/types/shared/utils/assert_never";
 import type { Step } from "@extension/platforms/excel/tools/parseExpression";
+import { normalizeError } from "@extension/shared/lib/utils";
 
 /**
  * Gets the value that the steps point to. It starts at the workbook and does one step at a time.
@@ -26,6 +27,18 @@ import type { Step } from "@extension/platforms/excel/tools/parseExpression";
  * checks that it is the kind of value that it needs. The loop checks that each step starts from
  * an Office.js object.
  */
+/**
+ * @cc [owner:matteotrab,label:security] steps-run-never-the-text
+ * The text of an expression MUST NOT be run. Only the steps that `parseExpression` produced and
+ * that the check accepted are run, with `Reflect.get` and `Reflect.apply`. A second parse of the
+ * text could read it in a way the check did not, and code that the check never saw would run.
+ */
+/**
+ * @cc [owner:matteotrab,label:security] steps-start-from-an-office-object
+ * A step MUST be refused when the value it starts from is not an `OfficeExtension.ClientObject`.
+ * Without this rule a step runs on a JavaScript function or on another value that a property
+ * gives, which is a way to reach code outside the Office.js API.
+ */
 export function resolveSteps(
   workbook: Excel.Workbook,
   steps: Step[]
@@ -43,7 +56,15 @@ export function resolveSteps(
     }
     // Gets the member by its name: the property to return (`worksheets`), or the method to call
     // (`getItem`). `Reflect.get(workbook, "worksheets")` is `workbook.worksheets`.
-    const member: unknown = Reflect.get(current, step.name);
+    //
+    // Office.js throws here when the property is not loaded, for example `range.values` after
+    // no `load`.
+    let member: unknown;
+    try {
+      member = Reflect.get(current, step.name);
+    } catch (error) {
+      return new Err(`"${step.name}" failed: ${normalizeError(error).message}`);
+    }
     switch (step.kind) {
       case "property":
         current = member;
@@ -54,7 +75,14 @@ export function resolveSteps(
         }
         // `Reflect.apply(getItem, worksheets, ["Sheet1"])` is `worksheets.getItem("Sheet1")`.
         // The second argument is the object that the method runs on.
-        current = Reflect.apply(member, current, step.args);
+        // The method of Office.js checks its arguments when it runs, and it throws here.
+        try {
+          current = Reflect.apply(member, current, step.args);
+        } catch (error) {
+          return new Err(
+            `"${step.name}" failed: ${normalizeError(error).message}`
+          );
+        }
         break;
       default:
         assertNever(step);

@@ -1,8 +1,6 @@
+import { useDownloadPdf } from "@app/hooks/useDownloadPdf";
 import { useFormatErrorDescription } from "@app/hooks/useFormatErrorDescription";
-import {
-  useSendApiErrorNotification,
-  useSendNotification,
-} from "@app/hooks/useNotification";
+import { useSendApiErrorNotification } from "@app/hooks/useNotification";
 import { clientFetch } from "@app/lib/egress/client";
 import {
   emptyArray,
@@ -296,9 +294,7 @@ export function usePublicFrame({ shareToken }: { shareToken: string | null }) {
 }
 
 export function useExportFrameAsPdf({ owner }: { owner: LightWorkspaceType }) {
-  const { t } = useLingui();
-  const sendApiErrorNotification = useSendApiErrorNotification();
-  const sendNotification = useSendNotification();
+  const downloadPdf = useDownloadPdf();
 
   return async ({
     fileId,
@@ -308,38 +304,14 @@ export function useExportFrameAsPdf({ owner }: { owner: LightWorkspaceType }) {
     fileId: string;
     fileName?: string;
     orientation: "portrait" | "landscape";
-  }): Promise<boolean> => {
-    const res = await clientFetch(
-      `/api/w/${owner.sId}/files/${fileId}/export/pdf`,
-      {
+  }): Promise<boolean> =>
+    downloadPdf({
+      url: `/api/w/${owner.sId}/files/${fileId}/export/pdf`,
+      init: {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orientation }),
-      }
-    );
-
-    if (!res.ok) {
-      const errorData = await getErrorFromResponse(res);
-      sendApiErrorNotification({
-        title: t`PDF export failed`,
-        error: errorData,
-      });
-      return false;
-    }
-
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = fileName?.replace(/\.[^.]+$/, ".pdf") ?? "frame.pdf";
-    link.click();
-    URL.revokeObjectURL(url);
-
-    sendNotification({
-      type: "success",
-      title: t`PDF exported`,
-      description: t`Your PDF has been downloaded.`,
+      },
+      fileName: fileName?.replace(/\.[^.]+$/, ".pdf") ?? "frame.pdf",
     });
-    return true;
-  };
 }

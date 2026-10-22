@@ -11,6 +11,7 @@ import type {
   ToolMarkerResourceType,
 } from "@app/lib/actions/mcp_internal_actions/output_schemas";
 import { EXECUTE_TABLES_QUERY_MARKER } from "@app/lib/actions/mcp_internal_actions/output_schemas";
+import type { ToolHandlerOutput } from "@app/lib/actions/mcp_internal_actions/tool_definition";
 import type {
   AgentLoopRunContext,
   SandboxFunctionRunContext,
@@ -19,7 +20,11 @@ import type {
 import config from "@app/lib/api/config";
 import type { CSVRecord } from "@app/lib/api/csv";
 import { toCsv } from "@app/lib/api/csv";
-import { writeToToolOutputsFolder } from "@app/lib/api/files/action_output_fs";
+import {
+  FRAME_SANDBOX_QUERY_RESULT_PREVIEW_ROWS,
+  frameSandboxFilePathHint,
+  writeToFramePersistentFilesFolder,
+} from "@app/lib/api/files/action_output_fs";
 import { makeFileName } from "@app/lib/api/files/action_output_fs/naming";
 import type { Authenticator } from "@app/lib/auth";
 import { hasFeatureFlag } from "@app/lib/auth";
@@ -52,6 +57,17 @@ type TablesQueryContentItem =
       type: "text";
       text: string;
     };
+
+export type SandboxQueryStructuredContent = {
+  path: string | null;
+  contentType: "text/csv";
+  title: string | null;
+  columns: string[];
+  rows: CSVRecord[];
+  rowCount: number;
+  truncated: boolean;
+  hint: string;
+};
 
 /**
  * Get the prefix for a row in a section file.
@@ -219,6 +235,45 @@ async function generateAgentLoopQueryResultFiles(
   return content;
 }
 
+function columnsFromResults(results: CSVRecord[]): string[] {
+  const columns = new Set<string>();
+  for (const row of results) {
+    for (const key of Object.keys(row)) {
+      columns.add(key);
+    }
+  }
+  return [...columns];
+}
+
+function buildSandboxQueryStructuredContent({
+  path,
+  title,
+  results,
+}: {
+  path: string | null;
+  title: string | null;
+  results: CSVRecord[];
+}): SandboxQueryStructuredContent {
+  const rowCount = results.length;
+  const truncated = rowCount > FRAME_SANDBOX_QUERY_RESULT_PREVIEW_ROWS;
+  const rows = truncated
+    ? results.slice(0, FRAME_SANDBOX_QUERY_RESULT_PREVIEW_ROWS)
+    : results;
+
+  return {
+    path,
+    contentType: "text/csv",
+    title,
+    columns: columnsFromResults(results),
+    rows,
+    rowCount,
+    truncated,
+    hint: path
+      ? frameSandboxFilePathHint(path, { encoding: "utf8" })
+      : "No file was written (empty result set).",
+  };
+}
+
 async function writeSandboxFunctionQueryResultFile(
   auth: Authenticator,
   {
@@ -236,11 +291,15 @@ async function writeSandboxFunctionQueryResultFile(
     ext: ".csv",
   });
   const csvContent = await toCsv(results);
-  const writeResult = await writeToToolOutputsFolder(auth, runContext, {
-    fileName: outputFileName,
-    content: csvContent,
-    contentType: "text/csv",
-  });
+  const writeResult = await writeToFramePersistentFilesFolder(
+    auth,
+    runContext,
+    {
+      fileName: outputFileName,
+      content: csvContent,
+      contentType: "text/csv",
+    }
+  );
   if (writeResult.isErr()) {
     return new Err(
       new MCPError(
@@ -249,12 +308,12 @@ async function writeSandboxFunctionQueryResultFile(
       )
     );
   }
-  const scopedPath = writeResult.value;
+  const { sandboxPath } = writeResult.value;
 
   return new Ok({
-    text: "Your query results were generated successfully. They are available as a structured CSV file.",
-    uri: scopedPath,
-    path: scopedPath,
+    text: "Query results saved. Use result.json() for path, columns, and a row preview.",
+    uri: sandboxPath,
+    path: sandboxPath,
     mimeType: INTERNAL_MIME_TYPES.TOOL_OUTPUT.FILE_PATH,
     title: outputFileName,
     contentType: "text/csv",
@@ -280,7 +339,7 @@ export async function executeQuery(
     fileName: string;
     connectorProvider: ConnectorProvider | null;
   }
-) {
+): Promise<Result<ToolHandlerOutput, MCPError>> {
   const queryIdentity = await buildQueryIdentity(auth, runContext);
   const coreAPI = new CoreAPI(config.getCoreAPIConfig(), logger);
   const queryResult = await coreAPI.queryDatabase({
@@ -298,8 +357,6 @@ export async function executeQuery(
     );
   }
 
-  const content: TablesQueryContentItem[] = [];
-
   const results: CSVRecord[] = queryResult.value.results
     .map((r) => r.value)
     .filter(
@@ -307,22 +364,22 @@ export async function executeQuery(
         record !== undefined && record !== null && typeof record === "object"
     );
 
-  content.push({
-    type: "resource",
-    resource: {
-      text: EXECUTE_TABLES_QUERY_MARKER,
-      mimeType: INTERNAL_MIME_TYPES.TOOL_OUTPUT.TOOL_MARKER,
-      uri: "",
-    },
-  });
+  switch (runContext.contextType) {
+    case "agent_loop": {
+      const content: TablesQueryContentItem[] = [
+        {
+          type: "resource",
+          resource: {
+            text: EXECUTE_TABLES_QUERY_MARKER,
+            mimeType: INTERNAL_MIME_TYPES.TOOL_OUTPUT.TOOL_MARKER,
+            uri: "",
+          },
+        },
+      ];
 
-  if (results.length > 0) {
-    // date in yyyy-mm-dd
-    const humanReadableDate = new Date().toISOString().split("T")[0];
-    const queryTitle = `${fileName} (${humanReadableDate})`;
-
-    switch (runContext.contextType) {
-      case "agent_loop": {
+      if (results.length > 0) {
+        const humanReadableDate = new Date().toISOString().split("T")[0];
+        const queryTitle = `${fileName} (${humanReadableDate})`;
         const agentLoopContent = await generateAgentLoopQueryResultFiles(auth, {
           queryTitle,
           results,
@@ -330,33 +387,60 @@ export async function executeQuery(
           connectorProvider,
         });
         content.push(...agentLoopContent);
-        break;
-      }
-      case "sandbox_function": {
-        const fileResult = await writeSandboxFunctionQueryResultFile(auth, {
-          queryTitle,
-          results,
-          runContext,
-        });
-        if (fileResult.isErr()) {
-          return fileResult;
-        }
-
+      } else {
         content.push({
-          type: "resource",
-          resource: fileResult.value,
+          type: "text",
+          text: "Query executed successfully but returned no results. No files were generated.",
         });
-        break;
       }
-      default:
-        return assertNever(runContext);
-    }
-  } else {
-    content.push({
-      type: "text",
-      text: "Query executed successfully but returned no results. No files were generated.",
-    });
-  }
 
-  return new Ok(content);
+      return new Ok(content);
+    }
+
+    case "sandbox_function": {
+      if (results.length === 0) {
+        return new Ok({
+          content: [
+            {
+              type: "text",
+              text: "Query executed successfully but returned no results. No files were generated.",
+            },
+          ],
+          structuredContent: buildSandboxQueryStructuredContent({
+            path: null,
+            title: null,
+            results: [],
+          }),
+        });
+      }
+
+      const humanReadableDate = new Date().toISOString().split("T")[0];
+      const queryTitle = `${fileName} (${humanReadableDate})`;
+      const fileResult = await writeSandboxFunctionQueryResultFile(auth, {
+        queryTitle,
+        results,
+        runContext,
+      });
+      if (fileResult.isErr()) {
+        return fileResult;
+      }
+
+      return new Ok({
+        content: [
+          {
+            type: "resource",
+            resource: fileResult.value,
+          },
+        ],
+        structuredContent: buildSandboxQueryStructuredContent({
+          path: fileResult.value.path,
+          title: fileResult.value.title,
+          results,
+        }),
+      });
+    }
+
+    default:
+      return assertNever(runContext);
+  }
 }

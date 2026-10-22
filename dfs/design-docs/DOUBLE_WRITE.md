@@ -106,9 +106,9 @@ Use a renewable lease with an initial duration of 60 seconds and renew it every 
 
 Each acquisition returns a newer fencing token for that source. Every DFS mutation, including deletion, grants and the completion marker, must verify that token and the active lease atomically with the mutation. DFS must reject writes from an expired or replaced holder. The token sequence must survive lease expiry and file deletion so an old token cannot become valid again.
 
-If renewal fails or times out, stop the transfer and DFS writes and fail the activity attempt. Do not report success after losing the lease. Renew only a matching, unexpired lease. Release only when the holder and token still match, so a delayed request cannot release a replacement worker's lease. Release after all writes finish or on cancellation when possible. Otherwise let the lease expire. The lock API and storage remain to be implemented.
+If renewal fails or times out, stop the transfer and DFS writes and fail the activity attempt. Do not report success after losing the lease. Renew only a matching, unexpired lease. Release only when the holder and token still match, so a delayed request cannot release a replacement worker's lease. Release after all writes finish or on cancellation when possible. Otherwise let the lease expire.
 
-The current DFS protocol has no lock or conditional-write operation. Front's Redis lock expires and does not fence DFS writes. Neither is sufficient to run the importer safely today.
+The [DFS lock API](API.md#exclusive-locks) defines `Lock`, `Unlock` and `Apply.locks`, but storage enforcement is not implemented and these calls return `UNSUPPORTED`. These locks also leave grant management available, so they do not fence `UpdateGrants`. Front's Redis lock expires and does not fence DFS writes. The importer still needs protection for content, grants and completion markers before activation.
 
 A GCS precondition only protects the read. Without the lock, worker A can fetch version A, stall while worker B copies version B into DFS, then overwrite B with A. Both reads passed their preconditions, and no further event need arrive. A GCS recheck before an unlocked DFS write still leaves this race.
 
@@ -164,9 +164,9 @@ Store one mapping from the source object to its DFS file ID and reuse it for lat
 
 ## Permissions
 
-Front resolves the conversation owner and pod permissions from the authenticated workspace. New conversation files receive `ALLOW u:<ownerUserId> rw`; the importer must not infer this subject from the object name or writer. Pod files inherit their directory's grants. Later imports preserve file-local grants maintained by Front. GCS custom metadata has no effect on access.
+Front resolves the conversation owner and pod permissions from the authenticated workspace. Imported files inherit their directory's grants. Do not add owner or participant grants to individual conversation files. Later imports preserve grants maintained by Front. GCS custom metadata has no effect on access.
 
-Use `createDfsSuperuserSession` only to create user and pod context folders, as required by its [contract](../../front/lib/api/dfs/sessions.ts). File writes use `createDfsSession` with the owner's subjects. `UpdateGrants` requires the tenant key. [Session API](API.md#createsession), [protocol](../protocol/proto/dfs.proto).
+Use `createDfsSuperuserSession` only to create user and pod context folders, as required by its [contract](../../front/lib/api/dfs/sessions.ts). Conversation directories and file writes use `createDfsSession` with subjects authorized to write the destination. `UpdateGrants` requires the tenant key. [Session API](API.md#createsession), [protocol](../protocol/proto/dfs.proto).
 
 File creation does not accept grants. Apply them separately with `UpdateGrants` using `remove: false` to attach and `remove: true` to detach. Required access restrictions must be in place before a file is accessible. A failed owner lookup or grant update must not produce a completed import. [Grant API](API.md#updategrants).
 
@@ -182,17 +182,29 @@ The DENY clears inherited access; G1 receives read access and G2 read/write acce
 
 ### Conversation sharing
 
-A standalone conversation directory inherits the owner's user grant:
+Follow the [conversation sharing design](../../front/design-docs/SHARING.md). A standalone conversation directory lives under its creator's user folder and inherits the creator's access:
 
 ```text
-/users/user-U/                            ALLOW u:user-U rw
+/users/user-U/                            DENY rw, ALLOW u:user-U rw
   .conversations/                        no local grants
-    conv-C/                              no local grants
+    conv-C/                              ALLOW u:user-P rw (eligible participant)
 ```
 
-When someone visits a shared conversation, Front first checks conversation access, then grants access to that conversation's DFS directory. It appears in the visitor's `/shared`. This must not grant access to the owner's other conversations. Later Front permission changes must update or revoke the DFS grant. Pod conversations retain the pod's audience.
+For standalone conversations, backfill `ALLOW u:<userId> rw` on the conversation directory for participants who still pass Front's current `canAccess` check. Opening a link does not create a grant. After the sharing migration, DFS grants are authoritative and participant rows remain for the sidebar, unread state and notifications. Sub-conversations outside pods and conversations created without a user still need an ownership decision.
 
-Use Front's current access checks:
+The standalone importer runs with the creator's regular session and reuses the stored conversation folder ID. It rejects root conversations without a creator, inactive creators and standalone sub-conversations.
+
+The importer relies on `getOrCreateConversationFolder` to resolve participants, create the folder and set its grants. Existing folders retain their grants. Participant eligibility, grant initialization and recovery belong to the shared folder helper.
+
+The helper currently grants all participants. Before activating imports, it must exclude inactive workspace members and participants who cannot read every requested space, as required by the sharing migration. Importing a file must not restore access that a participant has lost.
+
+The helper still needs to recover interrupted grant initialization: it stores `dfsObjectId` before calling `UpdateGrants`, and retries return the stored folder without retrying a failed grant write. Resolve this in the shared helper before activating imports.
+
+Pod conversations live under the pod's `.conversations/` directory and have no local grants. Pod member and editor groups already have `rw` on the pod folder, so inheritance is sufficient. The importer reuses the stored conversation folder ID and does not derive access from participants.
+
+On an open pod, the workspace global group has only `r` on the pod folder. To preserve these viewers' current ability to write conversation files, `.conversations/` needs an additional `ALLOW g:<globalGroupId> rw`. Adding and synchronizing this grant belongs in pod folder provisioning; the current helper does not do this yet.
+
+During migration, use Front's current access checks for imports and participant backfill:
 
 | Conversation | Required access |
 | --- | --- |
@@ -234,5 +246,5 @@ Check these cases before enabling replication:
 - An old delete/archive event leaves a newer live object intact. A missing historical revision does not delete its live replica.
 - Interrupted content, attribute and initial-grant writes leave no completion marker. Retries complete the import without resetting later Front grants.
 - Failed mount copies, dead-lettered handoffs, failed workflows and missed deletes are recovered. Mount-copy repair preserves live edits.
-- Tenant isolation, owner grants, pod permissions and conversation sharing match Front's checks. Failed or cross-workspace lookups cannot create completed imports.
+- Initial grants preserve or narrow Front's current access. Pod readers can write conversation files without gaining write access to pod files. Standalone participant backfill excludes users who no longer pass `canAccess`. Failed or cross-workspace lookups cannot create completed imports.
 - The switch to DFS waits for the importer and prevents pending GCS events from changing DFS-owned files.

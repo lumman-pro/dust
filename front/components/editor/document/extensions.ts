@@ -17,11 +17,12 @@ import {
   DocumentTable,
   DocumentTableCell,
   DocumentTableRow,
+  TIPTAP_DEFAULT_PRIORITY,
 } from "@app/components/editor/document/DocumentTable";
 import { createDocumentMarked } from "@app/components/editor/document/marked_instance";
 import { codeFence } from "@app/lib/markdown/code_fence";
 import { isNumber } from "@app/types/shared/utils/general";
-import { cn } from "@dust-tt/sparkle";
+import { cn, markdownTableClasses } from "@dust-tt/sparkle";
 import type { AnyExtension } from "@tiptap/core";
 import { Code } from "@tiptap/extension-code";
 import { CodeBlock } from "@tiptap/extension-code-block";
@@ -60,28 +61,49 @@ const starterKitOptions: Partial<StarterKitOptions> = {
     },
   },
   horizontalRule: {
-    HTMLAttributes: { class: "my-8 border-0 border-t border-border" },
+    HTMLAttributes: { class: "my-8 border-0 border-t border-border-dark" },
   },
 };
 
 /**
  * @cc [owner:avervaet,label:product] document-code-marks
- * Inline code MUST accept the bold, italic, strike and link marks Markdown can wrap it in, and
- * MUST exclude the comment mark, since an anchor written inside a code span reads back as code.
+ * Inline code MUST accept the bold, italic, strike, underline and link marks Markdown can wrap it
+ * in, and MUST exclude the comment mark, since an anchor written inside a code span reads back as
+ * code. It MUST render outside bold, italic, strike and underline, and be written inside them in
+ * Markdown.
  */
-const DocumentCode = Code.extend({ excludes: COMMENT_MARK_NAME });
+const DocumentCode = Code.extend({
+  excludes: COMMENT_MARK_NAME,
+  // Above the default, to render outside the bold, italic, strike and underline marks, so their
+  // lines take its color. Markdown writes it inside them (see `content.ts`).
+  priority: TIPTAP_DEFAULT_PRIORITY + 1,
+});
 
 /**
  * @cc [owner:rfrenoy,label:product] document-empty-heading
  * An empty heading MUST be written as its `#` marker alone, which reads back as an empty heading
  * of the same level.
  */
+/**
+ * @cc [owner:rfrenoy,label:product] document-heading-edge-whitespace
+ * Whitespace at the edges of a heading's rendered Markdown, right after its `#` marker or ending
+ * its line, MUST be written as numeric character references, such as `&#32;`, which Markdown reads
+ * back as that whitespace instead of trimming it.
+ */
 const DocumentHeading = Heading.extend({
-  renderMarkdown(node, h, context) {
-    if (node.content?.length) {
-      return this.parent?.(node, h, context) ?? "";
+  renderMarkdown(node, h) {
+    const marker = "#".repeat(
+      isNumber(node.attrs?.level) ? node.attrs.level : 1
+    );
+    if (!node.content?.length) {
+      return marker;
     }
-    return "#".repeat(isNumber(node.attrs?.level) ? node.attrs.level : 1);
+    const text = h
+      .renderChildren(node.content)
+      .replace(/^\s+|\s+$/g, (whitespace) =>
+        [...whitespace].map((char) => `&#${char.codePointAt(0)};`).join("")
+      );
+    return `${marker} ${text}`;
   },
 });
 
@@ -143,12 +165,10 @@ export const buildSchemaExtensions = ({
   live,
   resolveImageSource,
   parsePastedMarkdown = null,
-  emptyTaskLabel,
 }: {
   live: boolean;
   resolveImageSource?: DocumentImageOptions["resolveSource"];
   parsePastedMarkdown?: DocumentOrderedListOptions["parsePastedMarkdown"];
-  emptyTaskLabel?: string;
 }): AnyExtension[] => [
   DocumentAnchors,
   DocumentComments,
@@ -188,7 +208,6 @@ export const buildSchemaExtensions = ({
     parsePastedMarkdown,
   }),
   DocumentListItem.configure({
-    ...(emptyTaskLabel ? { emptyTaskLabel } : {}),
     HTMLAttributes: {
       class:
         "pl-1 marker:text-muted-foreground marker:tabular-nums [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1",
@@ -202,13 +221,16 @@ export const buildSchemaExtensions = ({
   }),
   DocumentTable.configure({
     HTMLAttributes: {
-      class: "my-6 w-full table-fixed border-collapse text-sm",
+      class: cn(
+        "my-6 w-full table-fixed border-separate border-spacing-0 bg-background text-sm",
+        markdownTableClasses.frame
+      ),
     },
   }),
   DocumentTableRow,
   DocumentTableCell.configure({
     HTMLAttributes: {
-      class: "border border-border px-3 py-1.5 align-top [&>p]:my-0",
+      class: cn(markdownTableClasses.cell, "[tr+tr>&]:border-t [&>p]:my-0"),
     },
   }),
   DocumentMarkdown,

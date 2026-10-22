@@ -423,6 +423,9 @@ const config = {
   getOAuthProductboardClientId: (): string => {
     return EnvironmentConfig.getEnvVariable("OAUTH_PRODUCTBOARD_CLIENT_ID");
   },
+  getOAuthDropboxClientId: (): string => {
+    return EnvironmentConfig.getEnvVariable("OAUTH_DROPBOX_CLIENT_ID");
+  },
   getOAuthHubspotClientId: (): string => {
     return EnvironmentConfig.getEnvVariable("OAUTH_HUBSPOT_CLIENT_ID");
   },
@@ -536,6 +539,9 @@ const config = {
   },
   getRedisCacheUri: (): string => {
     return EnvironmentConfig.getEnvVariable("REDIS_CACHE_URI");
+  },
+  getRedisCollabUri: (): string => {
+    return EnvironmentConfig.getEnvVariable("REDIS_COLLAB_URI");
   },
   getContentfulSpaceId: (): string | undefined => {
     return EnvironmentConfig.getOptionalEnvVariable("CONTENTFUL_SPACE_ID");

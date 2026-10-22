@@ -313,6 +313,20 @@ describe("makeFrameDraftLive", () => {
     expect(reloaded?.useCaseMetadata?.frameDraftMode).toBeDefined();
   });
 
+  it("makes the latest publication live when the caller names none", async () => {
+    const { auth, frame } = await setupFrame();
+    await publishBundle(auth, frame, CODE_A, "live");
+    assert((await enterFrameDraftMode(auth, { frame })).isOk());
+    const draftId = await publishBundle(auth, frame, CODE_B, "draft");
+
+    const result = await makeFrameDraftLive(auth, { frame });
+
+    expect(result.isOk() && result.value).toEqual({ publicationId: draftId });
+    const reloaded = await FileResource.fetchById(auth, frame.sId);
+    expect(reloaded?.useCaseMetadata?.activePublicationId).toBe(draftId);
+    expect(reloaded?.isInFrameDraftMode).toBe(false);
+  });
+
   it("refuses when there is no pending draft", async () => {
     const { auth, frame } = await setupFrame();
     const liveId = await publishBundle(auth, frame, CODE_A, "live");
@@ -392,7 +406,6 @@ describe("makeFrameDraftLive", () => {
 
   it("fails on the function sharing check like a publish would", async () => {
     const { auth, frame } = await setupFrame();
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     await FeatureFlagFactory.basic(auth, "frames_v2_functions");
     const liveId = await publishBundle(auth, frame, CODE_A, "live");
     const published = await publishFramePublication(auth, {

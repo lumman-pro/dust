@@ -243,6 +243,7 @@ export async function createUserMessage(
         : null,
       userContextApiKeyId: context.apiKeyId ?? null,
       userContextAuthMethod: context.authMethod ?? null,
+      userContextHostSelection: context.hostSelection ?? null,
       agenticMessageType,
       agenticOriginMessageId,
       requestedModelId: requestedModel?.modelId ?? null,
@@ -661,6 +662,7 @@ export const createAgentMessages = async (
             costCredits: null,
             resolvedModel: resolvedModelFromAgentMessageRow(agentMessageRow),
             modelResolutionMethod: agentMessageRow.modelResolutionMethod,
+            fallbackModelId: agentMessageRow.fallbackModelId,
           };
         }
       }

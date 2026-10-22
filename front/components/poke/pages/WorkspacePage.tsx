@@ -4,6 +4,7 @@ import { PokeUsageTab } from "@app/components/poke/credits/PokeUsageTab";
 import { CreditsDataTable } from "@app/components/poke/credits/table";
 import { DataSourceViewsDataTable } from "@app/components/poke/data_source_views/table";
 import { DataSourceDataTable } from "@app/components/poke/data_sources/table";
+import { DfsFileSystemTree } from "@app/components/poke/dfs/tree";
 import { FeatureFlagsDataTable } from "@app/components/poke/features/table";
 import { FramesDataTable } from "@app/components/poke/frames/table";
 import { GovernanceTab } from "@app/components/poke/governance/GovernanceTab";
@@ -321,6 +322,7 @@ export function WorkspacePage() {
                 <TabsTrigger value="webhooksources" label="Webhook Sources" />
                 <TabsTrigger value="credits" label="API Usage" />
                 <TabsTrigger value="usage" label="Usage" />
+                <TabsTrigger value="filesystem" label="File System" />
               </TabsList>
 
               <TabsContent value="metadata">
@@ -414,6 +416,9 @@ export function WorkspacePage() {
                   usageCapAlert={usageCapAlert}
                   defaultAlerts={defaultAlerts}
                 />
+              </TabsContent>
+              <TabsContent value="filesystem">
+                <DfsFileSystemTree owner={owner} />
               </TabsContent>
             </div>
           </Tabs>

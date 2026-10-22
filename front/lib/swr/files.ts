@@ -472,8 +472,8 @@ export const getFilePathDownloadUrl = (
     format,
   }: {
     lastModifiedMs?: number | null;
-    // A Markdown document without its comments.
-    format?: "markdown";
+    // A Markdown document without its comments, as Markdown or printed to PDF.
+    format?: "markdown" | "pdf";
   } = {}
 ) => {
   const encoded = filePath.split("/").map(encodeURIComponent).join("/");

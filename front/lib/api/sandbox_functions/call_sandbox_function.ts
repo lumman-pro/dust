@@ -1,6 +1,8 @@
+import { cancelPendingSandboxFunctionBlockedActions } from "@app/lib/api/sandbox_functions/cancel_pending_blocked_actions";
 import { isSandboxFunctionInvocationError } from "@app/lib/api/sandbox_functions/errors";
 import { getSandboxFunctionInvocationEvents } from "@app/lib/api/sandbox_functions/events";
 import type { Authenticator } from "@app/lib/auth";
+import type { SandboxFunctionInvocationResource } from "@app/lib/resources/sandbox_function_invocation_resource";
 import type { SandboxFunctionResource } from "@app/lib/resources/sandbox_function_resource";
 import type {
   SandboxFunctionCallError,
@@ -13,6 +15,15 @@ import { normalizeError } from "@app/types/shared/utils/error_utils";
 
 // Safety ceiling on waiting for the result event delivered over the invocation stream.
 const CALL_RESULT_WAIT_TIMEOUT_MS = 3 * 60 * 1_000;
+
+async function abandonCall(
+  auth: Authenticator,
+  invocation: SandboxFunctionInvocationResource,
+  error: SandboxFunctionCallError
+): Promise<Err<SandboxFunctionCallError>> {
+  await cancelPendingSandboxFunctionBlockedActions(auth, invocation);
+  return new Err(error);
+}
 
 /**
  * Invoke a sandbox function and wait for its result.
@@ -50,7 +61,7 @@ export async function callSandboxFunction(
       case "succeeded":
         return new Ok(settled.result);
       case "errored":
-        return new Err(settled.error);
+        return abandonCall(auth, invocation, settled.error);
       default:
         assertNever(settled);
     }
@@ -63,7 +74,7 @@ export async function callSandboxFunction(
       signal: AbortSignal.timeout(CALL_RESULT_WAIT_TIMEOUT_MS),
     })) {
       if (data.type === "sandbox_function_invocation_error") {
-        return new Err(data.error);
+        return abandonCall(auth, invocation, data.error);
       }
 
       if (data.type !== "sandbox_function_invocation_result") {
@@ -73,13 +84,13 @@ export async function callSandboxFunction(
       return new Ok(data.result);
     }
   } catch (error) {
-    return new Err({
+    return abandonCall(auth, invocation, {
       code: "transport_error",
       message: `Failed to receive sandbox function events: ${normalizeError(error).message}`,
     });
   }
 
-  return new Err({
+  return abandonCall(auth, invocation, {
     code: "transport_error",
     message: "Frame function did not return a result in time.",
   });

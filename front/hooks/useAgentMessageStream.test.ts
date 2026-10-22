@@ -128,6 +128,7 @@ function makeLightAgentMessage(
     activitySteps: [],
     resolvedModel: null,
     modelResolutionMethod: null,
+    fallbackModelId: null,
     ...overrides,
   };
 }

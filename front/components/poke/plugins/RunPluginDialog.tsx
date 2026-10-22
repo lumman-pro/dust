@@ -49,7 +49,24 @@ function pluginResponseToCopyText(result: PluginResponse): string {
       return result.value;
     case "textWithLink":
       return `${result.value}\n${result.linkText}: ${result.link}`;
+    case "file":
+      return result.value;
   }
+}
+
+function downloadPluginFile(
+  result: Extract<PluginResponse, { display: "file" }>
+) {
+  const bytes = Uint8Array.from(atob(result.content), (c) => c.charCodeAt(0));
+  const blob = new Blob([bytes], { type: result.contentType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = result.filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 interface CellRunResult {
@@ -327,6 +344,20 @@ export function RunPluginDialog({
                         window.open(result.link, "_blank");
                       }}
                       label={result.linkText}
+                      variant="highlight"
+                      className="mt-2"
+                    />
+                  </PokeAlertDescription>
+                </PokeAlert>
+              )}
+              {result && result.display === "file" && (
+                <PokeAlert variant="success">
+                  <PokeAlertTitle>Success</PokeAlertTitle>
+                  <PokeAlertDescription>
+                    <p>{result.value}</p>
+                    <Button
+                      onClick={() => downloadPluginFile(result)}
+                      label={`Download ${result.filename}`}
                       variant="highlight"
                       className="mt-2"
                     />

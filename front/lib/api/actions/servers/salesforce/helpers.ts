@@ -9,7 +9,7 @@ import { normalizeError } from "@app/types/shared/utils/error_utils";
 import type { Connection } from "jsforce";
 import jsforce from "jsforce";
 
-export const SF_API_VERSION = "57.0";
+export const SF_API_VERSION = "65.0";
 
 export async function withAuth(
   { authInfo }: ToolHandlerExtra,

@@ -208,11 +208,13 @@ export class AgentStepContentResource extends BaseResource<AgentStepContentModel
     {
       agentMessageIds,
       step,
+      dustRunId,
       transaction,
       textContentOnly = false,
     }: {
       agentMessageIds: ModelId[];
       step?: number;
+      dustRunId?: string;
       transaction?: Transaction;
       textContentOnly?: boolean;
     }
@@ -233,6 +235,7 @@ export class AgentStepContentResource extends BaseResource<AgentStepContentModel
             workspaceId: owner.id,
             ...(textContentOnly ? { type: "text_content" } : {}),
             ...(step !== undefined ? { step } : {}),
+            ...(dustRunId !== undefined ? { dustRunId } : {}),
             agentMessageId: {
               [Op.any]: Sequelize.literal("$agentMessageIds::bigint[]"),
             },
@@ -446,6 +449,31 @@ export class AgentStepContentResource extends BaseResource<AgentStepContentModel
       agentMessageIds: agentMessageModelIds,
       step,
       textContentOnly,
+    });
+  }
+
+  /**
+   * @cc [owner:frankaloia,label:product;backend] step-contents-for-run
+   * Returns the latest version of each index among the rows `dustRunId` wrote at `step`. Rows written
+   * by another run at the same indexes MUST NOT replace or hide them, and rows from other runs MUST
+   * NOT be returned.
+   */
+  static async fetchByAgentMessageModelIdsAtStepForRun(
+    auth: Authenticator,
+    {
+      agentMessageModelIds,
+      step,
+      dustRunId,
+    }: {
+      agentMessageModelIds: ModelId[];
+      step: number;
+      dustRunId: string;
+    }
+  ): Promise<AgentStepContentResource[]> {
+    return this.fetchByAgentMessagesFromPostgres(auth, {
+      agentMessageIds: agentMessageModelIds,
+      step,
+      dustRunId,
     });
   }
 

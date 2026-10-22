@@ -3,16 +3,9 @@
  * Shared authoring instructions MUST leave Slideshow and Slide in control of their dimensions.
  * Scrolling-page layout guidance MUST be scoped to pages and dashboards.
  */
-/**
- * @cc [owner:aubin-tchoi,label:product] frame-publish-hint-requires-frames-v2
- * Shared authoring prose MUST NOT mention `dsbx frame publish` or `validate` when hasFramesV2
- * is false.
- */
 export const buildInteractiveContentAuthoringProseV2 = ({
-  hasFramesV2,
   hasFunctions,
 }: {
-  hasFramesV2: boolean;
   hasFunctions: boolean;
 }) => `\
 ### Rendering Context
@@ -155,7 +148,7 @@ The same decision rule applies regardless of where the data came from:
 
 - Import \`useFile\` from \`@dust/react-hooks\`.
 - \`useFile()\` accepts a file ID (\`fil_abc123\` from an attachment tag), a scoped file path for files **outside** this Frame package, or a package-relative path for files **inside** this Frame package.
-- Files that live in this Frame's own folder (CSV, JSON, images next to \`index.tsx\`) must use a package-relative path starting with \`./\`, such as \`useFile("./data.csv")\` or \`useFile("./assets/logo.png")\`. Do **not** pass an absolute \`conversation-{conversationId}/MyFrame/data.csv\` or \`pod-{podId}/MyFrame/data.csv\` path for those files${hasFramesV2 ? ": \`dsbx frame publish\` and \`validate\` reject them so the Frame stays portable when shared or moved." : ": use relative paths so the Frame stays portable when shared or moved."}
+- Files that live in this Frame's own folder (CSV, JSON, images next to \`index.tsx\`) must use a package-relative path starting with \`./\`, such as \`useFile("./data.csv")\` or \`useFile("./assets/logo.png")\`. Do **not** pass an absolute \`conversation-{conversationId}/MyFrame/data.csv\` or \`pod-{podId}/MyFrame/data.csv\` path for those files: \`dsbx frame publish\` and \`validate\` reject them so the Frame stays portable when shared or moved.
 - For files outside the Frame package, use a file ID or an explicit scoped path: \`conversation-{conversationId}/report.csv\` for a conversation file, and \`pod-{podId}/filename.md\` for a pod file.
 - Never use bare \`conversation/filename\` or \`pod/filename\` paths. They are context-dependent, non-portable, and can silently load the wrong file.
 - Store file IDs as intact strings such as \`"fil_abc123"\`, not as string concatenation.
@@ -163,7 +156,9 @@ The same decision rule applies regardless of where the data came from:
 - For images from the conversation, load with \`useFile\`, create a local object URL with \`URL.createObjectURL(file)\`, and render that URL in \`<img>\` or background styles. External images can be rendered directly via \`<img src="https://...">\`.
 - Custom components that render files should use \`fileId\` as the prop name so server-side prefetching can work.
 - Other frames can be imported as React components by file ID or explicit scoped path, for example \`import MyComponent from "fil_abc123"\` or \`import MyComponent from "conversation-conv_123/MyFrame.tsx"\`. Transitive imports are supported.
-- To let users download data, import \`triggerUserFileDownload\` from \`@dust/react-hooks\` and expose it through a button or other user action. Never auto-trigger downloads.
+- To let users download data, import \`triggerUserFileDownload\` from \`@dust/react-hooks\` and
+  expose it through a button or other user action. Never auto-trigger downloads. An anchor with a
+  \`download\` attribute does nothing in the Frame's sandboxed iframe.
 - To capture the current visualization, import \`captureScreenshot\` from \`@dust/react-hooks\` and call \`await captureScreenshot("my-chart.png")\` or \`await captureScreenshot()\` from a user-triggered action.
 
 ### useUserIdentity Reference
@@ -173,6 +168,7 @@ The same decision rule applies regardless of where the data came from:
 - \`isAuthenticated\` is only true for a signed-in member of the workspace that owns the Frame. A viewer of a shared Frame who is signed out, or signed in to a different workspace, is not authenticated.
 - \`canWriteFrameSource\` is true when the viewer can modify the Frame v2 source files. For a standalone conversation this follows conversation access; in a Pod it follows write access to the Pod. Use it to show source-write-only controls${hasFunctions ? ", and declare the functions behind those controls with \`frame_author_required\` so the server enforces the same capability" : ""}.
 - \`isPodMember\` is true when the viewer belongs to the Pod hosting the Frame (its member or editor group); \`isPodEditor\` when they are one of its editors or a workspace admin. Both are false when the Frame is viewed outside a Pod (a conversation, a public share) even if the viewer is in fact a member, so treat false as "do not show Pod-scoped affordances here", not as proof of the viewer's standing.
+- Show a section or control only to viewers who can use it. Others see no trace of it: no heading, no disabled button, no "members only" note.
 - Render the \`isLoading\` state, and treat \`error\` and the unauthenticated case identically: fall back to the unauthenticated view rather than showing an error.
 - A Frame cannot sign anyone in. The viewer is already authenticated to Dust or they are not, and nothing the Frame renders can change that. When a Frame only makes sense for an authenticated member, render a plain view saying the content is unavailable to them, rather than a login prompt or a button that will not work.
 

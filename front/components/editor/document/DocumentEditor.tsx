@@ -33,6 +33,7 @@ import { EditorContent } from "@app/components/editor/EditorContent";
 import type { AgentEvent } from "@app/lib/client/collab/agents";
 import type { CommentChannel } from "@app/lib/client/collab/comments";
 import { getFileNameFromScopedPath } from "@app/lib/markdown/file_preview";
+import type { WorkingAgentActivity } from "@app/types/collab";
 import { cn } from "@dust-tt/sparkle";
 import { Trans } from "@lingui/react/macro";
 import type { AnyExtension, Editor } from "@tiptap/core";
@@ -136,7 +137,8 @@ interface DocumentViewProps extends DocumentProps {
     /** Where the file's version was kept after it changed outside the document, if it did. */
     conflictCopy?: string | null;
     /** What an agent is doing in the document, as the session last announced. */
-    agent?: AgentEvent | null;
+    agent?: AgentEvent<WorkingAgentActivity> | null;
+    commentAgents?: ReadonlyMap<string, AgentEvent>;
     participants?: CollabParticipant[];
     /** Bound to the shared document once synced; until then the file shows read-only. */
     binding: {
@@ -411,6 +413,7 @@ export const DocumentView = ({
         <DocumentCommentsList
           id={listId}
           comments={comments}
+          commentAgents={collabView?.commentAgents}
           renderCommentBody={renderCommentBody}
           commentInputExtensions={commentInputExtensions}
           mountPortalContainer={mountPortalContainer}
@@ -462,6 +465,7 @@ export const DocumentView = ({
           <DocumentCommentCard
             editor={editor}
             comments={comments}
+            commentAgents={collabView?.commentAgents}
             containerRef={contentRef}
             renderCommentBody={renderCommentBody}
             commentInputExtensions={commentInputExtensions}

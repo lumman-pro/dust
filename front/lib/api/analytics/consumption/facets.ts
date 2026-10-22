@@ -73,6 +73,7 @@ export type ConsumptionFacet = {
   icon?: string | null;
   documentCount: number;
   disabled: boolean;
+  revoked?: boolean;
 };
 
 export type ConsumptionAgentFacet = ConsumptionFacet & {
@@ -274,7 +275,10 @@ async function resolveFacets(
     }
   );
   const entries = [
-    ...catalogEntries,
+    // Revoked members are only listed when they have usage in the period.
+    ...catalogEntries.filter(
+      (entry) => !entry.revoked || buckets.contextual.has(entry.value)
+    ),
     ...missingCatalogValues.map((value) => {
       const resolved = resolvedLabels.get(value);
       return {

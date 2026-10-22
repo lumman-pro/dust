@@ -176,6 +176,7 @@ export function createPlaceholderAgentMessage({
     activitySteps: [],
     resolvedModel: null,
     modelResolutionMethod: null,
+    fallbackModelId: null,
     actions: [],
     richMentions: [],
     completionDurationMs: null,

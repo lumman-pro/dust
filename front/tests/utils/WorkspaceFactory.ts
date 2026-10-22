@@ -15,11 +15,16 @@ import { GroupResource } from "@app/lib/resources/group_resource";
 import { WorkspaceModel } from "@app/lib/resources/storage/models/workspace";
 import { generateRandomModelSId } from "@app/lib/resources/string_ids_server";
 import { SubscriptionResource } from "@app/lib/resources/subscription_resource";
+import { WorkspaceResource } from "@app/lib/resources/workspace_resource";
 import { renderLightWorkspaceType } from "@app/lib/workspace";
 import { PlanFactory } from "@app/tests/utils/PlanFactory";
 import type { WhitelistableModelMakerIdType } from "@app/types/assistant/models/types";
 import { assertNever } from "@app/types/shared/utils/assert_never";
-import type { WorkspaceType } from "@app/types/user";
+import type {
+  LightWorkspaceType,
+  WorkspaceSharingPolicy,
+  WorkspaceType,
+} from "@app/types/user";
 import { faker } from "@faker-js/faker";
 import { expect } from "vitest";
 
@@ -101,6 +106,18 @@ export class WorkspaceFactory {
     await FeatureFlagResource.enable(workspace, "whitelabel_frames");
 
     return workspace;
+  }
+
+  // Authenticators built before this call keep the previous policy: rebuild them afterwards.
+  static async setSharingPolicy(
+    workspace: LightWorkspaceType,
+    sharingPolicy: WorkspaceSharingPolicy
+  ): Promise<void> {
+    const workspaceResource = await WorkspaceResource.fetchById(workspace.sId);
+    if (!workspaceResource) {
+      throw new Error(`Workspace ${workspace.sId} not found`);
+    }
+    await workspaceResource.updateWorkspaceSettings({ sharingPolicy });
   }
 
   // Plans are seeded by the DB init script (admin/db.ts) to avoid deadlocks

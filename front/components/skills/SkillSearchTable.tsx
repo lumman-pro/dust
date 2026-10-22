@@ -195,7 +195,7 @@ export function SkillSearchTable({
                     <button type="button" className="w-full min-w-0 text-left">
                       <div className="flex items-center gap-2 py-1">
                         <SkillAvatar size="xs" />
-                        <span className="heading-sm min-w-0 grow overflow-hidden truncate text-foreground">
+                        <span className="text-sm min-w-0 grow overflow-hidden truncate text-foreground">
                           {skill.name}
                         </span>
                       </div>

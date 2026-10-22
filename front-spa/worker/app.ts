@@ -21,7 +21,7 @@
  * 4. Fall back to the main index.html for all other paths (SPA routing).
  */
 
-import type { GetShareFrameMetadataResponseBody } from "@dust-tt/front/lib/api/files/share";
+import type { GetShareMetadataResponseBody } from "@dust-tt/front/types/api/files/share";
 import { z } from "zod";
 
 interface Env {
@@ -29,10 +29,10 @@ interface Env {
   DUST_API_URL: string;
 }
 
-// z.ZodType<Pick<...>> makes TS flag any drift with GetShareFrameMetadataResponseBody.
+// z.ZodType<Pick<...>> makes TS flag any drift with GetShareMetadataResponseBody.
 const ShareFrameMetadataSchema: z.ZodType<
   Pick<
-    GetShareFrameMetadataResponseBody,
+    GetShareMetadataResponseBody,
     "description" | "ogImageUrl" | "title" | "workspaceName"
   >
 > = z.object({

@@ -92,7 +92,9 @@ export function resolveFrameSourceMovePaths({
     sourcePrefix.kind === "user" ||
     destinationPrefix.kind === "user" ||
     sourcePrefix.kind === "conversation_metadata" ||
-    destinationPrefix.kind === "conversation_metadata"
+    destinationPrefix.kind === "conversation_metadata" ||
+    sourcePrefix.kind === "frame" ||
+    destinationPrefix.kind === "frame"
   ) {
     return new Err(
       new FrameSourceMoveError(
@@ -133,6 +135,7 @@ export function resolveFrameSourceMovePaths({
       };
       break;
     default:
+      // user / conversation_metadata / frame rejected by the guard above.
       assertNever(destinationPrefix);
   }
   const parentRelativePath = path.posix.dirname(

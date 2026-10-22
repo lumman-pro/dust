@@ -1,11 +1,11 @@
 import { MCPError } from "@app/lib/actions/mcp_errors";
+import type { DataSourcesToolConfigurationType } from "@app/lib/actions/mcp_internal_actions/input_schemas";
 import type { FilesystemPathType } from "@app/lib/actions/mcp_internal_actions/output_schemas";
 import { checkConflictingTags } from "@app/lib/actions/mcp_internal_actions/tools/tags/utils";
 import {
   getAgentDataSourceConfigurations,
   makeCoreSearchNodesFilters,
 } from "@app/lib/actions/mcp_internal_actions/tools/utils";
-import type { DataSourceFilesystemLocateTreeInputType } from "@app/lib/actions/mcp_internal_actions/types";
 import config from "@app/lib/api/config";
 import type { Authenticator } from "@app/lib/auth";
 import logger from "@app/logger/logger";
@@ -24,7 +24,10 @@ import { removeNulls } from "@app/types/shared/utils/general";
 import { INTERNAL_MIME_TYPES } from "@dust-tt/client";
 
 export const locateTree = async (
-  { nodeId, dataSources }: DataSourceFilesystemLocateTreeInputType,
+  {
+    nodeId,
+    dataSources,
+  }: { nodeId: string; dataSources: DataSourcesToolConfigurationType },
   { auth }: { auth: Authenticator }
 ) => {
   const coreAPI = new CoreAPI(config.getCoreAPIConfig(), logger);

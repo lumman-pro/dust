@@ -71,7 +71,7 @@ const getTableColumns = (
       header: t(msg`Used by`),
       accessorFn: (row: RowData) => row.usage.count,
       meta: {
-        className: "w-28",
+        className: "w-36",
       },
       cell: (info: Info) => (
         <DataTable.CellContent>

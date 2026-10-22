@@ -4,6 +4,7 @@ import { CellProvider, useCellContext } from "@app/lib/auth/CellContext";
 import { ClientTypeProvider } from "@app/lib/context/clientType";
 import { i18n } from "@app/lib/i18n/i18n";
 import { SparkleContext } from "@dust-tt/sparkle";
+import { useSelectedCells } from "@extension/platforms/excel/hooks/useSelectedCells";
 import { ExcelPlatformService } from "@extension/platforms/excel/services/platform";
 import { AuthenticatedImage } from "@extension/shared/AuthenticatedImage";
 import { PlatformProvider } from "@extension/shared/context/PlatformContext";
@@ -31,10 +32,11 @@ export const ExcelApp = () => {
 
 const ExcelAppInner = () => {
   const { cells } = useCellContext();
-  const platformService = useMemo(
-    () => new ExcelPlatformService(cells),
-    [cells]
-  );
+  const platformService = useMemo(() => {
+    const service = new ExcelPlatformService(cells);
+    service.useInputBarSelection = useSelectedCells;
+    return service;
+  }, [cells]);
 
   const router = useMemo(
     () => createMemoryRouter(routes, { initialEntries: ["/"] }),

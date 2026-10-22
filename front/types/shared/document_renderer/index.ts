@@ -66,8 +66,44 @@ const DEFAULT_SCREENSHOT_OPTIONS: Required<
 };
 
 /**
+ * Build a form with the Chromium PDF fields (print media, scale, margins, footer, orientation)
+ * shared by Gotenberg's conversion routes.
+ */
+function buildPdfFormData(options: PdfOptions): FormData {
+  const {
+    footerHtml,
+    marginBottom,
+    marginLeft,
+    marginRight,
+    marginTop,
+    orientation,
+    scale,
+  } = { ...DEFAULT_PDF_OPTIONS, ...options };
+
+  const formData = new FormData();
+  formData.append("emulatedMediaType", "print"); // Apply @media print CSS rules.
+  formData.append("scale", scale.toString());
+  formData.append("printBackground", "true");
+  formData.append("marginTop", marginTop);
+  formData.append("marginBottom", marginBottom);
+  formData.append("marginLeft", marginLeft);
+  formData.append("marginRight", marginRight);
+
+  if (footerHtml) {
+    const footerBlob = new Blob([footerHtml], { type: "text/html" });
+    formData.append("files", footerBlob, "footer.html");
+  }
+
+  if (orientation === "landscape") {
+    formData.append("landscape", "true");
+  }
+
+  return formData;
+}
+
+/**
  * DocumentRenderer abstracts the underlying rendering service (Gotenberg) for generating
- * PDFs and screenshots from URLs.
+ * PDFs and screenshots from URLs or HTML.
  */
 export class DocumentRenderer {
   constructor(
@@ -89,45 +125,41 @@ export class DocumentRenderer {
     target: RenderTarget,
     options: PdfOptions = {}
   ): Promise<Result<Buffer, DocumentRendererError>> {
-    const {
-      footerHtml,
-      marginBottom,
-      marginLeft,
-      marginRight,
-      marginTop,
-      orientation,
-      scale,
-    } = { ...DEFAULT_PDF_OPTIONS, ...options };
-
-    const formData = new FormData();
+    const formData = buildPdfFormData(options);
     formData.append("url", target.url);
     formData.append("waitForExpression", target.waitForExpression);
-    formData.append("emulatedMediaType", "print"); // Apply @media print CSS rules.
-    formData.append("scale", scale.toString());
-    formData.append("printBackground", "true");
-    formData.append("marginTop", marginTop);
-    formData.append("marginBottom", marginBottom);
-    formData.append("marginLeft", marginLeft);
-    formData.append("marginRight", marginRight);
 
-    if (footerHtml) {
-      const footerBlob = new Blob([footerHtml], { type: "text/html" });
-      formData.append("files", footerBlob, "footer.html");
-    }
+    return this.convertToPdf("/forms/chromium/convert/url", formData);
+  }
 
-    if (orientation === "landscape") {
-      formData.append("landscape", "true");
-    }
+  /**
+   * Export a self-contained HTML string to PDF.
+   * The HTML is uploaded directly to Gotenberg so no public URL is required.
+   */
+  async exportHtmlToPdf(
+    html: string,
+    options: PdfOptions = {}
+  ): Promise<Result<Buffer, DocumentRendererError>> {
+    const formData = buildPdfFormData(options);
+    formData.append(
+      "files",
+      new Blob([html], { type: "text/html" }),
+      "index.html"
+    );
 
+    return this.convertToPdf("/forms/chromium/convert/html", formData);
+  }
+
+  private async convertToPdf(
+    route: string,
+    formData: FormData
+  ): Promise<Result<Buffer, DocumentRendererError>> {
     try {
-      const response = await fetch(
-        `${this.serviceUrl}/forms/chromium/convert/url`,
-        {
-          method: "POST",
-          body: formData,
-          signal: AbortSignal.timeout(this.timeoutMs),
-        }
-      );
+      const response = await fetch(`${this.serviceUrl}${route}`, {
+        method: "POST",
+        body: formData,
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
 
       if (!response.ok) {
         const errorText = await response.text();

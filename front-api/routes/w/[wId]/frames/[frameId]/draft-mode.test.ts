@@ -20,7 +20,6 @@ describe("POST /api/w/:wId/frames/:frameId/draft-mode", () => {
     const { auth, workspace } = await createPrivateApiMockRequest({
       role: "admin",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     await FeatureFlagFactory.basic(auth, "frames_v2_drafts");
     const { frame } = await createTestLiveConversationFrame(auth);
 
@@ -36,7 +35,6 @@ describe("POST /api/w/:wId/frames/:frameId/draft-mode", () => {
     const { auth, workspace } = await createPrivateApiMockRequest({
       role: "admin",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     const { frame } = await createTestLiveConversationFrame(auth);
 
     const response = await postDraftMode(workspace.sId, frame.sId);
@@ -53,7 +51,6 @@ describe("POST /api/w/:wId/frames/:frameId/draft-mode", () => {
     const { auth, workspace } = await createPrivateApiMockRequest({
       role: "admin",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     await FeatureFlagFactory.basic(auth, "frames_v2_drafts");
     const conversation = await ConversationFactory.create(auth, {
       agentConfigurationId: "test-agent",
@@ -75,7 +72,6 @@ describe("POST /api/w/:wId/frames/:frameId/draft-mode", () => {
     const { auth, workspace } = await createPrivateApiMockRequest({
       role: "admin",
     });
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     await FeatureFlagFactory.basic(auth, "frames_v2_drafts");
 
     const response = await postDraftMode(workspace.sId, "fil_missing0000");

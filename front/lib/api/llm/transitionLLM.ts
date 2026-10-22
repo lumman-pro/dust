@@ -2,7 +2,6 @@ import { withFlexProcessing } from "@app/lib/api/llm/flex_processing";
 import { LLM } from "@app/lib/api/llm/llm";
 import { filterApplicableReasoningEfforts } from "@app/lib/api/llm/per_message_reasoning_effort";
 import { withConciseOpenAIReasoningSummary } from "@app/lib/api/llm/reasoning_summary";
-import { withAnthropicServerSideFallback } from "@app/lib/api/llm/server_side_fallback";
 import type {
   BatchDeletionOutcome,
   BatchResult,
@@ -48,7 +47,6 @@ import { NoopNoopGlobalNoopStream } from "@app/lib/model_constructors/stream/end
 import type { Host } from "@app/lib/model_constructors/types/hosts";
 import {
   AGENT_PLATFORM_HOST,
-  ANTHROPIC_HOST,
   MISTRAL_HOST,
   OPENAI_RESPONSES_HOST,
   XAI_HOST,
@@ -712,16 +710,12 @@ abstract class BaseTransition extends LLM {
     config: InputConfig,
     host: Host
   ): Promise<InputConfig> {
-    if (host !== OPENAI_RESPONSES_HOST && host !== ANTHROPIC_HOST) {
+    if (host !== OPENAI_RESPONSES_HOST) {
       return config;
     }
 
     this.featureFlagsPromise ??= getFeatureFlags(this.authenticator);
     const featureFlags = await this.featureFlagsPromise;
-
-    if (host === ANTHROPIC_HOST) {
-      return withAnthropicServerSideFallback(config, featureFlags);
-    }
 
     const flaggedConfig = withFlexProcessing(
       withConciseOpenAIReasoningSummary(config, featureFlags),

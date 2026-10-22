@@ -1,5 +1,5 @@
-import { INTERACTIVE_CONTENT_INSTRUCTIONS } from "@app/lib/api/actions/servers/interactive_content/instructions";
 import { getEnabledSkillInstructions } from "@app/lib/api/assistant/skills_rendering";
+import { buildFramesV2Instructions } from "@app/lib/resources/skill/code_defined/global/frames_v2";
 import type { SkillResource } from "@app/lib/resources/skill/skill_resource";
 import { describe, expect, it } from "vitest";
 
@@ -18,6 +18,14 @@ function makeEnabledSkill(
     ...overrides,
   };
 }
+
+const FRAMES_INSTRUCTIONS = buildFramesV2Instructions({
+  hasFunctions: false,
+  hasPublicFunctions: false,
+  hasDrafts: false,
+  hasSchedules: false,
+  isPod: false,
+});
 
 describe("getEnabledSkillInstructions", () => {
   it("strips tool icon attributes from model-facing skill instructions", () => {
@@ -52,20 +60,17 @@ describe("getEnabledSkillInstructions", () => {
     const skill = makeEnabledSkill({
       sId: "frames",
       name: "Create Frames",
-      instructions: INTERACTIVE_CONTENT_INSTRUCTIONS,
+      instructions: FRAMES_INSTRUCTIONS,
     });
 
     const instructions = getEnabledSkillInstructions(skill);
 
     expect(instructions).toContain("### Rendering Context");
-    expect(instructions).toContain("### Creating Files");
   });
 
   it("frame instructions do not contain v1-only markers", () => {
     // Guards against re-importing the legacy viz authoring prose (still used
     // by other servers) into the frames instructions.
-    expect(INTERACTIVE_CONTENT_INSTRUCTIONS).not.toContain(
-      "Premium, Minimalist Aesthetic"
-    );
+    expect(FRAMES_INSTRUCTIONS).not.toContain("Premium, Minimalist Aesthetic");
   });
 });

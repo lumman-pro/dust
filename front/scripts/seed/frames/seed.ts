@@ -111,7 +111,6 @@ makeScript(
     const ctx = await createSeedContext({ execute, logger });
 
     await FeatureFlagResource.enableMany(ctx.workspace, [
-      "frames_v2",
       "frames_v2_functions",
     ]);
 

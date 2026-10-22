@@ -10,10 +10,12 @@ import { resumeAncestorConversations as resumeAncestorConversationsHelper } from
 import { getMessageChannelId } from "@app/lib/api/assistant/streaming/helpers";
 import { getRedisHybridManager } from "@app/lib/api/redis-hybrid-manager";
 import { resolveSandboxChildBlock } from "@app/lib/api/sandbox/sandbox_child_block";
+import { resolveSandboxFunctionAuthenticationFromConversation } from "@app/lib/api/sandbox_functions/resolve_action_from_conversation";
 import type { Authenticator } from "@app/lib/auth";
 import { DustError } from "@app/lib/error";
 import { AgentMCPActionResource } from "@app/lib/resources/agent_mcp_action_resource";
 import type { ConversationResource } from "@app/lib/resources/conversation_resource";
+import { isResourceSId } from "@app/lib/resources/string_ids";
 import logger from "@app/logger/logger";
 import { launchAgentLoopWorkflow } from "@app/temporal/agent_loop/client";
 import type { Result } from "@app/types/shared/result";
@@ -99,6 +101,22 @@ export async function resolveAuthentication(
         "unauthorized",
         `User is not authorized to resolve ${label} for this action`
       )
+    );
+  }
+
+  // Frame-function personal-auth blocks on the conversation channel use `sfa_` ids.
+  if (
+    kind === "authentication" &&
+    isResourceSId("sandbox_function_mcp_action", actionId)
+  ) {
+    return resolveSandboxFunctionAuthenticationFromConversation(
+      auth,
+      conversation,
+      {
+        actionId,
+        messageId,
+        outcome,
+      }
     );
   }
 

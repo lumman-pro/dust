@@ -384,18 +384,6 @@ msgstr "Impossible de révoquer l’accès"
 msgid "Couldn't save edits"
 msgstr "Impossible d’enregistrer les modifications"
 
-#: front/lib/swr/frames.ts
-msgid "PDF export failed"
-msgstr "Échec de l’export PDF"
-
-#: front/lib/swr/frames.ts
-msgid "PDF exported"
-msgstr "PDF exporté"
-
-#: front/lib/swr/frames.ts
-msgid "Your PDF has been downloaded."
-msgstr "Votre PDF a été téléchargé."
-
 #: front/lib/swr/github_connection.ts
 msgid "GitHub disconnected"
 msgstr "GitHub déconnecté"

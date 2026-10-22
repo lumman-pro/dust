@@ -1,7 +1,11 @@
 import { MCPError } from "@app/lib/actions/mcp_errors";
 import type { TablesConfigurationToolType } from "@app/lib/actions/mcp_internal_actions/input_schemas";
 import { GET_DATABASE_SCHEMA_MARKER } from "@app/lib/actions/mcp_internal_actions/output_schemas";
-import type { ToolHandlers } from "@app/lib/actions/mcp_internal_actions/tool_definition";
+import type {
+  ToolHandlerExtra,
+  ToolHandlerResultWithStructuredContent,
+  ToolHandlers,
+} from "@app/lib/actions/mcp_internal_actions/tool_definition";
 import { buildTools } from "@app/lib/actions/mcp_internal_actions/tool_definition";
 import { fetchTableDataSourceConfigurations } from "@app/lib/actions/mcp_internal_actions/tools/utils";
 import {
@@ -70,7 +74,12 @@ async function resolveTableConfigurations(
   });
 }
 
-const handlers: ToolHandlers<typeof QUERY_TABLES_V2_TOOLS_METADATA> = {
+const handlers: ToolHandlers<
+  typeof QUERY_TABLES_V2_TOOLS_METADATA,
+  (typeof QUERY_TABLES_V2_TOOLS_METADATA)[number]["name"],
+  ToolHandlerExtra,
+  ToolHandlerResultWithStructuredContent
+> = {
   [LIST_TABLES_TOOL_NAME]: async ({ tables }, { auth }) => {
     const resolvedRes = await resolveTableConfigurations(auth, tables);
     if (resolvedRes.isErr()) {

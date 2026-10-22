@@ -6,6 +6,7 @@ import {
 } from "@app/lib/api/analytics/consumption/schema";
 import type {
   ConsumptionScopeFilter,
+  ConsumptionTopRankBy,
   ConsumptionTopSortOrder,
 } from "@app/lib/api/analytics/consumption/scope";
 import type { GetConsumptionTopAgentsResponse } from "@app/lib/api/analytics/consumption/top_agents";
@@ -48,6 +49,7 @@ type ConsumptionTopFetcher = (
     search?: string;
     filter?: ConsumptionScopeFilter;
     sortOrder?: ConsumptionTopSortOrder;
+    rankBy?: ConsumptionTopRankBy;
   }
 ) => Promise<Result<ConsumptionTopResponse, ElasticsearchError>>;
 
@@ -66,8 +68,15 @@ export function createConsumptionTopRoute({
     validate("json", ConsumptionTopBodySchema),
     async (ctx): HandlerResult<ConsumptionTopResponse> => {
       const auth = ctx.get("auth");
-      const { limit, offset, search, filter, sortOrder, ...periodQuery } =
-        ctx.req.valid("json");
+      const {
+        limit,
+        offset,
+        search,
+        filter,
+        sortOrder,
+        rankBy,
+        ...periodQuery
+      } = ctx.req.valid("json");
 
       const period = await resolveConsumptionPeriod(
         auth,
@@ -81,6 +90,7 @@ export function createConsumptionTopRoute({
         search,
         filter,
         sortOrder,
+        rankBy,
       });
       if (result.isErr()) {
         return apiError(

@@ -1,6 +1,7 @@
 {
   "number_of_shards": 2,
   "number_of_replicas": 1,
+  "routing.allocation.require.workload": "default",
   "refresh_interval": "30s",
   "analysis": {
     "analyzer": {
@@ -17,10 +18,7 @@
       "edge_analyzer": {
         "type": "custom",
         "tokenizer": "icu_tokenizer",
-        "filter": [
-          "lowercase",
-          "edge_ngram_filter"
-        ]
+        "filter": ["lowercase", "edge_ngram_filter"]
       }
     },
     "filter": {

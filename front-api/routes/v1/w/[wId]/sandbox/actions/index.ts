@@ -1,4 +1,5 @@
 import { hideInternalConfiguration } from "@app/lib/actions/mcp_internal_actions/input_configuration";
+import { isServerUsableForMessage } from "@app/lib/actions/personal_actions";
 import { isServerSideMCPServerConfiguration } from "@app/lib/actions/types/guards";
 import { FILES_SERVER_NAME } from "@app/lib/api/actions/servers/files/metadata";
 import { SANDBOX_TOOL_NAME } from "@app/lib/api/actions/servers/sandbox/metadata";
@@ -189,11 +190,29 @@ app.get("/", async (ctx): HandlerResult<GetSandboxToolsResponseType> => {
     });
   }
 
+  const agentMessage = agentMessageRes.value;
+  const [userMessageRow] = agentMessage.parentId
+    ? await conversationResource.fetchMessagesByModelIds(auth, [
+        agentMessage.parentId,
+      ])
+    : [];
+  if (!userMessageRow?.userMessage) {
+    return apiError(ctx, {
+      status_code: 404,
+      api_error: {
+        type: "message_not_found",
+        message: `User message answered by agent message ${mId} not found.`,
+      },
+    });
+  }
+  const isWithoutConcreteUser = userMessageRow.userMessage.userId === null;
+
   // Fetch agent accessible servers.
   const agentConfig = await getPinnedAgentToolingForAgentMessage(auth, {
     agentVersion,
     conversation: conversationResource,
-    agentMessage: agentMessageRes.value,
+    agentMessage,
+    userMessage: userMessageRow,
   });
   if (!agentConfig) {
     return apiError(ctx, {
@@ -248,7 +267,13 @@ app.get("/", async (ctx): HandlerResult<GetSandboxToolsResponseType> => {
   return ctx.json(
     {
       serverViews: filterServerViews(
-        views.map((view) => view.toJSON()),
+        views
+          .filter((view) =>
+            isServerUsableForMessage(view, {
+              isWithoutConcreteUser,
+            })
+          )
+          .map((view) => view.toJSON()),
         ctx.req.query()
       ),
     },

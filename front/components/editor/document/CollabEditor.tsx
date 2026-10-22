@@ -6,6 +6,10 @@ import type {
 } from "@app/components/editor/document/types";
 import { useCollabAgentActivity } from "@app/components/editor/document/useCollabAgentActivity";
 import { useCollabParticipants } from "@app/components/editor/document/useCollabParticipants";
+import {
+  useCommentAgentActivities,
+  workingCommentAgent,
+} from "@app/components/editor/document/useCommentAgentActivities";
 import { useImageSourceResolver } from "@app/components/editor/document/useImageSourceResolver";
 import { useShowSaving } from "@app/components/editor/document/useShowSaving";
 import { useCollabConnection } from "@app/hooks/useCollabConnection";
@@ -34,7 +38,14 @@ export default function CollabEditor(props: CollabEditorProps) {
   );
   // Here rather than in the icon, which mounts again with each connection.
   const showSaving = useShowSaving(syncingSinceMs);
-  const agent = useCollabAgentActivity(connection?.provider ?? null);
+  const conversationAgent = useCollabAgentActivity(
+    connection?.provider ?? null
+  );
+  const commentAgents = useCommentAgentActivities(
+    connection?.provider ?? null,
+    connection?.comments ?? null
+  );
+  const agent = conversationAgent ?? workingCommentAgent(commentAgents);
   const { id, name, color } = props.live.user;
   const participants = useCollabParticipants(
     connection?.provider.awareness ?? null
@@ -76,6 +87,7 @@ export default function CollabEditor(props: CollabEditorProps) {
         saveFailed: saveState.failed,
         conflictCopy: saveState.conflictCopy,
         agent,
+        commentAgents,
         participants,
         binding: {
           extensions,

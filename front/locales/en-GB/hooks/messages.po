@@ -133,6 +133,18 @@ msgstr ""
 msgid "The feedback has been marked as unseen."
 msgstr ""
 
+#: front/hooks/useDownloadPdf.ts
+msgid "PDF export failed"
+msgstr ""
+
+#: front/hooks/useDownloadPdf.ts
+msgid "PDF exported"
+msgstr ""
+
+#: front/hooks/useDownloadPdf.ts
+msgid "Your PDF has been downloaded."
+msgstr ""
+
 #: front/hooks/useDustMcpServerSettings.ts
 msgid "Failed to update the Dust MCP server settings"
 msgstr ""

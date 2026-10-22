@@ -162,6 +162,25 @@ const functionArtifacts = [
   },
 ] satisfies FramePublicationFunctionArtifact[];
 
+const addTaskSchedule = {
+  cron: "0 9 * * 1-5",
+  timezone: "Europe/Paris",
+  input: { title: "Daily stand-up" },
+};
+
+const manifestWithSchedule = FrameManifestSchema.parse({
+  version: 1,
+  description: "Track tasks.",
+  functions: [
+    {
+      name: "add-task",
+      description: "Add a task.",
+      entryPoint: "functions/add_task.ts",
+      schedules: [addTaskSchedule],
+    },
+  ],
+});
+
 const publicFunctionArtifacts = functionArtifacts.map((artifact) => ({
   ...artifact,
   userIdentity: "public" as const,
@@ -493,7 +512,6 @@ describe("storeFramePublication", () => {
 
   it("rejects a public function when public functions are disabled", async () => {
     const { auth, frame } = await setupFrame();
-    await FeatureFlagFactory.basic(auth, "frames_v2");
     await FeatureFlagFactory.basic(auth, "frames_v2_functions");
 
     const result = await storeFramePublication(auth, {
@@ -639,6 +657,38 @@ describe("storeFramePublication", () => {
 
     expect(result.isErr() && result.error.code).toBe("invalid_frame");
     expect(fileStorageMock.saveFileCalls).toHaveLength(0);
+  });
+
+  it("rejects a schedule input that does not match its function schema before writing", async () => {
+    const { auth, frame } = await setupFrame();
+
+    const stored = await storeFramePublication(auth, {
+      frame,
+      functionArtifacts,
+      manifest: FrameManifestSchema.parse({
+        ...manifestWithSchedule,
+        functions: [
+          {
+            ...manifestWithSchedule.functions[0],
+            schedules: [{ ...addTaskSchedule, input: { title: 42 } }],
+          },
+        ],
+      }),
+      sourceFiles: sourceFilesWithFunction,
+      uiBundleCode,
+    });
+
+    expect(stored.isErr() && stored.error).toMatchObject({
+      code: "invalid_schedule",
+      message: expect.stringContaining(
+        'Frame function "add-task" schedule (cron "0 9 * * 1-5", Europe/Paris)'
+      ),
+    });
+    expect(stored.isErr() && stored.error.message).toContain("input/title");
+    expect(fileStorageMock.saveFileCalls).toHaveLength(0);
+    expect(await FramePublicationResource.listForFrame(auth, frame)).toEqual(
+      []
+    );
   });
 
   it("does not write publication.json after an artifact failure", async () => {
@@ -1786,6 +1836,63 @@ describe("publishFramePublication modes", () => {
         functionArtifacts[0].bundleCode
       ),
     });
+  });
+
+  it("stores schedules on a draft without touching the live publication", async () => {
+    const { auth, frame, workspaceId } = await setupFrame();
+    const live = await publishFramePublication(auth, {
+      frame,
+      functionArtifacts,
+      manifest: manifestWithFunction,
+      sourceFiles: sourceFilesWithFunction,
+      uiBundleCode: "export default function A() {}",
+      mode: "live",
+    });
+    expect(live.isOk()).toBe(true);
+    if (live.isErr()) {
+      return;
+    }
+    const liveAllowlist = await (
+      await FileResource.fetchById(auth, frame.sId)
+    )?.getActiveAuthorizedFileAccessAllowlist();
+
+    const draft = await publishFramePublication(auth, {
+      frame,
+      functionArtifacts,
+      manifest: manifestWithSchedule,
+      sourceFiles: sourceFilesWithFunction,
+      uiBundleCode: "export default function A() {}",
+      mode: "draft",
+    });
+
+    expect(draft.isOk() && draft.value.status).toBe("draft");
+    if (draft.isErr()) {
+      return;
+    }
+    expect(draft.value.publicationId).not.toBe(live.value.publicationId);
+    const reloaded = await FileResource.fetchById(auth, frame.sId);
+    expect(reloaded?.useCaseMetadata?.activePublicationId).toBe(
+      live.value.publicationId
+    );
+    expect(reloaded?.pendingDraftPublicationId).toBe(draft.value.publicationId);
+    expect(await reloaded?.getActiveAuthorizedFileAccessAllowlist()).toEqual(
+      liveAllowlist
+    );
+
+    const descriptorOf = (publicationId: string) =>
+      getStoredDescriptor(
+        getFramePublicationDescriptorPath({
+          workspaceId,
+          frameId: frame.sId,
+          publicationId,
+        })
+      );
+    expect(
+      descriptorOf(live.value.publicationId).manifest.functions[0]?.schedules
+    ).toEqual([]);
+    expect(
+      descriptorOf(draft.value.publicationId).manifest.functions[0]?.schedules
+    ).toEqual([addTaskSchedule]);
   });
 });
 

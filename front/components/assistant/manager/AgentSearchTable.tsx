@@ -306,7 +306,7 @@ export function AgentSearchTable({
                       <div>
                         <Avatar visual={agent.pictureUrl} size="xs" />
                       </div>
-                      <div className="heading-sm min-w-0 grow overflow-hidden truncate text-foreground">
+                      <div className="text-sm min-w-0 grow overflow-hidden truncate text-foreground">
                         {agent.name}
                       </div>
                     </div>
@@ -373,28 +373,6 @@ export function AgentSearchTable({
             type: "numeric",
             className:
               "hidden w-28 max-md:table-cell max-md:@max-[32rem]:[.sort-by-last-edited_&]:hidden @sm:table-cell",
-          },
-        },
-        {
-          id: "feedback" as const,
-          header: t`Feedback`,
-          cell: ({ row: { original: agent } }) => {
-            if (agent.scope === "global") {
-              return <DataTable.BasicCellContent label="-" />;
-            }
-            const { up, down } = agent.feedbacks;
-            const total = up + down;
-            return (
-              <DataTable.BasicCellContent
-                className="font-mono"
-                label={`${total}`}
-                tooltip={t`${up} positive and ${down} negative feedback`}
-              />
-            );
-          },
-          meta: {
-            type: "numeric",
-            className: "hidden @lg:w-24 @lg:table-cell",
           },
         },
         {
@@ -532,12 +510,6 @@ export function AgentSearchTable({
                 return <ChipCellSkeleton />;
               case "tags":
                 return <TextCellSkeleton className="w-16" />;
-              case "feedback":
-                return (
-                  <div className="flex h-12 items-center justify-end">
-                    <TextCellSkeleton className="w-8" />
-                  </div>
-                );
               case "usage":
                 return (
                   <div className="flex h-12 items-center justify-end">

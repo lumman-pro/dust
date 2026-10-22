@@ -9,6 +9,7 @@ import { FrameToolbar } from "@app/components/assistant/conversation/interactive
 import { FrameToolConsentGate } from "@app/components/assistant/conversation/interactive_content/frame/FrameToolConsentGate";
 import { PreviewActionButtons } from "@app/components/assistant/conversation/interactive_content/frame/PreviewActionButtons";
 import { useFrameEditSession } from "@app/components/assistant/conversation/interactive_content/frame/useFrameEditSession";
+import { useSidePanelFrameTracking } from "@app/components/assistant/conversation/interactive_content/useFrameTracking";
 import { useSidePanelFullScreen } from "@app/components/assistant/conversation/useSidePanelFullScreen";
 import { ConfirmContext } from "@app/components/Confirm";
 import { useVisualizationRevert } from "@app/hooks/conversations";
@@ -107,11 +108,20 @@ export function FrameRenderer({
   const frameSpaceId = projectId ?? conversation.spaceId ?? null;
 
   const {
+    canEnterFullScreen,
     isFullScreen,
     enterFullScreen,
     exitFullScreen,
     closePanel: onClosePanel,
   } = useSidePanelFullScreen(DEFAULT_FRAME_PANEL_SIZE);
+
+  useSidePanelFrameTracking({
+    frameId: fileId,
+    location: { type: "conversation", id: conversation.sId },
+    uiElement: "conversation_side_panel",
+    isFullScreen,
+    canEnterFullScreen,
+  });
 
   const { fileContent, error, mutateFileContent, isFileContentLoading } =
     useFileContent({

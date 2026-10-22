@@ -30,6 +30,7 @@ import {
 } from "@app/lib/actions/mcp_helper";
 import { DEFAULT_MCP_SERVER_ICON } from "@app/lib/actions/mcp_icons";
 import type { DefaultRemoteMCPServerConfig } from "@app/lib/actions/mcp_internal_actions/remote_servers";
+import { getDefaultRemoteMCPServerAuthorization } from "@app/lib/actions/mcp_internal_actions/remote_servers";
 import { getTokenFieldLabel } from "@app/lib/actions/mcp_internal_actions/server_token_labels";
 import type { AuthorizationInfo } from "@app/lib/actions/mcp_metadata_extraction";
 import type {
@@ -301,13 +302,15 @@ export function CreateMCPServerDialog({
     }
   }, [internalMCPServer, isOpen]);
 
-  // Initialize authorization for oauth-static remote servers when dialog opens.
   useEffect(() => {
-    if (defaultServerConfig?.authMethod === "oauth-static" && isOpen) {
-      setAuthorization({
-        provider: "mcp_static",
-        supported_use_cases: defaultServerConfig.supportedOAuthUseCases ?? [],
-      });
+    if (
+      isOpen &&
+      (defaultServerConfig?.authMethod === "oauth-static" ||
+        defaultServerConfig?.authMethod === "oauth-static-dust-app")
+    ) {
+      setAuthorization(
+        getDefaultRemoteMCPServerAuthorization(defaultServerConfig)
+      );
     }
   }, [defaultServerConfig, isOpen]);
 

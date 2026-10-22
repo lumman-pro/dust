@@ -1,4 +1,4 @@
-import { AgentMCPActionResource } from "@app/lib/resources/agent_mcp_action_resource";
+import { listConversationBlockedActions } from "@app/lib/api/assistant/conversation/blocked_actions";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
 import type { BlockedActionsResponseType } from "@dust-tt/client";
 import { publicApiApp } from "@front-api/middlewares/ctx";
@@ -36,11 +36,10 @@ app.get(
       });
     }
 
-    const blockedActions =
-      await AgentMCPActionResource.listBlockedActionsForConversation(
-        auth,
-        conversation
-      );
+    const blockedActions = await listConversationBlockedActions(
+      auth,
+      conversation
+    );
 
     return ctx.json({ blockedActions });
   }

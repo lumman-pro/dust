@@ -5,7 +5,7 @@ import type {
   PostCollabTicketResponseBody,
 } from "@app/types/api/file_system/types";
 import type { LightWorkspaceType } from "@app/types/user";
-import { useCallback } from "react";
+import { useMemo } from "react";
 
 /**
  * Returns a function fetching a one-time ticket to open `filePath` in its live session, called
@@ -22,26 +22,31 @@ export function useCollabTicket({
   filePath,
 }: {
   owner: LightWorkspaceType;
-  /** Scoped path of the file opened live. */
-  filePath: string;
-}): () => Promise<string> {
+  /** Scoped path of the file opened live; without one, there is no ticket to fetch. */
+  filePath: string | null;
+}): (() => Promise<string>) | null {
   const workspaceId = owner.sId;
-  return useCallback(async () => {
-    const response = await clientFetch(
-      `/api/w/${workspaceId}/files/collab-tickets`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          filePath,
-        } satisfies PostCollabTicketRequestBody),
-      }
-    );
-    if (!response.ok) {
-      const errorData = await getErrorFromResponse(response);
-      throw new Error(errorData.message);
+  return useMemo(() => {
+    if (!filePath) {
+      return null;
     }
-    const { ticket }: PostCollabTicketResponseBody = await response.json();
-    return ticket;
+    return async () => {
+      const response = await clientFetch(
+        `/api/w/${workspaceId}/files/collab-tickets`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filePath,
+          } satisfies PostCollabTicketRequestBody),
+        }
+      );
+      if (!response.ok) {
+        const errorData = await getErrorFromResponse(response);
+        throw new Error(errorData.message);
+      }
+      const { ticket }: PostCollabTicketResponseBody = await response.json();
+      return ticket;
+    };
   }, [workspaceId, filePath]);
 }

@@ -9,18 +9,22 @@ import {
 import {
   getCommentedTexts,
   getDocumentJSONComments,
+  markComment,
   withDocumentJSONComments,
   withoutDocumentJSONComments,
   withoutOrphanCommentMarks,
 } from "@app/components/editor/document/DocumentComments";
 import type { DfmComment } from "@app/lib/markdown/dfm";
+import type { CommentAnchor, CommentRequestErrorCode } from "@app/types/collab";
 import { BODY_FRAGMENT_NAME } from "@app/types/collab";
 import type { Result } from "@app/types/shared/result";
 import { Err, Ok } from "@app/types/shared/result";
 import type { LocalTransactionOrigin } from "@hocuspocus/server";
 import type { JSONContent } from "@tiptap/core";
 import {
+  initProseMirrorDoc,
   prosemirrorJSONToYXmlFragment,
+  relativePositionToAbsolutePosition,
   updateYFragment,
   yXmlFragmentToProsemirrorJSON,
 } from "@tiptap/y-tiptap";
@@ -138,6 +142,22 @@ export function getYDocUnsavableBodyReason(
     : null;
 }
 
+const readEnvelope = (doc: Y.Doc): DfmEnvelope | null => {
+  const envelope = envelopeSchema.safeParse(
+    doc.getMap(ENVELOPE_MAP_NAME).toJSON()
+  );
+  return envelope.success ? envelope.data : null;
+};
+
+const withSessionThreads = (
+  content: JSONContent,
+  comments: DfmComment[]
+): JSONContent =>
+  withDocumentJSONComments(
+    withoutOrphanCommentMarks(content, new Set(comments.map(({ id }) => id))),
+    comments
+  );
+
 const readLiveDocument = ({
   doc,
   comments,
@@ -145,10 +165,8 @@ const readLiveDocument = ({
   { envelope: DfmEnvelope; content: JSONContent },
   string
 > => {
-  const envelope = envelopeSchema.safeParse(
-    doc.getMap(ENVELOPE_MAP_NAME).toJSON()
-  );
-  if (!envelope.success) {
+  const envelope = readEnvelope(doc);
+  if (!envelope) {
     return new Err("The live document has no valid envelope.");
   }
 
@@ -161,15 +179,83 @@ const readLiveDocument = ({
   } catch {
     return new Err("The live document has an unreadable body.");
   }
-  const threadIds = new Set(comments.map(({ id }) => id));
-  return new Ok({
-    envelope: envelope.data,
-    content: withDocumentJSONComments(
-      withoutOrphanCommentMarks(content, threadIds),
-      comments
-    ),
-  });
+  return new Ok({ envelope, content: withSessionThreads(content, comments) });
 };
+
+/**
+ * @cc [owner:tdraier,label:product;security] co-edition-comment-anchored
+ * `anchorYDocComment` MUST mark `commentId`, as the editor's `addComment` marks a draft, on the
+ * text from the character `anchor.first` follows, or from where it was when it was deleted,
+ * through the one `anchor.last` follows, in one transaction with `origin`, changing nothing else.
+ * It MUST refuse without changing `doc`: as `unanchored` when either position resolves nowhere in
+ * the body, that text is empty, or none of it can take the mark; as `unwritable` when
+ * `yDocToDfm` would refuse the document with the mark and `comments`; as `unavailable` when the
+ * body or envelope cannot be read.
+ */
+/**
+ * @cc [owner:tdraier,label:coding] co-edition-comment-anchored-in-place
+ * An exception to `no-parameter-mutation` limited to `doc`: `anchorYDocComment` MUST change the
+ * live document it is handed in place, since its connections sync from that very instance, and
+ * MUST NOT change `anchor` or `comments`.
+ */
+export function anchorYDocComment(
+  doc: Y.Doc,
+  {
+    commentId,
+    anchor,
+    comments,
+  }: { commentId: string; anchor: CommentAnchor; comments: DfmComment[] },
+  origin: LocalTransactionOrigin
+): Result<void, CommentRequestErrorCode> {
+  const envelope = readEnvelope(doc);
+  const fragment = doc.getXmlFragment(BODY_FRAGMENT_NAME);
+  let body: ReturnType<typeof initProseMirrorDoc>;
+  // A client can send structures the binding or the schema cannot read back.
+  try {
+    body = initProseMirrorDoc(fragment, documentSchema);
+  } catch {
+    return new Err("unavailable");
+  }
+  if (!envelope) {
+    return new Err("unavailable");
+  }
+
+  const resolve = (position: CommentAnchor["first"]) =>
+    relativePositionToAbsolutePosition(
+      doc,
+      fragment,
+      Y.createRelativePositionFromJSON(position),
+      body.mapping
+    );
+  const afterFirst = resolve(anchor.first);
+  const to = resolve(anchor.last);
+  if (afterFirst === null || to === null) {
+    return new Err("unanchored");
+  }
+  // A deleted character's position resolves to where it was, so the text left starts there.
+  const firstDeleted = Y.getItem(
+    doc.store,
+    Y.createID(anchor.first.item.client, anchor.first.item.clock)
+  ).deleted;
+  const from = firstDeleted ? afterFirst : afterFirst - 1;
+  if (to <= from) {
+    return new Err("unanchored");
+  }
+  const marked = markComment(body.doc, from, to, commentId);
+  if (!marked) {
+    return new Err("unanchored");
+  }
+  if (
+    saveDfm(envelope, withSessionThreads(marked.doc.toJSON(), comments)).isErr()
+  ) {
+    return new Err("unwritable");
+  }
+
+  doc.transact(() => {
+    updateYFragment(doc, fragment, marked.doc, body.meta);
+  }, origin);
+  return new Ok(undefined);
+}
 
 /**
  * @cc [owner:tdraier,label:product] co-edition-commented-texts

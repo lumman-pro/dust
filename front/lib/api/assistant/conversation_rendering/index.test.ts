@@ -1,6 +1,9 @@
 import { CheckpointedConversationWindowState } from "@app/lib/api/assistant/conversation_rendering/checkpointed_window_state";
 import { makeConversationWindowCheckpoint } from "@app/lib/api/assistant/conversation_rendering/conversation_window_checkpoint";
-import { renderConversationWindow } from "@app/lib/api/assistant/conversation_rendering/conversation_window_core";
+import {
+  renderConversationWindow,
+  renderConversationWindowCheckpoint,
+} from "@app/lib/api/assistant/conversation_rendering/conversation_window_core";
 import { getLlmCredentials } from "@app/lib/api/provider_credentials";
 import type { Authenticator } from "@app/lib/auth";
 import { tokenCountForTexts } from "@app/lib/tokenization";
@@ -261,6 +264,44 @@ describe("seeded conversation window", () => {
     expect(renderAllMessages).not.toHaveBeenCalled();
     expect(getLlmCredentials).not.toHaveBeenCalled();
     expect(tokenCountForTexts).not.toHaveBeenCalled();
+  });
+
+  it("renders a checkpoint alone the same way as an exact checkpoint render", async () => {
+    const savedCheckpoint = checkpoint([
+      contentFragmentMessage("saved fragment"),
+      userMessage("saved user"),
+      assistantMessage("saved assistant"),
+    ]);
+    const rendered = await renderConversationWindow(
+      auth,
+      {
+        model,
+        prompt: "PROMPT",
+        enabledSkills: [],
+        tools: "TOOLS",
+        allowedTokenCount: 100_000,
+      },
+      {
+        kind: "checkpoint_exact",
+        conversation: createConversation(workspace),
+        checkpoint: savedCheckpoint,
+      }
+    );
+
+    const result = renderConversationWindowCheckpoint(savedCheckpoint);
+
+    expect(rendered.isOk() && result.isOk()).toBe(true);
+    if (rendered.isErr() || result.isErr()) {
+      return;
+    }
+    expect(result.value).toEqual(rendered.value.modelConversation);
+    expect(result.value.messages[0]).toMatchObject({
+      role: "user",
+      content: [
+        { type: "text", text: "saved fragment" },
+        { type: "text", text: "saved user" },
+      ],
+    });
   });
 
   it("renders and tokenizes only the continuation appended to a checkpoint", async () => {

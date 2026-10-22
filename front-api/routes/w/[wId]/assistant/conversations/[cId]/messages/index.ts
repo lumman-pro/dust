@@ -160,6 +160,10 @@ const app = workspaceApp();
  *                     type: array
  *                     items:
  *                       type: string
+ *                   hostSelection:
+ *                     type: string
+ *                     maxLength: 256
+ *                     description: What the user had selected in the app hosting Dust when sending the message, e.g. `Sheet1!C5:D6` in Excel. Stored with the message and shown to the agent in that message's metadata.
  *               skipToolsValidation:
  *                 type: boolean
  *               modelSelection:
@@ -380,6 +384,7 @@ app.post(
         origin,
         clientSideMCPServerIds: context.clientSideMCPServerIds ?? [],
         selectedSpaceIds: context.selectedSpaceIds ?? [],
+        hostSelection: context.hostSelection ?? null,
       },
       skipToolsValidation: skipToolsValidation ?? false,
       modelSelection,

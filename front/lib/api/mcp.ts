@@ -92,6 +92,15 @@ export function getRetryPolicyFromToolConfiguration(
 export const TOOL_COST_CATEGORIES = ["basic", "advanced"] as const;
 export type ToolCostCategory = (typeof TOOL_COST_CATEGORIES)[number];
 
+export function isToolCostCategory(value: string): value is ToolCostCategory {
+  return TOOL_COST_CATEGORIES.some((category) => category === value);
+}
+
+export type ToolBillingInfo = {
+  toolCostCategory: ToolCostCategory;
+  freeUsage: boolean;
+};
+
 // Schemas are in mcp_schemas.ts to avoid pulling zod + heavy dependencies
 // into the Temporal workflow sandbox.
 // Import schemas from "@app/lib/api/mcp_schemas" directly.
@@ -200,6 +209,7 @@ export type ServerSideMCPToolTypeWithStakeAndRetryPolicy =
 export type ClientSideMCPToolTypeWithStakeLevel =
   WithStakeLevelType<MCPToolWithAvailabilityType> & {
     argumentsRequiringApproval?: string[];
+    declaredBilling?: ToolBillingInfo;
     timeoutMs?: number;
   };
 

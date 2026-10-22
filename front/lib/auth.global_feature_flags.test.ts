@@ -1,4 +1,4 @@
-import { Authenticator, getFeatureFlags, hasFeatureFlag } from "@app/lib/auth";
+import { Authenticator, getFeatureFlags } from "@app/lib/auth";
 import { FeatureFlagModel } from "@app/lib/models/feature_flag";
 import { GlobalFeatureFlagModel } from "@app/lib/models/global_feature_flag";
 import { FeatureFlagResource } from "@app/lib/resources/feature_flag_resource";
@@ -205,40 +205,6 @@ describe("getFeatureFlags with global flags", () => {
 
     const flags = await getFeatureFlags(auth);
     expect(flags).not.toContain("sandbox_tools");
-  });
-
-  it("disable_frames_v2 overrides the global frames_v2 rollout", async () => {
-    const workspace = await WorkspaceFactory.basic();
-    const auth = await Authenticator.internalAdminForWorkspace(workspace.sId);
-
-    await GlobalFeatureFlagResource.setRolloutPercentage(
-      "frames_v2",
-      100,
-      null
-    );
-    await GlobalFeatureFlagResource.setRolloutPercentage(
-      "dummy_feature_for_flag_testing",
-      100,
-      null
-    );
-    await FeatureFlagResource.enable(workspace, "disable_frames_v2");
-
-    const flags = await getFeatureFlags(auth);
-    expect(flags).not.toContain("frames_v2");
-    expect(flags).toContain("disable_frames_v2");
-    expect(flags).toContain("dummy_feature_for_flag_testing");
-    await expect(hasFeatureFlag(auth, "frames_v2")).resolves.toBe(false);
-  });
-
-  it("disable_frames_v2 overrides a workspace frames_v2 flag", async () => {
-    const workspace = await WorkspaceFactory.basic();
-    const auth = await Authenticator.internalAdminForWorkspace(workspace.sId);
-
-    await FeatureFlagResource.enable(workspace, "frames_v2");
-    await FeatureFlagResource.enable(workspace, "disable_frames_v2");
-
-    const flags = await getFeatureFlags(auth);
-    expect(flags).not.toContain("frames_v2");
   });
 
   it("keeps a stable resource snapshot until the next request", async () => {

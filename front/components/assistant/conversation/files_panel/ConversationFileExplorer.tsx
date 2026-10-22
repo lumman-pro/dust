@@ -20,7 +20,6 @@ import { useConversationSandboxFiles } from "@app/hooks/conversations/useConvers
 import { useFolderPathUrlState } from "@app/hooks/useFolderPathUrlState";
 import { usePinPodBanner } from "@app/hooks/usePinPodBanner";
 import { usePodFileTabs } from "@app/hooks/usePodFileTabs";
-import { useFeatureFlags } from "@app/lib/auth/AuthContext";
 import { downloadFile, useDeleteFileByPath } from "@app/lib/swr/files";
 import { usePodFiles } from "@app/lib/swr/pods";
 import { useSpaceInfo } from "@app/lib/swr/spaces";
@@ -81,7 +80,6 @@ export function ConversationFileExplorer({
 }: ConversationFileExplorerProps) {
   const { t } = useLingui();
   const { closePanel, openPanel } = useConversationSidePanelContext();
-  const { hasFeature } = useFeatureFlags();
   const confirm = useContext(ConfirmContext);
   const isPod = isPodConversation(conversation);
 
@@ -223,7 +221,11 @@ export function ConversationFileExplorer({
 
   const onOpenInteractive = useCallback(
     (entry: { fileId: string }) =>
-      openPanel({ type: "interactive_content", fileId: entry.fileId }),
+      openPanel({
+        type: "interactive_content",
+        fileId: entry.fileId,
+        openedFrom: { source: "user", uiElement: "conversation_files_panel" },
+      }),
     [openPanel]
   );
 
@@ -310,7 +312,6 @@ export function ConversationFileExplorer({
         <FileExplorer
           currentFolderPath={currentFolderPath}
           defaultViewMode={isPod ? "list" : "grid"}
-          displayFramePackages={hasFeature("frames_v2")}
           files={files}
           getExtraFileMenuItems={getExtraFileMenuItems}
           hideBreadcrumbAtRoot={!isPod}

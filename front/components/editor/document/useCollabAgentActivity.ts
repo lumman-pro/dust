@@ -1,6 +1,8 @@
 import { AGENT_EDIT_SHOWN_MS } from "@app/components/editor/document/AgentCarets";
 import type { AgentEvent } from "@app/lib/client/collab/agents";
 import { onAgentActivity } from "@app/lib/client/collab/agents";
+import type { DocumentActivity } from "@app/types/collab";
+import { isDocumentActivity } from "@app/types/collab";
 import type { HocuspocusProvider } from "@hocuspocus/provider";
 import { useEffect, useState } from "react";
 
@@ -12,17 +14,18 @@ const EDITING_SHOWN_MS = AGENT_EDIT_SHOWN_MS;
 
 /**
  * @cc [owner:PopDaph,label:product] collab-agent-activity-shown
- * The activity MUST be the last one the session announced on `provider`, for
- * `READING_SHOWN_MS` after a read and `EDITING_SHOWN_MS` after an edit, then none. A new provider
- * MUST start with none.
+ * The activity MUST be the last read or edit the session announced on `provider` for an agent
+ * without `commentId`, for `READING_SHOWN_MS` after a read and `EDITING_SHOWN_MS` after an edit,
+ * then none. Any other activity, and any activity of an agent with a `commentId`, MUST change
+ * nothing. A new provider MUST start with none.
  */
 export function useCollabAgentActivity(
   provider: HocuspocusProvider | null
-): AgentEvent | null {
+): AgentEvent<DocumentActivity> | null {
   // Kept with its provider: until the effect's cleanup runs, a new provider would see the old one's.
   const [shown, setShown] = useState<{
     provider: HocuspocusProvider;
-    event: AgentEvent;
+    event: AgentEvent<DocumentActivity>;
   } | null>(null);
 
   useEffect(() => {
@@ -30,12 +33,15 @@ export function useCollabAgentActivity(
       return;
     }
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const unsubscribe = onAgentActivity(provider, (event) => {
+    const unsubscribe = onAgentActivity(provider, ({ agent, activity }) => {
+      if (agent.commentId || !isDocumentActivity(activity)) {
+        return;
+      }
       clearTimeout(timer);
-      setShown({ provider, event });
+      setShown({ provider, event: { agent, activity } });
       timer = setTimeout(
         () => setShown(null),
-        event.activity === "editing" ? EDITING_SHOWN_MS : READING_SHOWN_MS
+        activity === "editing" ? EDITING_SHOWN_MS : READING_SHOWN_MS
       );
     });
     return () => {

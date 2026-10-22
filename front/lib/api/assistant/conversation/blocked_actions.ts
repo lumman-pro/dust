@@ -1,5 +1,14 @@
 import type { AgentLoopBlockedToolExecution } from "@app/lib/actions/mcp";
 import { isBlockedActionEvent } from "@app/lib/actions/mcp";
+import {
+  getInternalMCPServerDisplayedAs,
+  getInternalMCPServerNameFromSId,
+} from "@app/lib/actions/mcp_internal_actions/constants";
+import {
+  collectApprovalArgsLabelResourceIds,
+  getApprovalArgsLabel,
+} from "@app/lib/actions/tool_approval_labels";
+import { getToolDisplayLabels } from "@app/lib/actions/tool_display_labels";
 import { getMessageChannelId } from "@app/lib/api/assistant/streaming/helpers";
 import {
   buildAuditLogTarget,
@@ -9,6 +18,10 @@ import { getRedisHybridManager } from "@app/lib/api/redis-hybrid-manager";
 import type { Authenticator } from "@app/lib/auth";
 import { AgentMCPActionResource } from "@app/lib/resources/agent_mcp_action_resource";
 import { ConversationResource } from "@app/lib/resources/conversation_resource";
+import { FileResource } from "@app/lib/resources/file_resource";
+import { MCPServerViewResource } from "@app/lib/resources/mcp_server_view_resource";
+import { SandboxFunctionMCPActionResource } from "@app/lib/resources/sandbox_function_mcp_action_resource";
+import { SpaceResource } from "@app/lib/resources/space_resource";
 import logger from "@app/logger/logger";
 import type {
   AgentMessageType,
@@ -19,6 +32,169 @@ import { normalizeError } from "@app/types/shared/utils/error_utils";
 export type GetBlockedActionsResponseType = {
   blockedActions: AgentLoopBlockedToolExecution[];
 };
+
+/**
+ * Agent-loop blocked actions plus Frame-function tools blocked while invoked via
+ * `dsbx frame call` from this conversation.
+ */
+export async function listConversationBlockedActions(
+  auth: Authenticator,
+  conversation: ConversationResource
+): Promise<AgentLoopBlockedToolExecution[]> {
+  const [agentBlocked, sandboxFunctionBlocked] = await Promise.all([
+    AgentMCPActionResource.listBlockedActionsForConversation(
+      auth,
+      conversation
+    ),
+    listSandboxFunctionBlockedActionsForConversation(auth, conversation),
+  ]);
+
+  return [...agentBlocked, ...sandboxFunctionBlocked].sort(
+    (a, b) => a.created - b.created
+  );
+}
+
+/**
+ * Present blocked Frame-function tools for this conversation. Retrieval is on the resource;
+ * serialization stays here to avoid resource ↔ presentation import cycles.
+ */
+async function listSandboxFunctionBlockedActionsForConversation(
+  auth: Authenticator,
+  conversation: ConversationResource
+): Promise<AgentLoopBlockedToolExecution[]> {
+  const owner = auth.getNonNullableWorkspace();
+  const rows =
+    await SandboxFunctionMCPActionResource.listBlockedForConversation(auth, {
+      conversationId: conversation.sId,
+    });
+
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const mcpServerViewModelIds = [
+    ...new Set(rows.map(({ action }) => action.mcpServerViewId)),
+  ];
+  const mcpServerViews = await MCPServerViewResource.fetchByModelIds(
+    auth,
+    mcpServerViewModelIds
+  );
+  const mcpServerViewByModelId = new Map(
+    mcpServerViews.map((view) => [view.id, view])
+  );
+
+  const { spaceIds, fileIds } = collectApprovalArgsLabelResourceIds(
+    rows.map(({ action }) => ({
+      inputs: action.inputs,
+      argumentsRequiringApproval:
+        action.toolConfiguration.argumentsRequiringApproval ?? [],
+    }))
+  );
+  const [spaces, files] = await Promise.all([
+    spaceIds.length > 0
+      ? SpaceResource.fetchByIds(auth, spaceIds)
+      : Promise.resolve([]),
+    fileIds.length > 0
+      ? FileResource.fetchByIds(auth, fileIds)
+      : Promise.resolve([]),
+  ]);
+  const approvalLabelCaches = {
+    spacesById: new Map(spaces.map((space) => [space.sId, space])),
+    filesById: new Map(files.map((file) => [file.sId, file])),
+  };
+
+  const blockedActionsList: AgentLoopBlockedToolExecution[] = [];
+
+  for (const row of rows) {
+    const { action } = row;
+    const toolConfiguration = action.toolConfiguration;
+    const mcpServerView = mcpServerViewByModelId.get(action.mcpServerViewId);
+    const internalMCPServerName = getInternalMCPServerNameFromSId(
+      toolConfiguration.toolServerId
+    );
+    const displayLabels =
+      getToolDisplayLabels({
+        internalMCPServerName,
+        mcpServerName: toolConfiguration.mcpServerName,
+        toolName: toolConfiguration.originalName,
+        inputs: action.inputs,
+      }) ?? toolConfiguration.displayLabels;
+
+    const base = {
+      messageId: row.agentMessageId,
+      userId: row.userSId,
+      conversationId: conversation.sId,
+      actionId: action.sId,
+      configurationId: row.agentConfigurationId,
+      created: action.createdAt.getTime(),
+      inputs: action.inputs,
+      stake: toolConfiguration.permission,
+      metadata: {
+        toolName: toolConfiguration.originalName,
+        mcpServerName: toolConfiguration.mcpServerName,
+        displayLabel: displayLabels?.done,
+        // Match the streaming event: function slug is not on the action row; server name is.
+        agentName: toolConfiguration.mcpServerName,
+        icon:
+          mcpServerView?.getServerDisplayMetadata().icon ??
+          toolConfiguration.icon,
+        displayedAs: getInternalMCPServerDisplayedAs(
+          toolConfiguration.toolServerId
+        ),
+      },
+      argumentsRequiringApproval: toolConfiguration.argumentsRequiringApproval,
+      approvalArgsLabel: await getApprovalArgsLabel({
+        auth,
+        internalMCPServerName,
+        toolName: toolConfiguration.originalName,
+        inputs: action.inputs,
+        argumentsRequiringApproval:
+          toolConfiguration.argumentsRequiringApproval ?? [],
+        caches: approvalLabelCaches,
+      }),
+      sandboxFunctionId: row.sandboxFunctionId,
+      invocationId: row.invocationId,
+    };
+
+    if (action.status === "blocked_validation_required") {
+      blockedActionsList.push({
+        ...base,
+        status: "blocked_validation_required",
+        authorizationInfo: null,
+        // Edit+validate is not wired for sandbox-function tools yet.
+        editableArguments: undefined,
+      });
+    } else if (action.status === "blocked_authentication_required") {
+      const authorizationInfo = mcpServerView?.getAuthorization() ?? null;
+      const mcpServerId = mcpServerView?.mcpServerId;
+      const mcpServerDisplayName = mcpServerView?.getDisplayName();
+      if (!mcpServerId || !mcpServerDisplayName || !authorizationInfo) {
+        logger.warn(
+          {
+            actionId: action.sId,
+            conversationId: conversation.sId,
+            invocationId: row.invocationId,
+            workspaceId: owner.sId,
+          },
+          "MCP server view or authorization info not found for blocked sandbox function action"
+        );
+        continue;
+      }
+      blockedActionsList.push({
+        ...base,
+        status: "blocked_authentication_required",
+        authorizationInfo,
+        metadata: {
+          ...base.metadata,
+          mcpServerId,
+          mcpServerDisplayName,
+        },
+      });
+    }
+  }
+
+  return blockedActionsList;
+}
 
 /**
  * Cleans up the blocked actions of an agent message that reached a terminal status
@@ -179,11 +355,10 @@ export async function clearActionRequiredIfNoBlockedActions(
     return;
   }
 
-  const blockedActions =
-    await AgentMCPActionResource.listBlockedActionsForConversation(
-      auth,
-      conversation
-    );
+  const blockedActions = await listConversationBlockedActions(
+    auth,
+    conversation
+  );
 
   if (blockedActions.length === 0) {
     await ConversationResource.clearActionRequiredForConversation(

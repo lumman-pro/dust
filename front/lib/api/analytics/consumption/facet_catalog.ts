@@ -33,6 +33,8 @@ export type ConsumptionFacetCatalogEntry = {
   scope?: AgentConfigurationScope;
   maker?: ModelMakerIdType;
   tier?: ModelsTierName;
+  // Only set on users whose workspace membership was revoked.
+  revoked?: boolean;
 };
 
 export type ConsumptionFacetCatalog = Record<
@@ -137,7 +139,9 @@ async function listConsumptionFacetCatalogWithoutTracing(
     "user",
     requestedDimensions,
     async () => {
-      const result = await getMembers(auth, { activeOnly: true });
+      // Revoked members stay listed so admins can still find their historical
+      // usage. Facets drop the ones without usage in the selected period.
+      const result = await getMembers(auth, { activeOnly: false });
       return result.members;
     }
   );
@@ -218,6 +222,8 @@ async function listConsumptionFacetCatalogWithoutTracing(
       value: member.sId,
       label: member.fullName,
       pictureUrl: member.image,
+      // getMembers reports revoked memberships with the "none" role.
+      ...(member.workspaces[0]?.role === "none" ? { revoked: true } : {}),
     })),
     // API key names are not unique and are also the indexed grouping key.
     // Keep one selectable entry per name so the catalog matches ES buckets.
